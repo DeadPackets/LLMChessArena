@@ -40,6 +40,10 @@ class GameEngine:
     async def play_game(self) -> GameResult:
         """Run the main game loop until completion."""
         max_total_moves = self.config.max_moves * 2
+        logger.info(
+            "Game started: %s (white) vs %s (black), max %d moves per side",
+            self.config.white_model, self.config.black_model, self.config.max_moves,
+        )
 
         while not self.board.is_game_over() and len(self.move_history) < max_total_moves:
             current_color = "white" if self.board.turn == chess.WHITE else "black"
@@ -56,14 +60,24 @@ class GameEngine:
                 try:
                     eval_before = await self.stockfish.evaluate(self.board)
                 except Exception as e:
-                    logger.warning("Stockfish eval_before failed: %s", e)
+                    logger.warning("Stockfish eval_before failed (move %d): %s", self.board.fullmove_number, e)
 
+            logger.info(
+                "Move %d: requesting move from %s (%s) | FEN: %s",
+                self.board.fullmove_number, model_name, current_color, self.board.fen(),
+            )
             await self._emit_status(f"Waiting for {current_color.title()} ({model_name}) to move...")
             move_result = await self._get_llm_move(model_name, current_color)
 
             if move_result is None:
+                winner = "black" if current_color == "white" else "white"
+                logger.warning(
+                    "Move %d: %s (%s) forfeited after %d consecutive illegal moves",
+                    self.board.fullmove_number, model_name, current_color,
+                    self._consecutive_illegal_moves,
+                )
                 return self._build_result(
-                    outcome=f"{'black' if current_color == 'white' else 'white'}_wins",
+                    outcome=f"{winner}_wins",
                     termination="illegal_moves",
                 )
 
@@ -73,6 +87,14 @@ class GameEngine:
             san = self.board.san(chess_move)
             self.board.push(chess_move)
 
+            logger.info(
+                "Move %d: %s played %s (%s) in %dms | tokens: %s in / %s out | cost: $%s",
+                self.board.fullmove_number - (1 if current_color == "black" else 0),
+                current_color, san, chess_move.uci(), elapsed_ms,
+                usage_data.get("input_tokens", "?"), usage_data.get("output_tokens", "?"),
+                f"{usage_data.get('cost_usd', 0) or 0:.4f}",
+            )
+
             # Evaluate position AFTER the move
             eval_after: PositionEval | None = None
             if self.stockfish:
@@ -80,7 +102,7 @@ class GameEngine:
                 try:
                     eval_after = await self.stockfish.evaluate(self.board)
                 except Exception as e:
-                    logger.warning("Stockfish eval_after failed: %s", e)
+                    logger.warning("Stockfish eval_after failed (move %s): %s", san, e)
 
             # Classify the move
             classification: str | None = None
@@ -131,9 +153,15 @@ class GameEngine:
 
         # Game ended naturally
         if len(self.move_history) >= max_total_moves and not self.board.is_game_over():
+            logger.info("Game ended: draw by max moves (%d)", max_total_moves)
             return self._build_result(outcome="draw", termination="max_moves")
 
-        return self._build_result_from_board()
+        result = self._build_result_from_board()
+        logger.info(
+            "Game ended: %s by %s after %d moves",
+            result.outcome, result.termination, result.total_moves,
+        )
+        return result
 
     async def _emit_status(self, message: str) -> None:
         if self.status_callback:
@@ -166,6 +194,10 @@ class GameEngine:
             )
 
             start = time.monotonic()
+            logger.info(
+                "LLM call: model=%s, color=%s, attempt=%d, show_legal=%s",
+                model_name, color, self._consecutive_illegal_moves + 1, show_legal,
+            )
             try:
                 result = await chess_agent.run(
                     user_prompt,
@@ -173,8 +205,13 @@ class GameEngine:
                     model=f"openrouter:{model_name}",
                 )
             except Exception as e:
+                elapsed_ms = int((time.monotonic() - start) * 1000)
                 self._consecutive_illegal_moves += 1
                 error_context = f"API error: {e}"
+                logger.error(
+                    "LLM call failed: model=%s, error=%s, elapsed=%dms, consecutive_failures=%d",
+                    model_name, e, elapsed_ms, self._consecutive_illegal_moves,
+                )
                 await self._emit_illegal_move(
                     color=color, model=model_name,
                     attempted_move="(API error)", reason=str(e),
@@ -182,6 +219,7 @@ class GameEngine:
                 )
                 continue
             elapsed_ms = int((time.monotonic() - start) * 1000)
+            logger.info("LLM response: model=%s, elapsed=%dms", model_name, elapsed_ms)
 
             # Extract token/cost data from pydantic-ai result
             usage = result.usage()
@@ -200,9 +238,14 @@ class GameEngine:
                 move = chess.Move.from_uci(uci_str)
                 if move in self.board.legal_moves:
                     self._consecutive_illegal_moves = 0  # Reset on legal move
+                    logger.debug("LLM move accepted: %s (%s)", uci_str, model_name)
                     return move, narration, trash_talk, elapsed_ms, usage_data
                 else:
                     self._consecutive_illegal_moves += 1
+                    logger.warning(
+                        "Illegal move: model=%s, attempted=%s, consecutive=%d/%d",
+                        model_name, uci_str, self._consecutive_illegal_moves, MAX_CONSECUTIVE_ILLEGAL_MOVES,
+                    )
                     error_context = (
                         f"ILLEGAL MOVE: '{uci_str}' is valid UCI notation but is not a "
                         f"legal move in this position. The piece cannot move there. "
@@ -215,6 +258,10 @@ class GameEngine:
                     )
             except (ValueError, chess.InvalidMoveError):
                 self._consecutive_illegal_moves += 1
+                logger.warning(
+                    "Invalid UCI: model=%s, attempted='%s', consecutive=%d/%d",
+                    model_name, uci_str, self._consecutive_illegal_moves, MAX_CONSECUTIVE_ILLEGAL_MOVES,
+                )
                 error_context = (
                     f"INVALID UCI: '{uci_str}' is not valid UCI notation. "
                     f"UCI moves must be 4-5 lowercase characters: source square + "
@@ -227,6 +274,10 @@ class GameEngine:
                     attempt=self._consecutive_illegal_moves,
                 )
 
+        logger.error(
+            "Forfeit: model=%s (%s) reached %d consecutive illegal moves",
+            model_name, color, MAX_CONSECUTIVE_ILLEGAL_MOVES,
+        )
         return None  # Forfeit after MAX_CONSECUTIVE_ILLEGAL_MOVES consecutive illegal moves
 
     async def _emit_illegal_move(

@@ -35,6 +35,11 @@ class GameManager:
         game_id = uuid4().hex[:12]
         now = datetime.now(timezone.utc)
 
+        logger.info(
+            "Creating game %s: %s (white) vs %s (black)",
+            game_id, config.white_model, config.black_model,
+        )
+
         await self._ensure_model(config.white_model)
         await self._ensure_model(config.black_model)
 
@@ -51,23 +56,28 @@ class GameManager:
 
         task = asyncio.create_task(self._run_game(game_id, config))
         self.active_games[game_id] = task
+        logger.info("Game %s: background task started", game_id)
         return game_id
 
     def subscribe(self, game_id: str) -> asyncio.Queue:
         """Subscribe to real-time events for a game."""
         queue: asyncio.Queue = asyncio.Queue()
         self.event_queues.setdefault(game_id, []).append(queue)
+        count = len(self.event_queues[game_id])
+        logger.info("Game %s: WebSocket subscriber added (total: %d)", game_id, count)
         return queue
 
     def unsubscribe(self, game_id: str, queue: asyncio.Queue) -> None:
         queues = self.event_queues.get(game_id, [])
         if queue in queues:
             queues.remove(queue)
+        logger.debug("Game %s: WebSocket subscriber removed", game_id)
 
     async def stop_game(self, game_id: str) -> bool:
         """Cancel an active game."""
         task = self.active_games.get(game_id)
         if task and not task.done():
+            logger.info("Game %s: stop requested, cancelling task", game_id)
             task.cancel()
             async with get_session_factory()() as session:
                 game = await session.get(Game, game_id)
@@ -134,6 +144,7 @@ class GameManager:
 
     async def _run_game(self, game_id: str, config: GameConfig) -> None:
         """Execute a full game and persist results."""
+        logger.info("Game %s: engine initializing", game_id)
         engine = GameEngine(
             config, stockfish=self.stockfish, opening_detector=self.opening_detector
         )
@@ -170,8 +181,14 @@ class GameManager:
 
         try:
             result = await engine.play_game()
+            logger.info(
+                "Game %s: completed — %s by %s, %d moves, cost $%.4f",
+                game_id, result.outcome, result.termination,
+                result.total_moves, result.total_cost_usd,
+            )
             await self._persist_result(game_id, result)
             await self._update_elo(result)
+            logger.info("Game %s: results persisted and ELO updated", game_id)
             await self._broadcast(game_id, {
                 "type": "game_over",
                 "data": {
@@ -328,8 +345,16 @@ class GameManager:
                 await session.commit()
 
     async def _broadcast(self, game_id: str, event: dict) -> None:
-        for q in self.event_queues.get(game_id, []):
+        queues = self.event_queues.get(game_id, [])
+        event_type = event.get("type", "unknown")
+        dropped = 0
+        for q in queues:
             try:
                 q.put_nowait(event)
             except asyncio.QueueFull:
-                pass
+                dropped += 1
+        if dropped:
+            logger.warning(
+                "Game %s: broadcast %s dropped for %d/%d subscribers (queue full)",
+                game_id, event_type, dropped, len(queues),
+            )

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from sqlmodel import select
@@ -16,12 +18,15 @@ from app.models.api_models import (
 from app.models.chess_models import GameConfig
 from app.services.stats_service import compute_game_analysis
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/games", tags=["games"])
 
 
 @router.post("", response_model=GameCreatedResponse)
 async def create_game(req: CreateGameRequest, request: Request):
     """Start a new game between two LLM models."""
+    logger.info("API: create game — %s vs %s (max %d moves)", req.white_model, req.black_model, req.max_moves)
     manager = request.app.state.game_manager
     config = GameConfig(
         white_model=req.white_model,
@@ -29,6 +34,7 @@ async def create_game(req: CreateGameRequest, request: Request):
         max_moves=req.max_moves,
     )
     game_id = await manager.start_game(config)
+    logger.info("API: game created — id=%s", game_id)
     return GameCreatedResponse(id=game_id, status="active")
 
 
@@ -141,8 +147,10 @@ async def get_pgn(game_id: str, session: AsyncSession = Depends(get_session)):
 @router.post("/{game_id}/stop")
 async def stop_game(game_id: str, request: Request):
     """Force-stop an active game."""
+    logger.info("API: stop game — id=%s", game_id)
     manager = request.app.state.game_manager
     stopped = await manager.stop_game(game_id)
     if not stopped:
         raise HTTPException(404, "Game not found or already completed")
+    logger.info("API: game stopped — id=%s", game_id)
     return {"status": "stopped"}

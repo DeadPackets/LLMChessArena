@@ -27,20 +27,26 @@ async def game_websocket(websocket: WebSocket, game_id: str):
       3. Connection closes after game_over or on client disconnect
     """
     await websocket.accept()
+    logger.info("WebSocket connected: game=%s, client=%s", game_id, websocket.client)
 
     manager = websocket.app.state.game_manager
 
     # Send catch-up state (all moves played so far)
     catch_up = await manager.get_catch_up_state(game_id)
     if catch_up is None:
+        logger.warning("WebSocket game not found: %s", game_id)
         await websocket.send_json({"type": "error", "data": {"message": "Game not found"}})
         await websocket.close(code=4004)
         return
 
+    move_count = len(catch_up["data"].get("moves", []))
+    status = catch_up["data"]["status"]
+    logger.info("WebSocket catch-up sent: game=%s, %d moves, status=%s", game_id, move_count, status)
     await websocket.send_text(json.dumps(catch_up, default=_json_default))
 
     # If game is already completed, close after sending catch-up
-    if catch_up["data"]["status"] == "completed":
+    if status == "completed":
+        logger.info("WebSocket closing (game completed): game=%s", game_id)
         await websocket.close()
         return
 
@@ -51,14 +57,17 @@ async def game_websocket(websocket: WebSocket, game_id: str):
             event = await queue.get()
             if event is None:
                 # Game ended, manager sends None to signal cleanup
+                logger.info("WebSocket received end signal: game=%s", game_id)
                 break
+            event_type = event.get("type", "unknown")
             await websocket.send_text(json.dumps(event, default=_json_default))
-            if event.get("type") == "game_over":
+            logger.debug("WebSocket sent event: game=%s, type=%s", game_id, event_type)
+            if event_type == "game_over":
                 break
     except WebSocketDisconnect:
-        logger.debug("WebSocket client disconnected from game %s", game_id)
+        logger.info("WebSocket client disconnected: game=%s", game_id)
     except Exception:
-        logger.exception("WebSocket error for game %s", game_id)
+        logger.exception("WebSocket error: game=%s", game_id)
     finally:
         manager.unsubscribe(game_id, queue)
         try:

@@ -250,9 +250,8 @@ button {
 }
 
 .game-info__opening {
-  font-family: var(--font-display);
-  font-style: italic;
-  font-size: 0.95rem;
+  font-family: var(--font-body);
+  font-size: 0.88rem;
   color: var(--text-secondary);
 }
 

@@ -63,12 +63,30 @@ export default function TrashTalkPanel({
     return result;
   }, [moves, illegalMoves]);
 
-  // Auto-scroll to bottom on new entries
+  const selectedBubbleRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (chatRef.current) {
       chatRef.current.scrollTop = chatRef.current.scrollHeight;
     }
   }, [entries.length]);
+
+  // Scroll to the selected bubble when user clicks a move
+  useEffect(() => {
+    if (selectedBubbleRef.current && chatRef.current) {
+      const container = chatRef.current;
+      const el = selectedBubbleRef.current;
+      const elTop = el.offsetTop - container.offsetTop;
+      const elBottom = elTop + el.offsetHeight;
+      const viewTop = container.scrollTop;
+      const viewBottom = viewTop + container.clientHeight;
+
+      if (elBottom > viewBottom || elTop < viewTop) {
+        el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+    }
+  }, [selectedIndex]);
 
   if (entries.length === 0) return null;
 
@@ -114,6 +132,7 @@ export default function TrashTalkPanel({
           return (
             <div
               key={`move-${entry.index}`}
+              ref={isSelected ? selectedBubbleRef : undefined}
               className={`trash-talk-bubble trash-talk-bubble--${m.color}${
                 isSelected ? " trash-talk-bubble--selected" : ""
               }`}

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import logging
 import math
+import time
 
 import chess
 import chess.engine
 
 from app.config import STOCKFISH_PATH
 from app.models.chess_models import PositionEval
+
+logger = logging.getLogger(__name__)
 
 
 class StockfishService:
@@ -18,14 +22,17 @@ class StockfishService:
         self._engine: chess.engine.UciProtocol | None = None
 
     async def start(self) -> None:
+        logger.info("Starting Stockfish at %s", self.path)
         self._transport, self._engine = await chess.engine.popen_uci(self.path)
         await self._engine.configure({
             "Threads": 2,
             "Hash": 128,
         })
+        logger.info("Stockfish ready (Threads=2, Hash=128MB)")
 
     async def stop(self) -> None:
         if self._engine:
+            logger.info("Stopping Stockfish")
             await self._engine.quit()
             self._engine = None
 
@@ -37,10 +44,12 @@ class StockfishService:
 
     async def evaluate(self, board: chess.Board, depth: int = 18) -> PositionEval:
         """Evaluate a position and return structured evaluation data."""
+        start = time.monotonic()
         info = await self.engine.analyse(
             board,
             chess.engine.Limit(depth=depth),
         )
+        elapsed_ms = int((time.monotonic() - start) * 1000)
 
         score = info["score"].white()  # Always from White's perspective
         cp = score.score(mate_score=10000)
@@ -56,7 +65,7 @@ class StockfishService:
         pv = info.get("pv", [])
         best_move = pv[0].uci() if pv else None
 
-        return PositionEval(
+        eval_result = PositionEval(
             centipawns=cp,
             mate_in=mate_in,
             win_probability_white=win_prob,
@@ -64,6 +73,11 @@ class StockfishService:
             best_move_uci=best_move,
             depth=info.get("depth", depth),
         )
+        logger.debug(
+            "Stockfish eval: depth=%d, cp=%d, mate=%s, best=%s, %dms",
+            info.get("depth", depth), cp, mate_in, best_move, elapsed_ms,
+        )
+        return eval_result
 
     @staticmethod
     def cp_to_win_probability(cp: int) -> float:
