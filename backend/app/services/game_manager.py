@@ -29,27 +29,75 @@ class GameManager:
         self.opening_detector = opening_detector
         self.active_games: dict[str, asyncio.Task] = {}
         self.event_queues: dict[str, list[asyncio.Queue]] = {}
+        self.human_move_queues: dict[str, asyncio.Queue] = {}
+        self._awaiting_human_move: dict[str, str | None] = {}  # game_id -> color or None
+
+    async def recover_orphaned_games(self) -> None:
+        """Mark any games left as 'active' in the DB but with no running task.
+
+        This handles the case where the server restarted mid-game. Since board
+        state is not persisted, these games cannot be resumed and must be
+        terminated cleanly.
+        """
+        now = datetime.now(timezone.utc)
+        async with get_session_factory()() as session:
+            results = await session.exec(
+                select(Game).where(Game.status == "active")
+            )
+            orphaned = results.all()
+            for game in orphaned:
+                if game.id not in self.active_games:
+                    logger.warning(
+                        "Orphaned game %s (%s vs %s, %d moves): marking as completed (server_restart)",
+                        game.id, game.white_model, game.black_model, game.total_moves or 0,
+                    )
+                    game.status = "completed"
+                    game.outcome = "draw"
+                    game.termination = "server_restart"
+                    game.completed_at = now
+                    session.add(game)
+            if orphaned:
+                await session.commit()
+                logger.info("Recovered %d orphaned game(s)", len(orphaned))
 
     async def start_game(self, config: GameConfig) -> str:
         """Create a game record and start it as a background task."""
         game_id = uuid4().hex[:12]
         now = datetime.now(timezone.utc)
 
+        def _side_label(is_human: bool, is_stockfish: bool, model: str) -> str:
+            if is_human:
+                return "Human"
+            if is_stockfish:
+                return "Stockfish"
+            return model
+
+        white_label = _side_label(config.white_is_human, config.white_is_stockfish, config.white_model)
+        black_label = _side_label(config.black_is_human, config.black_is_stockfish, config.black_model)
         logger.info(
             "Creating game %s: %s (white) vs %s (black)",
-            game_id, config.white_model, config.black_model,
+            game_id, white_label, black_label,
         )
 
-        await self._ensure_model(config.white_model)
-        await self._ensure_model(config.black_model)
+        # Register models (Human/Stockfish get their own model entries)
+        await self._ensure_model(white_label)
+        await self._ensure_model(black_label)
 
         async with get_session_factory()() as session:
             game = Game(
                 id=game_id,
-                white_model=config.white_model,
-                black_model=config.black_model,
+                white_model=white_label,
+                black_model=black_label,
                 status="active",
                 started_at=now,
+                white_temperature=config.white_temperature,
+                black_temperature=config.black_temperature,
+                white_reasoning_effort=config.white_reasoning_effort,
+                black_reasoning_effort=config.black_reasoning_effort,
+                white_is_human=config.white_is_human,
+                black_is_human=config.black_is_human,
+                white_is_stockfish=config.white_is_stockfish,
+                black_is_stockfish=config.black_is_stockfish,
             )
             session.add(game)
             await session.commit()
@@ -91,6 +139,15 @@ class GameManager:
             return True
         return False
 
+    async def submit_human_move(self, game_id: str, uci: str) -> bool:
+        """Submit a human move for an active game. Returns True if queued."""
+        queue = self.human_move_queues.get(game_id)
+        if queue is None:
+            logger.warning("Game %s: human move submitted but no queue exists", game_id)
+            return False
+        await queue.put(uci)
+        return True
+
     async def get_catch_up_state(self, game_id: str) -> dict | None:
         """Get full game state for a late-joining WebSocket client."""
         async with get_session_factory()() as session:
@@ -114,7 +171,7 @@ class GameManager:
                 "san": m.san,
                 "fen_after": m.fen_after,
                 "narration": m.narration,
-                "trash_talk": m.trash_talk,
+                "table_talk": m.table_talk,
                 "centipawns": m.centipawns,
                 "mate_in": m.mate_in,
                 "win_probability": m.win_probability,
@@ -139,17 +196,35 @@ class GameManager:
                 "termination": game.termination,
                 "fen": last_fen,
                 "moves": moves,
+                "white_temperature": game.white_temperature,
+                "black_temperature": game.black_temperature,
+                "white_reasoning_effort": game.white_reasoning_effort,
+                "black_reasoning_effort": game.black_reasoning_effort,
+                "white_is_human": bool(game.white_is_human),
+                "black_is_human": bool(game.black_is_human),
+                "white_is_stockfish": bool(game.white_is_stockfish),
+                "black_is_stockfish": bool(game.black_is_stockfish),
+                "awaiting_human_move": self._awaiting_human_move.get(game.id),
             },
         }
 
     async def _run_game(self, game_id: str, config: GameConfig) -> None:
         """Execute a full game and persist results."""
         logger.info("Game %s: engine initializing", game_id)
+
+        # Create human move queue if either side is human
+        human_queue: asyncio.Queue | None = None
+        if config.white_is_human or config.black_is_human:
+            human_queue = asyncio.Queue()
+            self.human_move_queues[game_id] = human_queue
+
         engine = GameEngine(
-            config, stockfish=self.stockfish, opening_detector=self.opening_detector
+            config, stockfish=self.stockfish, opening_detector=self.opening_detector,
+            human_move_queue=human_queue,
         )
 
         async def on_move(record: MoveRecord) -> None:
+            self._awaiting_human_move.pop(game_id, None)
             await self._persist_move(game_id, record)
             await self._broadcast(game_id, {
                 "type": "move_played",
@@ -165,17 +240,29 @@ class GameManager:
         async def on_illegal_move(event: dict) -> None:
             await self._handle_illegal_move(game_id, event)
 
+        async def on_awaiting_human_move(color: str) -> None:
+            self._awaiting_human_move[game_id] = color
+            await self._broadcast(game_id, {
+                "type": "awaiting_human_move",
+                "data": {"color": color},
+            })
+
         engine.move_callbacks.append(on_move)
         engine.illegal_move_callbacks.append(on_illegal_move)
         engine.status_callback = on_status
+        engine.awaiting_human_move_callback = on_awaiting_human_move
 
         # Broadcast game started
         await self._broadcast(game_id, {
             "type": "game_started",
             "data": {
                 "game_id": game_id,
-                "white_model": config.white_model,
-                "black_model": config.black_model,
+                "white_model": "Stockfish" if config.white_is_stockfish else "Human" if config.white_is_human else config.white_model,
+                "black_model": "Stockfish" if config.black_is_stockfish else "Human" if config.black_is_human else config.black_model,
+                "white_is_human": config.white_is_human,
+                "black_is_human": config.black_is_human,
+                "white_is_stockfish": config.white_is_stockfish,
+                "black_is_stockfish": config.black_is_stockfish,
             },
         })
 
@@ -187,6 +274,15 @@ class GameManager:
                 result.total_moves, result.total_cost_usd,
             )
             await self._persist_result(game_id, result)
+            # Normalize model IDs for non-LLM sides before ELO update
+            if config.white_is_stockfish:
+                result.white_model = "Stockfish"
+            elif config.white_is_human:
+                result.white_model = "Human"
+            if config.black_is_stockfish:
+                result.black_model = "Stockfish"
+            elif config.black_is_human:
+                result.black_model = "Human"
             await self._update_elo(result)
             logger.info("Game %s: results persisted and ELO updated", game_id)
             await self._broadcast(game_id, {
@@ -220,6 +316,8 @@ class GameManager:
             })
         finally:
             self.active_games.pop(game_id, None)
+            self.human_move_queues.pop(game_id, None)
+            self._awaiting_human_move.pop(game_id, None)
             # Signal end to any remaining subscribers
             for q in self.event_queues.pop(game_id, []):
                 await q.put(None)
@@ -263,7 +361,7 @@ class GameManager:
                 san=record.san,
                 fen_after=record.fen_after,
                 narration=record.narration,
-                trash_talk=record.trash_talk,
+                table_talk=record.table_talk,
                 centipawns=record.eval_after.centipawns if record.eval_after else None,
                 mate_in=record.eval_after.mate_in if record.eval_after else None,
                 win_probability=record.eval_after.win_probability_white if record.eval_after else None,

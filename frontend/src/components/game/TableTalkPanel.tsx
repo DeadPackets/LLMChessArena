@@ -20,7 +20,7 @@ type ChatEntry =
   | { type: "move"; index: number; move: MoveData }
   | { type: "illegal"; data: IllegalMoveData };
 
-export default function TrashTalkPanel({
+export default function TableTalkPanel({
   moves,
   illegalMoves,
   selectedIndex,
@@ -48,8 +48,8 @@ export default function TrashTalkPanel({
         result.push({ type: "illegal", data: illegalMoves[illegalIdx] });
         illegalIdx++;
       }
-      // Only include moves that have trash talk
-      if (m.trashTalk) {
+      // Only include moves that have table talk
+      if (m.tableTalk) {
         result.push({ type: "move", index: i, move: m });
       }
     }
@@ -91,9 +91,9 @@ export default function TrashTalkPanel({
   if (entries.length === 0) return null;
 
   return (
-    <div className="trash-talk-panel panel">
-      <div className="trash-talk-panel__label">Trash Talk</div>
-      <div className="trash-talk-chat" ref={chatRef}>
+    <div className="table-talk-panel panel">
+      <div className="table-talk-panel__label">Table Talk</div>
+      <div className="table-talk-chat" ref={chatRef}>
         {entries.map((entry, i) => {
           if (entry.type === "illegal") {
             const d = entry.data;
@@ -101,23 +101,23 @@ export default function TrashTalkPanel({
             const isInvalidUCI = d.reason === "Invalid UCI notation";
             const errorLabel = isInvalidUCI ? "invalid UCI" : "illegal move";
             const errorClass = isInvalidUCI
-              ? "trash-talk-bubble--invalid-uci"
-              : "trash-talk-bubble--illegal";
+              ? "table-talk-bubble--invalid-uci"
+              : "table-talk-bubble--illegal";
             return (
               <div
                 key={`illegal-${i}`}
-                className={`trash-talk-bubble ${errorClass} trash-talk-bubble--${d.color}`}
+                className={`table-talk-bubble ${errorClass} table-talk-bubble--${d.color}`}
               >
-                <div className="trash-talk-bubble__header">
-                  <span className="trash-talk-bubble__model">{model}</span>
-                  <span className="trash-talk-bubble__move">
+                <div className="table-talk-bubble__header">
+                  <span className="table-talk-bubble__model">{model}</span>
+                  <span className="table-talk-bubble__move">
                     {errorLabel} ({d.attempt}/{d.maxAttempts})
                   </span>
                 </div>
-                <div className="trash-talk-bubble__illegal-text">
+                <div className="table-talk-bubble__illegal-text">
                   <code>{d.attemptedMove}</code>
                 </div>
-                <div className="trash-talk-bubble__illegal-reason">{d.reason}</div>
+                <div className="table-talk-bubble__illegal-reason">{d.reason}</div>
               </div>
             );
           }
@@ -133,18 +133,18 @@ export default function TrashTalkPanel({
             <div
               key={`move-${entry.index}`}
               ref={isSelected ? selectedBubbleRef : undefined}
-              className={`trash-talk-bubble trash-talk-bubble--${m.color}${
-                isSelected ? " trash-talk-bubble--selected" : ""
+              className={`table-talk-bubble table-talk-bubble--${m.color}${
+                isSelected ? " table-talk-bubble--selected" : ""
               }`}
               onClick={() => onSelectMove(entry.index)}
             >
-              <div className="trash-talk-bubble__header">
-                <span className="trash-talk-bubble__model">{model}</span>
-                <span className="trash-talk-bubble__move">
+              <div className="table-talk-bubble__header">
+                <span className="table-talk-bubble__model">{model}</span>
+                <span className="table-talk-bubble__move">
                   {m.moveNumber}{m.color === "black" ? "..." : "."} {m.san}
                 </span>
               </div>
-              <div className="trash-talk-bubble__text">{m.trashTalk}</div>
+              <div className="table-talk-bubble__text">{m.tableTalk}</div>
             </div>
           );
         })}

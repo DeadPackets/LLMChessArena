@@ -25,13 +25,36 @@ router = APIRouter(prefix="/api/games", tags=["games"])
 
 @router.post("", response_model=GameCreatedResponse)
 async def create_game(req: CreateGameRequest, request: Request):
-    """Start a new game between two LLM models."""
-    logger.info("API: create game — %s vs %s (max %d moves)", req.white_model, req.black_model, req.max_moves)
+    """Start a new game. At least one side must be an LLM."""
+    white_is_llm = not req.white_is_human and not req.white_is_stockfish
+    black_is_llm = not req.black_is_human and not req.black_is_stockfish
+    if not white_is_llm and not black_is_llm:
+        raise HTTPException(400, "At least one side must be an LLM")
+    if req.white_is_human and req.white_is_stockfish:
+        raise HTTPException(400, "A side cannot be both human and Stockfish")
+    if req.black_is_human and req.black_is_stockfish:
+        raise HTTPException(400, "A side cannot be both human and Stockfish")
+    if white_is_llm and not req.white_model.strip():
+        raise HTTPException(400, "White model is required for LLM side")
+    if black_is_llm and not req.black_model.strip():
+        raise HTTPException(400, "Black model is required for LLM side")
+
+    white_label = "Human" if req.white_is_human else "Stockfish" if req.white_is_stockfish else req.white_model
+    black_label = "Human" if req.black_is_human else "Stockfish" if req.black_is_stockfish else req.black_model
+    logger.info("API: create game — %s vs %s (max %d moves)", white_label, black_label, req.max_moves)
     manager = request.app.state.game_manager
     config = GameConfig(
         white_model=req.white_model,
         black_model=req.black_model,
         max_moves=req.max_moves,
+        white_temperature=req.white_temperature,
+        black_temperature=req.black_temperature,
+        white_reasoning_effort=req.white_reasoning_effort,
+        black_reasoning_effort=req.black_reasoning_effort,
+        white_is_human=req.white_is_human,
+        black_is_human=req.black_is_human,
+        white_is_stockfish=req.white_is_stockfish,
+        black_is_stockfish=req.black_is_stockfish,
     )
     game_id = await manager.start_game(config)
     logger.info("API: game created — id=%s", game_id)
@@ -70,6 +93,14 @@ async def list_games(
             total_moves=r.total_moves or 0,
             started_at=r.started_at,
             completed_at=r.completed_at,
+            white_temperature=r.white_temperature,
+            black_temperature=r.black_temperature,
+            white_reasoning_effort=r.white_reasoning_effort,
+            black_reasoning_effort=r.black_reasoning_effort,
+            white_is_human=bool(r.white_is_human),
+            black_is_human=bool(r.black_is_human),
+            white_is_stockfish=bool(r.white_is_stockfish),
+            black_is_stockfish=bool(r.black_is_stockfish),
         )
         for r in rows
     ]
@@ -103,6 +134,14 @@ async def get_game(game_id: str, session: AsyncSession = Depends(get_session)):
         total_moves=game.total_moves or 0,
         started_at=game.started_at,
         completed_at=game.completed_at,
+        white_temperature=game.white_temperature,
+        black_temperature=game.black_temperature,
+        white_reasoning_effort=game.white_reasoning_effort,
+        black_reasoning_effort=game.black_reasoning_effort,
+        white_is_human=bool(game.white_is_human),
+        black_is_human=bool(game.black_is_human),
+        white_is_stockfish=bool(game.white_is_stockfish),
+        black_is_stockfish=bool(game.black_is_stockfish),
         pgn=game.pgn,
         moves=[
             MoveDetail(
@@ -112,7 +151,7 @@ async def get_game(game_id: str, session: AsyncSession = Depends(get_session)):
                 san=m.san,
                 fen_after=m.fen_after,
                 narration=m.narration,
-                trash_talk=m.trash_talk,
+                table_talk=m.table_talk,
                 centipawns=m.centipawns,
                 mate_in=m.mate_in,
                 win_probability=m.win_probability,

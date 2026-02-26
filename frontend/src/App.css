@@ -782,7 +782,8 @@ button {
 }
 
 .new-game-dialog__label {
-  display: block;
+  display: flex;
+  align-items: baseline;
   font-size: 0.78rem;
   font-weight: 500;
   color: var(--text-secondary);
@@ -808,6 +809,221 @@ button {
 
 .new-game-dialog__input::placeholder {
   color: var(--text-muted);
+}
+
+.new-game-dialog__advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 0.3rem 0;
+  margin-top: 0.25rem;
+  font-family: var(--font-body);
+  transition: color 0.15s;
+}
+
+.new-game-dialog__advanced-toggle:hover {
+  color: var(--amber);
+}
+
+.new-game-dialog__advanced-chevron {
+  font-size: 0.7rem;
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+.new-game-dialog__advanced-chevron--open {
+  transform: rotate(180deg);
+}
+
+.new-game-dialog__advanced {
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+  margin-top: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.new-game-dialog__label-hint {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--amber);
+  font-family: var(--font-mono);
+}
+
+.new-game-dialog__range-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.new-game-dialog__range-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  min-width: 1ch;
+}
+
+.new-game-dialog__range {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+  margin: 0;
+}
+
+.new-game-dialog__range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--amber);
+  cursor: pointer;
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 0 6px rgba(212, 168, 67, 0.4);
+}
+
+.new-game-dialog__range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--amber);
+  cursor: pointer;
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 0 6px rgba(212, 168, 67, 0.4);
+}
+
+.new-game-dialog__select {
+  cursor: pointer;
+}
+
+.new-game-dialog__reset-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--font-body);
+  text-align: left;
+}
+
+.new-game-dialog__reset-btn:hover {
+  color: var(--amber);
+}
+
+.new-game-dialog__settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.new-game-dialog__model-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.new-game-dialog__model-settings-header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.new-game-dialog__model-settings-icon {
+  font-size: 1rem;
+}
+
+/* --- Player Type Toggle --- */
+
+.player-type-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.player-type-toggle__btn {
+  flex: 1;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.player-type-toggle__btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.player-type-toggle__btn--active {
+  background: var(--amber);
+  color: #111;
+}
+
+.player-type-toggle__btn--active:hover {
+  background: var(--amber-bright);
+}
+
+.player-type-toggle__btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* --- Human Turn Indicator --- */
+
+.human-turn-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius);
+  background: var(--amber-glow-strong);
+  border: 1px solid var(--amber-dim);
+  color: var(--amber-bright);
+  font-size: 0.82rem;
+  font-weight: 600;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(212, 168, 67, 0.2); }
+  50% { box-shadow: 0 0 16px rgba(212, 168, 67, 0.4); }
+}
+
+.resign-btn {
+  margin-top: 0.5rem;
+  width: 100%;
+  color: var(--blunder);
+  border: 1px solid rgba(202, 52, 49, 0.3);
+  font-size: 0.78rem;
+}
+
+.resign-btn:hover {
+  background: rgba(202, 52, 49, 0.15);
+  border-color: var(--blunder);
 }
 
 .new-game-dialog__actions {
@@ -1281,7 +1497,7 @@ button {
   .move-list {
     max-height: 300px;
   }
-  .trash-talk-panel {
+  .table-talk-panel {
     flex: none;
     max-height: 250px;
   }
@@ -1466,10 +1682,10 @@ button {
 
 
 /* ========================================================================
-   TRASH TALK CHAT PANEL
+   TABLE TALK CHAT PANEL
    ======================================================================== */
 
-.trash-talk-panel {
+.table-talk-panel {
   padding: 0.5rem;
   flex: 1 1 0;
   min-height: 0;
@@ -1478,7 +1694,7 @@ button {
   flex-direction: column;
 }
 
-.trash-talk-panel__label {
+.table-talk-panel__label {
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -1490,7 +1706,7 @@ button {
   padding: 0 0.5rem 0.35rem;
 }
 
-.trash-talk-chat {
+.table-talk-chat {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -1500,11 +1716,11 @@ button {
   padding: 0.25rem;
 }
 
-.trash-talk-chat::-webkit-scrollbar { width: 4px; }
-.trash-talk-chat::-webkit-scrollbar-track { background: transparent; }
-.trash-talk-chat::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
+.table-talk-chat::-webkit-scrollbar { width: 4px; }
+.table-talk-chat::-webkit-scrollbar-track { background: transparent; }
+.table-talk-chat::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
 
-.trash-talk-bubble {
+.table-talk-bubble {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
@@ -1518,45 +1734,45 @@ button {
   cursor: pointer;
 }
 
-.trash-talk-bubble--white {
+.table-talk-bubble--white {
   align-self: flex-start;
   background: var(--bg-tertiary);
   border-color: var(--border);
 }
 
-.trash-talk-bubble--black {
+.table-talk-bubble--black {
   align-self: flex-end;
   background: var(--bg-secondary);
   border-color: var(--border);
 }
 
-.trash-talk-bubble--selected {
+.table-talk-bubble--selected {
   border-color: var(--amber) !important;
   box-shadow: 0 0 8px rgba(212, 168, 67, 0.15);
 }
 
-.trash-talk-bubble--illegal {
+.table-talk-bubble--illegal {
   background: rgba(202, 52, 49, 0.08);
   border-color: rgba(202, 52, 49, 0.25) !important;
   max-width: 90%;
 }
 
-.trash-talk-bubble--invalid-uci {
+.table-talk-bubble--invalid-uci {
   background: rgba(224, 136, 50, 0.08);
   border-color: rgba(224, 136, 50, 0.25) !important;
   max-width: 90%;
 }
 
-.trash-talk-bubble--invalid-uci .trash-talk-bubble__illegal-text {
+.table-talk-bubble--invalid-uci .table-talk-bubble__illegal-text {
   color: var(--mistake);
 }
 
-.trash-talk-bubble--illegal.trash-talk-bubble--white,
-.trash-talk-bubble--invalid-uci.trash-talk-bubble--white { align-self: flex-start; }
-.trash-talk-bubble--illegal.trash-talk-bubble--black,
-.trash-talk-bubble--invalid-uci.trash-talk-bubble--black { align-self: flex-end; }
+.table-talk-bubble--illegal.table-talk-bubble--white,
+.table-talk-bubble--invalid-uci.table-talk-bubble--white { align-self: flex-start; }
+.table-talk-bubble--illegal.table-talk-bubble--black,
+.table-talk-bubble--invalid-uci.table-talk-bubble--black { align-self: flex-end; }
 
-.trash-talk-bubble__header {
+.table-talk-bubble__header {
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -1564,27 +1780,27 @@ button {
   font-size: 0.68rem;
 }
 
-.trash-talk-bubble__model {
+.table-talk-bubble__model {
   color: var(--amber);
   font-weight: 600;
 }
 
-.trash-talk-bubble__move {
+.table-talk-bubble__move {
   color: var(--text-muted);
 }
 
-.trash-talk-bubble__text {
+.table-talk-bubble__text {
   font-family: var(--font-body);
   color: var(--text-secondary);
 }
 
-.trash-talk-bubble__illegal-text {
+.table-talk-bubble__illegal-text {
   font-family: var(--font-mono);
   font-size: 0.75rem;
   color: var(--blunder);
 }
 
-.trash-talk-bubble__illegal-reason {
+.table-talk-bubble__illegal-reason {
   font-family: var(--font-mono);
   font-size: 0.68rem;
   color: var(--text-muted);

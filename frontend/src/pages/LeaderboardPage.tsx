@@ -12,6 +12,7 @@ function formatModelName(id: string, displayName: string | null): string {
 export default function LeaderboardPage() {
   const [models, setModels] = useState<EnhancedModelStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showHuman, setShowHuman] = useState(true);
 
   useEffect(() => {
     getLeaderboard()
@@ -28,14 +29,26 @@ export default function LeaderboardPage() {
     );
   }
 
-  const maxElo = models.length > 0 ? Math.max(...models.map((m) => m.elo_rating)) : 1500;
-  const minElo = models.length > 0 ? Math.min(...models.map((m) => m.elo_rating)) : 1500;
+  const displayModels = showHuman
+    ? models
+    : models.filter((m) => m.id !== "Human");
+
+  const maxElo = displayModels.length > 0 ? Math.max(...displayModels.map((m) => m.elo_rating)) : 1500;
+  const minElo = displayModels.length > 0 ? Math.min(...displayModels.map((m) => m.elo_rating)) : 1500;
   const eloRange = maxElo - minElo || 1;
 
   return (
     <div className="leaderboard-page">
-      <h1 className="leaderboard-page__title">Leaderboard</h1>
-      {models.length === 0 ? (
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+        <h1 className="leaderboard-page__title" style={{ marginBottom: 0 }}>Leaderboard</h1>
+        <button
+          className={`filter-btn${showHuman ? " filter-btn--active" : ""}`}
+          onClick={() => setShowHuman(!showHuman)}
+        >
+          Include Human
+        </button>
+      </div>
+      {displayModels.length === 0 ? (
         <div className="empty-state panel">
           <div className="empty-state__icon">&#9813;</div>
           <div className="empty-state__text">
@@ -59,7 +72,7 @@ export default function LeaderboardPage() {
               </tr>
             </thead>
             <tbody>
-              {models.map((model, i) => {
+              {displayModels.map((model, i) => {
                 const rank = i + 1;
                 const barWidth = Math.max(4, ((model.elo_rating - minElo) / eloRange) * 80);
                 const rankCls = rank <= 3 ? ` leaderboard__rank--${rank}` : "";

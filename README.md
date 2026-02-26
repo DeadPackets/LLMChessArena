@@ -2,7 +2,7 @@
 
 # ♞ LLM Chess Arena
 
-**Watch AI models battle it out on the chessboard with real-time evaluation, live commentary, and deep post-game analysis.**
+**Watch AI models battle it out on the chessboard — against each other, against humans, or against Stockfish — with real-time evaluation, table talk, and deep post-game analysis.**
 
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -21,18 +21,32 @@
 
 ## Overview
 
-LLM Chess Arena is a full-stack web application that pits large language models against each other in chess. Games are played in real-time via [OpenRouter](https://openrouter.ai/), evaluated move-by-move with [Stockfish](https://stockfishchess.org/), and narrated by an AI commentator — all streamed live to a sleek dark-themed UI.
+LLM Chess Arena is a full-stack web application that pits large language models against each other (or against Stockfish or a human player) in chess. Games are played in real-time via [OpenRouter](https://openrouter.ai/), evaluated move-by-move with [Stockfish](https://stockfishchess.org/), and accompanied by AI-generated table talk — all streamed live to a sleek dark-themed UI.
 
 ### Highlights
 
 - **Any LLM vs Any LLM** — Supports any model available on OpenRouter (GPT-4o, Claude, Gemini, Llama, etc.)
-- **Real-time WebSocket streaming** — Watch moves, evaluations, and commentary appear live
+- **Human vs LLM** — Play against any AI model with interactive drag-and-drop or click-to-move, legal move highlighting, and promotion dialogs
+- **Stockfish as opponent** — Pit any LLM against the strongest classical chess engine to benchmark raw chess ability
+- **Real-time WebSocket streaming** — Watch moves, evaluations, and table talk appear live
 - **Stockfish-powered analysis** — Every move gets engine evaluation, win probability, and classification (brilliant, great, best, good, inaccuracy, mistake, blunder)
-- **AI narration** — A separate LLM provides color commentary for each move
+- **Table talk** — LLMs provide honest, natural reactions to the position after each move — confident when ahead, frustrated when behind
 - **Post-game analysis** — Accuracy scores, ACPL, critical moments, classification breakdowns
-- **ELO rating system** — Models accumulate ratings across games
+- **ELO rating system** — All players (LLMs, Human, and Stockfish) accumulate ratings across games on a unified leaderboard
 - **Cost tracking** — Per-move and per-game token usage and API cost tracking
 - **Docker-ready** — One command to deploy the entire stack
+
+---
+
+## Game Modes
+
+| Mode | Description |
+|------|-------------|
+| **LLM vs LLM** | Two AI models play each other. Both provide table talk and narration. |
+| **Human vs LLM** | You play against an AI model with an interactive board — legal move highlights, click-to-move, drag-and-drop, and pawn promotion. |
+| **LLM vs Stockfish** | An AI model plays against the Stockfish engine. Stockfish plays instantly with no table talk or narration — a pure chess skill benchmark. |
+
+> **Note:** Every game must have at least one LLM. Human vs Stockfish games are not allowed — this is an LLM arena, not a chess website.
 
 ---
 
@@ -42,7 +56,7 @@ LLM Chess Arena is a full-stack web application that pits large language models 
 <summary><b>🎮 Live Game Viewer</b></summary>
 <br />
 <img src="docs/screenshots/game-viewer.png" alt="Game Viewer" width="800" />
-<p>Interactive chessboard with eval bar, win probability graph, classified move list, playback controls, and AI commentary.</p>
+<p>Interactive chessboard with eval bar, win probability graph, classified move list, playback controls, table talk, and AI commentary.</p>
 </details>
 
 <details>
@@ -56,21 +70,28 @@ LLM Chess Arena is a full-stack web application that pits large language models 
 <summary><b>🏠 Games List</b></summary>
 <br />
 <img src="docs/screenshots/games-page.png" alt="Games Page" width="800" />
-<p>Browse active and completed games with filtering. Start new matches between any two models.</p>
+<p>Browse active and completed games with filtering. Start new matches between any combination of LLM, Human, and Stockfish.</p>
+</details>
+
+<details>
+<summary><b>➕ New Game Dialog</b></summary>
+<br />
+<img src="docs/screenshots/new-game-dialog.png" alt="New Game Dialog" width="800" />
+<p>Three-way player type toggle (LLM / Human / Stockfish) per side with automatic enforcement of the "at least one LLM" rule. Advanced settings for temperature and reasoning effort per LLM side.</p>
 </details>
 
 <details>
 <summary><b>🏆 Leaderboard</b></summary>
 <br />
 <img src="docs/screenshots/leaderboard.png" alt="Leaderboard" width="800" />
-<p>ELO rankings with accuracy, ACPL, average cost, and response time stats.</p>
+<p>Unified ELO rankings for LLMs, Human, and Stockfish — with accuracy, ACPL, average cost, and response time stats. Toggle to filter out Human players.</p>
 </details>
 
 <details>
 <summary><b>🤖 Model Detail</b></summary>
 <br />
 <img src="docs/screenshots/model-detail.png" alt="Model Detail" width="800" />
-<p>Deep dive into any model's performance: win rates, head-to-head records, classification distribution, and recent games.</p>
+<p>Deep dive into any model's performance: win rates, head-to-head records, classification distribution, and recent games. Works for LLMs, Human, and Stockfish alike.</p>
 </details>
 
 <details>
@@ -88,11 +109,11 @@ LLM Chess Arena is a full-stack web application that pits large language models 
 |-------|-----------|
 | **Backend** | [FastAPI](https://fastapi.tiangolo.com) + [SQLModel](https://sqlmodel.tiangolo.com) + [aiosqlite](https://github.com/omnilib/aiosqlite) |
 | **LLM Orchestration** | [pydantic-ai](https://ai.pydantic.dev) via [OpenRouter](https://openrouter.ai) |
-| **Chess Engine** | [Stockfish](https://stockfishchess.org) (depth 18 live eval) |
+| **Chess Engine** | [Stockfish](https://stockfishchess.org) (depth 18 live eval + playable opponent) |
 | **Chess Logic** | [python-chess](https://python-chess.readthedocs.io) |
 | **Real-time** | WebSocket (FastAPI → React) |
 | **Frontend** | [React 19](https://react.dev) + [TypeScript](https://typescriptlang.org) + [Vite](https://vitejs.dev) |
-| **Board UI** | [react-chessboard](https://github.com/Clariity/react-chessboard) |
+| **Board UI** | [react-chessboard](https://github.com/Clariity/react-chessboard) + [chess.js](https://github.com/jhlywa/chess.js) (client-side validation) |
 | **Charts** | [Recharts](https://recharts.org) |
 | **Deployment** | [Docker Compose](https://docs.docker.com/compose/) (nginx + uvicorn) |
 
@@ -156,11 +177,13 @@ The frontend dev server runs at **http://localhost:5173** and proxies API reques
 
 ## Usage
 
-1. **Start a game** — Click "New Game" on the home page, enter two model IDs (e.g., `openai/gpt-4o` vs `anthropic/claude-sonnet-4`), and click Start
-2. **Watch live** — The board updates in real-time with move animations, engine evaluation, and AI narration
-3. **Review games** — Click any completed game to see full analysis with accuracy scores, critical moments, and replay controls
-4. **Track models** — Visit the Leaderboard to see ELO rankings, or click a model name for detailed stats and head-to-head records
-5. **Monitor costs** — The Cost & Performance page shows platform-wide spending and token usage across all models
+1. **Start a game** — Click "New Game", choose player types (LLM / Human / Stockfish) per side, enter model IDs for LLM sides, and click Start
+2. **Watch live** — The board updates in real-time with move animations, engine evaluation, and table talk between the models
+3. **Play as Human** — Select "Human" for one side to play interactively with legal move highlighting, click-to-move, and drag-and-drop
+4. **Benchmark against Stockfish** — Select "Stockfish" for one side to test an LLM against the strongest classical engine
+5. **Review games** — Click any completed game to see full analysis with accuracy scores, critical moments, and replay controls
+6. **Track models** — Visit the Leaderboard to see ELO rankings (LLMs, Human, and Stockfish all ranked together), or click a model name for detailed stats
+7. **Monitor costs** — The Cost & Performance page shows platform-wide spending and token usage across all models
 
 ---
 
@@ -174,17 +197,20 @@ LLMChessArena/
 │   │   ├── config.py            # Environment config
 │   │   ├── database.py          # SQLModel tables (Game, Move, LLMModel)
 │   │   ├── models/
-│   │   │   └── api_models.py    # Pydantic response models
+│   │   │   ├── api_models.py    # Pydantic request/response models
+│   │   │   └── chess_models.py  # GameConfig, ChessMove, MoveRecord, GameResult
 │   │   ├── routers/
 │   │   │   ├── games.py         # Game CRUD + analysis
 │   │   │   ├── models_router.py # Leaderboard + model detail
 │   │   │   ├── stats_router.py  # Cost/token overview
-│   │   │   └── ws.py            # WebSocket game streaming
+│   │   │   └── ws.py            # WebSocket game streaming + human moves
 │   │   └── services/
-│   │       ├── game_engine.py   # Chess game loop
-│   │       ├── game_manager.py  # Concurrent game management
-│   │       ├── stockfish_service.py  # Async Stockfish UCI
+│   │       ├── chess_agent.py   # LLM chess agent (pydantic-ai)
+│   │       ├── game_engine.py   # Chess game loop (LLM, Human, Stockfish)
+│   │       ├── game_manager.py  # Concurrent game management + ELO
+│   │       ├── stockfish_service.py  # Async Stockfish UCI (eval + move gen)
 │   │       ├── move_classifier.py    # Move classification
+│   │       ├── elo_service.py        # ELO calculation
 │   │       ├── stats_service.py      # ACPL, accuracy, aggregates
 │   │       └── opening_detector.py   # ECO opening book
 │   ├── Dockerfile
@@ -192,7 +218,7 @@ LLMChessArena/
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/               # GameList, GameViewer, Leaderboard, ModelDetail, CostDashboard
-│   │   ├── components/          # Board, EvalBar, MoveList, WinProbGraph, AnalysisPanel, etc.
+│   │   ├── components/          # ChessboardPanel, EvalBar, MoveList, WinProbGraph, TableTalkPanel, etc.
 │   │   ├── hooks/               # useGameWebSocket, useReplayControls
 │   │   ├── api/client.ts        # REST API client
 │   │   └── types/               # TypeScript interfaces
@@ -210,7 +236,7 @@ LLMChessArena/
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/games` | List games (filter by status, model) |
-| `POST` | `/api/games` | Create a new game |
+| `POST` | `/api/games` | Create a new game (LLM/Human/Stockfish) |
 | `GET` | `/api/games/:id` | Game detail with moves and analysis |
 | `POST` | `/api/games/:id/stop` | Stop an active game |
 | `GET` | `/api/games/:id/pgn` | Download PGN |

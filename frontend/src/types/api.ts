@@ -10,6 +10,14 @@ export interface GameSummary {
   total_moves: number;
   started_at: string | null;
   completed_at: string | null;
+  white_temperature: number | null;
+  black_temperature: number | null;
+  white_reasoning_effort: string | null;
+  black_reasoning_effort: string | null;
+  white_is_human: boolean;
+  black_is_human: boolean;
+  white_is_stockfish: boolean;
+  black_is_stockfish: boolean;
 }
 
 export interface MoveDetail {
@@ -19,7 +27,7 @@ export interface MoveDetail {
   san: string;
   fen_after: string;
   narration: string | null;
-  trash_talk: string | null;
+  table_talk: string | null;
   centipawns: number | null;
   mate_in: number | null;
   win_probability: number | null;
@@ -131,6 +139,14 @@ export interface CreateGameRequest {
   white_model: string;
   black_model: string;
   max_moves?: number;
+  white_temperature?: number | null;
+  black_temperature?: number | null;
+  white_reasoning_effort?: string | null;
+  black_reasoning_effort?: string | null;
+  white_is_human?: boolean;
+  black_is_human?: boolean;
+  white_is_stockfish?: boolean;
+  black_is_stockfish?: boolean;
 }
 
 export interface GameCreatedResponse {

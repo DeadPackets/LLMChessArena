@@ -100,6 +100,10 @@ async def model_detail(model_id: str, session: AsyncSession = Depends(get_sessio
             total_moves=g.total_moves or 0,
             started_at=g.started_at,
             completed_at=g.completed_at,
+            white_is_human=bool(g.white_is_human),
+            black_is_human=bool(g.black_is_human),
+            white_is_stockfish=bool(g.white_is_stockfish),
+            black_is_stockfish=bool(g.black_is_stockfish),
         )
         for g in recent
     ]

@@ -14,6 +14,15 @@ const initialState: GameState = {
   termination: null,
   openingEco: null,
   openingName: null,
+  whiteTemperature: null,
+  blackTemperature: null,
+  whiteReasoningEffort: null,
+  blackReasoningEffort: null,
+  whiteIsHuman: false,
+  blackIsHuman: false,
+  whiteIsStockfish: false,
+  blackIsStockfish: false,
+  awaitingHumanMove: null,
   moves: [],
   illegalMoves: [],
   currentFen: STARTING_FEN,
@@ -42,7 +51,7 @@ function normalizeCatchUpMove(raw: Record<string, unknown>): MoveData {
     san: raw.san as string,
     fenAfter: raw.fen_after as string,
     narration: (raw.narration as string | null) ?? null,
-    trashTalk: (raw.trash_talk as string | null) ?? null,
+    tableTalk: (raw.table_talk as string | null) ?? null,
     centipawns: (raw.centipawns as number | null) ?? null,
     mateIn: (raw.mate_in as number | null) ?? null,
     winProbability: (raw.win_probability as number | null) ?? null,
@@ -72,7 +81,7 @@ function normalizeLiveMove(raw: Record<string, unknown>): MoveData {
     san: raw.san as string,
     fenAfter: raw.fen_after as string,
     narration: (raw.narration as string | null) ?? null,
-    trashTalk: (raw.trash_talk as string | null) ?? null,
+    tableTalk: (raw.table_talk as string | null) ?? null,
     centipawns: evalAfter?.centipawns ?? null,
     mateIn: evalAfter?.mate_in ?? null,
     winProbability: evalAfter?.win_probability_white ?? null,
@@ -120,6 +129,15 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         autoFollow: d.status === "active",
         openingEco: opening?.eco ?? null,
         openingName: opening?.name ?? null,
+        whiteTemperature: (d.white_temperature as number | null) ?? null,
+        blackTemperature: (d.black_temperature as number | null) ?? null,
+        whiteReasoningEffort: (d.white_reasoning_effort as string | null) ?? null,
+        blackReasoningEffort: (d.black_reasoning_effort as string | null) ?? null,
+        whiteIsHuman: (d.white_is_human as boolean) ?? false,
+        blackIsHuman: (d.black_is_human as boolean) ?? false,
+        whiteIsStockfish: (d.white_is_stockfish as boolean) ?? false,
+        blackIsStockfish: (d.black_is_stockfish as boolean) ?? false,
+        awaitingHumanMove: (d.awaiting_human_move as string | null) ?? null,
         statusMessage: null,
       };
     }
@@ -141,6 +159,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         selectedIndex: newIdx,
         openingEco: move.openingEco ?? state.openingEco,
         openingName: move.openingName ?? state.openingName,
+        awaitingHumanMove: null,
         statusMessage: null,
       };
     }
@@ -154,6 +173,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         gameId: action.payload.game_id,
         whiteModel: action.payload.white_model,
         blackModel: action.payload.black_model,
+        whiteIsHuman: action.payload.white_is_human ?? false,
+        blackIsHuman: action.payload.black_is_human ?? false,
+        whiteIsStockfish: action.payload.white_is_stockfish ?? false,
+        blackIsStockfish: action.payload.black_is_stockfish ?? false,
         status: "active",
       };
 
@@ -234,6 +257,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case "CONNECTION_STATUS":
       return { ...state, connectionStatus: action.payload };
 
+    case "AWAITING_HUMAN_MOVE":
+      return {
+        ...state,
+        awaitingHumanMove: action.payload.color,
+        statusMessage: null,
+      };
+
     case "ILLEGAL_MOVE_ATTEMPT":
       return {
         ...state,
@@ -251,7 +281,7 @@ export function useGameWebSocket(gameId: string) {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const wsUrl = `${protocol}//${window.location.host}/ws/games/${gameId}`;
 
-  const { readyState } = useWebSocket(wsUrl, {
+  const { readyState, sendJsonMessage } = useWebSocket(wsUrl, {
     onMessage: (event) => {
       try {
         const msg = JSON.parse(event.data);
@@ -285,6 +315,9 @@ export function useGameWebSocket(gameId: string) {
             dispatch({ type: "ILLEGAL_MOVE_ATTEMPT", payload: illegalMove });
             break;
           }
+          case "awaiting_human_move":
+            dispatch({ type: "AWAITING_HUMAN_MOVE", payload: msg.data });
+            break;
         }
       } catch {
         // ignore malformed messages
@@ -345,5 +378,13 @@ export function useGameWebSocket(gameId: string) {
     dispatch({ type: "TOGGLE_AUTO_FOLLOW" });
   }, []);
 
-  return { state, selectMove, navigate, toggleAutoFollow };
+  const submitMove = useCallback((uci: string) => {
+    sendJsonMessage({ type: "human_move", uci });
+  }, [sendJsonMessage]);
+
+  const resign = useCallback(() => {
+    sendJsonMessage({ type: "resign" });
+  }, [sendJsonMessage]);
+
+  return { state, selectMove, navigate, toggleAutoFollow, submitMove, resign };
 }

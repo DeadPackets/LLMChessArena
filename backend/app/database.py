@@ -30,6 +30,14 @@ class Game(SQLModel, table=True):
     white_illegal_moves: int = Field(default=0)
     black_illegal_moves: int = Field(default=0)
     total_cost_usd: float = Field(default=0.0)
+    white_temperature: Optional[float] = None
+    black_temperature: Optional[float] = None
+    white_reasoning_effort: Optional[str] = None
+    black_reasoning_effort: Optional[str] = None
+    white_is_human: Optional[bool] = Field(default=False)
+    black_is_human: Optional[bool] = Field(default=False)
+    white_is_stockfish: Optional[bool] = Field(default=False)
+    black_is_stockfish: Optional[bool] = Field(default=False)
 
 
 class Move(SQLModel, table=True):
@@ -43,7 +51,7 @@ class Move(SQLModel, table=True):
     san: str
     fen_after: str
     narration: Optional[str] = None
-    trash_talk: Optional[str] = None
+    table_talk: Optional[str] = None
     centipawns: Optional[int] = None
     mate_in: Optional[int] = None
     win_probability: Optional[float] = None
@@ -90,8 +98,35 @@ async def init_db(url: str = DATABASE_URL):
 
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+        # Lightweight migrations for new columns on existing tables
+        await _migrate_add_columns(conn)
 
     return engine
+
+
+async def _migrate_add_columns(conn) -> None:
+    """Add missing columns to existing tables (idempotent)."""
+    import sqlalchemy
+
+    migrations = [
+        ("games", "temperature", "FLOAT"),
+        ("games", "reasoning_effort", "VARCHAR"),
+        ("games", "white_temperature", "FLOAT"),
+        ("games", "black_temperature", "FLOAT"),
+        ("games", "white_reasoning_effort", "VARCHAR"),
+        ("games", "black_reasoning_effort", "VARCHAR"),
+        ("games", "white_is_human", "BOOLEAN DEFAULT 0"),
+        ("games", "black_is_human", "BOOLEAN DEFAULT 0"),
+        ("games", "white_is_stockfish", "BOOLEAN DEFAULT 0"),
+        ("games", "black_is_stockfish", "BOOLEAN DEFAULT 0"),
+    ]
+    for table, column, col_type in migrations:
+        try:
+            await conn.execute(
+                sqlalchemy.text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+            )
+        except Exception:
+            pass  # Column already exists
 
 
 def get_session_factory():

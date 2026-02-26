@@ -7,9 +7,17 @@ from pydantic import BaseModel
 # --- Requests ---
 
 class CreateGameRequest(BaseModel):
-    white_model: str
-    black_model: str
+    white_model: str = ""
+    black_model: str = ""
     max_moves: int = 200
+    white_temperature: float | None = None
+    black_temperature: float | None = None
+    white_reasoning_effort: str | None = None
+    black_reasoning_effort: str | None = None
+    white_is_human: bool = False
+    black_is_human: bool = False
+    white_is_stockfish: bool = False
+    black_is_stockfish: bool = False
 
 
 # --- Responses ---
@@ -26,6 +34,14 @@ class GameSummary(BaseModel):
     total_moves: int = 0
     started_at: datetime | None = None
     completed_at: datetime | None = None
+    white_temperature: float | None = None
+    black_temperature: float | None = None
+    white_reasoning_effort: str | None = None
+    black_reasoning_effort: str | None = None
+    white_is_human: bool = False
+    black_is_human: bool = False
+    white_is_stockfish: bool = False
+    black_is_stockfish: bool = False
 
 
 class MoveDetail(BaseModel):
@@ -35,7 +51,7 @@ class MoveDetail(BaseModel):
     san: str
     fen_after: str
     narration: str | None = None
-    trash_talk: str | None = None
+    table_talk: str | None = None
     centipawns: int | None = None
     mate_in: int | None = None
     win_probability: float | None = None

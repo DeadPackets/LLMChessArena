@@ -8,13 +8,21 @@ class ChessMove(BaseModel):
 
     move: str = Field(description="Your move in UCI notation: 4 chars (source square + destination square), or 5 chars for promotion. Examples: 'e2e4', 'g1f3', 'e7e8q'. Lowercase only, no hyphens, no SAN.")
     narration: str = Field(description="Brief commentary on your move, max 128 characters", max_length=128)
-    trash_talk: str = Field(description="A short trash-talk message directed at your opponent, max 128 characters", max_length=128)
+    table_talk: str = Field(description="A short natural reaction to the current position, max 128 characters", max_length=128)
 
 
 class GameConfig(BaseModel):
     white_model: str  # OpenRouter model ID, e.g. "anthropic/claude-sonnet-4-5"
     black_model: str
     max_moves: int = 200  # per side
+    white_temperature: float | None = None  # 0.0 - 2.0, None = provider default
+    black_temperature: float | None = None
+    white_reasoning_effort: str | None = None  # "none", "low", "medium", "high"
+    black_reasoning_effort: str | None = None
+    white_is_human: bool = False
+    black_is_human: bool = False
+    white_is_stockfish: bool = False
+    black_is_stockfish: bool = False
 
 
 class PositionEval(BaseModel):
@@ -35,7 +43,7 @@ class MoveRecord(BaseModel):
     san: str
     fen_after: str
     narration: str
-    trash_talk: str = ""
+    table_talk: str = ""
     response_time_ms: int = 0
     # Evaluation fields (populated by Stockfish in Phase 2)
     eval_before: PositionEval | None = None

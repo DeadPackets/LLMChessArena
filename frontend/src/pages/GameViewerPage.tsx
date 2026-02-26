@@ -13,7 +13,7 @@ import GameInfoHeader from "../components/game/GameInfoHeader";
 import GameOverBanner from "../components/game/GameOverBanner";
 import WinProbGraph from "../components/game/WinProbGraph";
 import ResponseTimeGraph from "../components/game/ResponseTimeGraph";
-import TrashTalkPanel from "../components/game/TrashTalkPanel";
+import TableTalkPanel from "../components/game/TableTalkPanel";
 import CapturedMaterial from "../components/game/CapturedMaterial";
 import AnalysisPanel from "../components/game/AnalysisPanel";
 import type { IllegalMoveData } from "../types/websocket";
@@ -48,7 +48,7 @@ function IllegalMoveIndicator({ illegalMoves }: { illegalMoves: IllegalMoveData[
 
 export default function GameViewerPage() {
   const { gameId } = useParams<{ gameId: string }>();
-  const { state, selectMove, navigate, toggleAutoFollow } = useGameWebSocket(gameId!);
+  const { state, selectMove, navigate, toggleAutoFollow, submitMove, resign } = useGameWebSocket(gameId!);
 
   // Fetch full game detail for completed games (includes analysis)
   const [gameDetail, setGameDetail] = useState<GameDetail | null>(null);
@@ -100,6 +100,11 @@ export default function GameViewerPage() {
   const isCompleted = state.status === "completed";
   const isLive = state.status === "active";
 
+  // Human player logic
+  const humanColor = state.whiteIsHuman ? "white" : state.blackIsHuman ? "black" : null;
+  const isHumanTurn = !!(humanColor && state.awaitingHumanMove === humanColor && isLive);
+  const boardOrientation: "white" | "black" = humanColor === "black" ? "black" : "white";
+
   return (
     <div className="game-viewer">
       <GameInfoHeader state={state} />
@@ -120,6 +125,10 @@ export default function GameViewerPage() {
               fen={state.currentFen}
               selectedMove={selectedMove}
               previousMove={previousMove}
+              isHumanTurn={isHumanTurn}
+              humanColor={humanColor}
+              onHumanMove={submitMove}
+              boardOrientation={boardOrientation}
             />
           </div>
           <CapturedMaterial fen={state.currentFen} />
@@ -162,7 +171,7 @@ export default function GameViewerPage() {
 
           <NarrationPanel move={selectedMove} />
 
-          <TrashTalkPanel
+          <TableTalkPanel
             moves={state.moves}
             illegalMoves={state.illegalMoves}
             selectedIndex={state.selectedIndex}
@@ -175,7 +184,26 @@ export default function GameViewerPage() {
             <IllegalMoveIndicator illegalMoves={state.illegalMoves} />
           )}
 
-          {state.statusMessage && (
+          {isHumanTurn && (
+            <div className="human-turn-indicator">
+              Your turn — drag a piece to move
+            </div>
+          )}
+
+          {humanColor && isLive && !isHumanTurn && state.awaitingHumanMove === null && (
+            <div className="status-message">
+              <div className="status-message__spinner" />
+              Opponent is thinking...
+            </div>
+          )}
+
+          {humanColor && isLive && (
+            <button className="btn btn--ghost resign-btn" onClick={resign}>
+              Resign
+            </button>
+          )}
+
+          {state.statusMessage && !humanColor && (
             <div className="status-message">
               <div className="status-message__spinner" />
               {state.statusMessage}

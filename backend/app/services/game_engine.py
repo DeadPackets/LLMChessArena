@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Callable, Awaitable
 
 import chess
 import chess.pgn
+
+from pydantic_ai.settings import ModelSettings
 
 from app.config import MAX_MOVES_PER_SIDE, MAX_CONSECUTIVE_ILLEGAL_MOVES
 from app.models.chess_models import ChessMove, GameConfig, GameResult, MoveRecord, PositionEval
@@ -25,6 +28,7 @@ class GameEngine:
         config: GameConfig,
         stockfish: StockfishService | None = None,
         opening_detector: OpeningDetector | None = None,
+        human_move_queue: asyncio.Queue | None = None,
     ):
         self.config = config
         self.board = chess.Board()
@@ -32,8 +36,10 @@ class GameEngine:
         self.move_callbacks: list[Callable[[MoveRecord], Awaitable[None]]] = []
         self.illegal_move_callbacks: list[Callable[[dict], Awaitable[None]]] = []
         self.status_callback: Callable[[str], Awaitable[None]] | None = None
+        self.awaiting_human_move_callback: Callable[[str], Awaitable[None]] | None = None
         self.stockfish = stockfish
         self.opening_detector = opening_detector
+        self.human_move_queue = human_move_queue
         self._last_opening: dict[str, str] | None = None
         self._consecutive_illegal_moves = 0
 
@@ -62,38 +68,84 @@ class GameEngine:
                 except Exception as e:
                     logger.warning("Stockfish eval_before failed (move %d): %s", self.board.fullmove_number, e)
 
-            logger.info(
-                "Move %d: requesting move from %s (%s) | FEN: %s",
-                self.board.fullmove_number, model_name, current_color, self.board.fen(),
+            # Determine side type
+            is_human = (
+                (current_color == "white" and self.config.white_is_human) or
+                (current_color == "black" and self.config.black_is_human)
             )
-            await self._emit_status(f"Waiting for {current_color.title()} ({model_name}) to move...")
-            move_result = await self._get_llm_move(model_name, current_color)
+            is_stockfish = (
+                (current_color == "white" and self.config.white_is_stockfish) or
+                (current_color == "black" and self.config.black_is_stockfish)
+            )
+
+            if is_human:
+                logger.info(
+                    "Move %d: awaiting human move (%s) | FEN: %s",
+                    self.board.fullmove_number, current_color, self.board.fen(),
+                )
+                await self._emit_status(f"Waiting for {current_color.title()} (Human) to move...")
+                move_result = await self._get_human_move(current_color)
+            elif is_stockfish:
+                logger.info(
+                    "Move %d: requesting Stockfish move (%s) | FEN: %s",
+                    self.board.fullmove_number, current_color, self.board.fen(),
+                )
+                await self._emit_status(f"Stockfish ({current_color.title()}) is thinking...")
+                move_result = await self._get_stockfish_move(current_color, eval_before)
+            else:
+                logger.info(
+                    "Move %d: requesting move from %s (%s) | FEN: %s",
+                    self.board.fullmove_number, model_name, current_color, self.board.fen(),
+                )
+                await self._emit_status(f"Waiting for {current_color.title()} ({model_name}) to move...")
+                move_result = await self._get_llm_move(model_name, current_color)
 
             if move_result is None:
                 winner = "black" if current_color == "white" else "white"
-                logger.warning(
-                    "Move %d: %s (%s) forfeited after %d consecutive illegal moves",
-                    self.board.fullmove_number, model_name, current_color,
-                    self._consecutive_illegal_moves,
-                )
-                return self._build_result(
-                    outcome=f"{winner}_wins",
-                    termination="illegal_moves",
-                )
+                if is_human:
+                    logger.info("Move %d: %s (Human) resigned", self.board.fullmove_number, current_color)
+                    return self._build_result(
+                        outcome=f"{winner}_wins",
+                        termination="resignation",
+                    )
+                elif is_stockfish:
+                    logger.error("Move %d: Stockfish failed to produce a move (%s)", self.board.fullmove_number, current_color)
+                    return self._build_result(
+                        outcome="draw",
+                        termination="error",
+                    )
+                else:
+                    logger.warning(
+                        "Move %d: %s (%s) forfeited after %d consecutive illegal moves",
+                        self.board.fullmove_number, model_name, current_color,
+                        self._consecutive_illegal_moves,
+                    )
+                    return self._build_result(
+                        outcome=f"{winner}_wins",
+                        termination="illegal_moves",
+                    )
 
-            chess_move, narration, trash_talk, elapsed_ms, usage_data = move_result
+            chess_move, narration, table_talk, elapsed_ms, usage_data = move_result
 
             # Record the SAN before pushing
             san = self.board.san(chess_move)
             self.board.push(chess_move)
 
-            logger.info(
-                "Move %d: %s played %s (%s) in %dms | tokens: %s in / %s out | cost: $%s",
-                self.board.fullmove_number - (1 if current_color == "black" else 0),
-                current_color, san, chess_move.uci(), elapsed_ms,
-                usage_data.get("input_tokens", "?"), usage_data.get("output_tokens", "?"),
-                f"{usage_data.get('cost_usd', 0) or 0:.4f}",
-            )
+            if is_human or is_stockfish:
+                side_label = "Human" if is_human else "Stockfish"
+                logger.info(
+                    "Move %d: %s (%s) played %s (%s)",
+                    self.board.fullmove_number - (1 if current_color == "black" else 0),
+                    current_color, side_label, san, chess_move.uci(),
+                )
+            else:
+                logger.info(
+                    "Move %d: %s played %s (%s) in %dms | tokens: %s in / %s out | cost: $%s",
+                    self.board.fullmove_number - (1 if current_color == "black" else 0),
+                    current_color, san, chess_move.uci(), elapsed_ms,
+                    usage_data.get("input_tokens", "?"), usage_data.get("output_tokens", "?"),
+                    f"{usage_data.get('cost_usd', 0) or 0:.4f}",
+                )
 
             # Evaluate position AFTER the move
             eval_after: PositionEval | None = None
@@ -134,7 +186,7 @@ class GameEngine:
                 san=san,
                 fen_after=self.board.fen(),
                 narration=narration,
-                trash_talk=trash_talk,
+                table_talk=table_talk,
                 response_time_ms=elapsed_ms,
                 eval_before=eval_before,
                 eval_after=eval_after,
@@ -167,13 +219,105 @@ class GameEngine:
         if self.status_callback:
             await self.status_callback(message)
 
+    async def _get_human_move(
+        self, color: str,
+    ) -> tuple[chess.Move, str, str, int, dict] | None:
+        """Wait for a human player to submit a move via the WebSocket queue.
+
+        Returns (move, narration, table_talk, elapsed_ms, usage_data) or None on forfeit.
+        Human moves have no narration, table talk, or usage data.
+        """
+        if self.human_move_queue is None:
+            logger.error("Human move requested but no queue available")
+            return None
+
+        # Signal that we're waiting for a human move
+        if self.awaiting_human_move_callback:
+            await self.awaiting_human_move_callback(color)
+
+        while True:
+            uci_str = await self.human_move_queue.get()
+
+            # Check for resignation
+            if uci_str == "resign":
+                logger.info("Human (%s) resigned", color)
+                return None
+
+            try:
+                move = chess.Move.from_uci(uci_str)
+                if move in self.board.legal_moves:
+                    self._consecutive_illegal_moves = 0
+                    logger.info("Human move accepted: %s (%s)", uci_str, color)
+                    return move, "", "", 0, {}
+                else:
+                    logger.warning("Human submitted illegal move: %s (%s)", uci_str, color)
+                    await self._emit_illegal_move(
+                        color=color, model="Human",
+                        attempted_move=uci_str, reason="Illegal move",
+                        attempt=1,
+                    )
+                    # Re-signal that we're still waiting
+                    if self.awaiting_human_move_callback:
+                        await self.awaiting_human_move_callback(color)
+            except (ValueError, chess.InvalidMoveError):
+                logger.warning("Human submitted invalid UCI: '%s' (%s)", uci_str, color)
+                await self._emit_illegal_move(
+                    color=color, model="Human",
+                    attempted_move=uci_str, reason="Invalid UCI notation",
+                    attempt=1,
+                )
+                if self.awaiting_human_move_callback:
+                    await self.awaiting_human_move_callback(color)
+
+    async def _get_stockfish_move(
+        self, color: str, eval_before: PositionEval | None,
+    ) -> tuple[chess.Move, str, str, int, dict] | None:
+        """Get the best move from Stockfish engine.
+
+        Reuses eval_before if available (already computed), otherwise evaluates.
+        Returns (move, narration, table_talk, elapsed_ms, usage_data).
+        Stockfish moves have no narration, table talk, or usage data.
+        """
+        best_move_uci: str | None = None
+        elapsed_ms = 0
+
+        if eval_before and eval_before.best_move_uci:
+            best_move_uci = eval_before.best_move_uci
+        elif self.stockfish:
+            start = time.monotonic()
+            try:
+                result = await self.stockfish.evaluate(self.board)
+                elapsed_ms = int((time.monotonic() - start) * 1000)
+                best_move_uci = result.best_move_uci
+            except Exception as e:
+                logger.error("Stockfish evaluate failed (%s): %s", color, e)
+                return None
+        else:
+            logger.error("Stockfish move requested but stockfish service not available")
+            return None
+
+        if not best_move_uci:
+            logger.error("Stockfish returned no best move (%s)", color)
+            return None
+
+        try:
+            move = chess.Move.from_uci(best_move_uci)
+            if move not in self.board.legal_moves:
+                logger.error("Stockfish returned illegal move: %s (%s)", best_move_uci, color)
+                return None
+            self._consecutive_illegal_moves = 0
+            return move, "", "", elapsed_ms, {}
+        except (ValueError, chess.InvalidMoveError):
+            logger.error("Stockfish returned invalid UCI: %s (%s)", best_move_uci, color)
+            return None
+
     async def _get_llm_move(
         self, model_name: str, color: str
     ) -> tuple[chess.Move, str, str, int, dict] | None:
         """Get a legal move from the LLM, with retries for illegal moves.
 
         Uses a game-wide consecutive illegal move counter. Resets on each legal move.
-        Returns (move, narration, trash_talk, elapsed_ms, usage_data) or None on forfeit.
+        Returns (move, narration, table_talk, elapsed_ms, usage_data) or None on forfeit.
         usage_data contains input_tokens, output_tokens, cost_usd.
         """
         history_dicts = [r.model_dump() for r in self.move_history]
@@ -194,15 +338,34 @@ class GameEngine:
             )
 
             start = time.monotonic()
+            # Build per-color model settings from config
+            temp = (
+                self.config.white_temperature if color == "white"
+                else self.config.black_temperature
+            )
+            reasoning = (
+                self.config.white_reasoning_effort if color == "white"
+                else self.config.black_reasoning_effort
+            )
+            settings: ModelSettings = {}
+            if temp is not None:
+                settings["temperature"] = temp
+            if reasoning:
+                settings["extra_body"] = {
+                    "reasoning": {"effort": reasoning},
+                }
+
             logger.info(
-                "LLM call: model=%s, color=%s, attempt=%d, show_legal=%s",
+                "LLM call: model=%s, color=%s, attempt=%d, show_legal=%s, temp=%s, reasoning=%s",
                 model_name, color, self._consecutive_illegal_moves + 1, show_legal,
+                temp, reasoning,
             )
             try:
                 result = await chess_agent.run(
                     user_prompt,
                     deps=ctx,
                     model=f"openrouter:{model_name}",
+                    model_settings=settings,
                 )
             except Exception as e:
                 elapsed_ms = int((time.monotonic() - start) * 1000)
@@ -232,14 +395,14 @@ class GameEngine:
 
             uci_str = result.output.move.strip()
             narration = result.output.narration
-            trash_talk = result.output.trash_talk
+            table_talk = result.output.table_talk
 
             try:
                 move = chess.Move.from_uci(uci_str)
                 if move in self.board.legal_moves:
                     self._consecutive_illegal_moves = 0  # Reset on legal move
                     logger.debug("LLM move accepted: %s (%s)", uci_str, model_name)
-                    return move, narration, trash_talk, elapsed_ms, usage_data
+                    return move, narration, table_talk, elapsed_ms, usage_data
                 else:
                     self._consecutive_illegal_moves += 1
                     logger.warning(

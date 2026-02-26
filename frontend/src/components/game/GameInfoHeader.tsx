@@ -6,9 +6,21 @@ interface Props {
 
 function formatModelName(name: string | null): string {
   if (!name) return "Unknown";
-  // Strip provider prefix if present (e.g. "openai/gpt-4o" → "gpt-4o")
   const parts = name.split("/");
   return parts[parts.length - 1];
+}
+
+function formatModelLabel(
+  name: string | null,
+  reasoningEffort: string | null,
+  temperature: number | null,
+): string {
+  let label = formatModelName(name);
+  const suffixes: string[] = [];
+  if (reasoningEffort) suffixes.push(`${reasoningEffort}`);
+  if (temperature !== null) suffixes.push(`temp: ${temperature.toFixed(1)}`);
+  if (suffixes.length > 0) label += ` (${suffixes.join(", ")})`;
+  return label;
 }
 
 function totalCost(state: GameState): number {
@@ -19,20 +31,31 @@ export default function GameInfoHeader({ state }: Props) {
   const isLive = state.status === "active";
   const cost = state.gameOverData?.totalCostUsd ?? totalCost(state);
 
+  const whiteLabel = state.whiteIsHuman
+    ? "Human"
+    : state.whiteIsStockfish
+    ? "Stockfish"
+    : formatModelLabel(state.whiteModel, state.whiteReasoningEffort, state.whiteTemperature);
+  const blackLabel = state.blackIsHuman
+    ? "Human"
+    : state.blackIsStockfish
+    ? "Stockfish"
+    : formatModelLabel(state.blackModel, state.blackReasoningEffort, state.blackTemperature);
+
   return (
     <div className="game-info panel">
       <div className="game-info__players">
         <div className="game-info__player">
           <span className="game-info__player-icon game-info__player-icon--white">&#9812;</span>
           <span className="game-info__player-name" title={state.whiteModel ?? undefined}>
-            {formatModelName(state.whiteModel)}
+            {whiteLabel}
           </span>
         </div>
         <span className="game-info__vs">vs</span>
         <div className="game-info__player">
           <span className="game-info__player-icon game-info__player-icon--black">&#9818;</span>
           <span className="game-info__player-name" title={state.blackModel ?? undefined}>
-            {formatModelName(state.blackModel)}
+            {blackLabel}
           </span>
         </div>
       </div>

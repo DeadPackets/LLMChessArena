@@ -54,6 +54,9 @@ async def lifespan(app: FastAPI):
         opening_detector=opening_detector,
     )
 
+    # Clean up any games orphaned by a previous restart
+    await game_manager.recover_orphaned_games()
+
     # Store in app state for access by routers
     app.state.stockfish = stockfish
     app.state.opening_detector = opening_detector

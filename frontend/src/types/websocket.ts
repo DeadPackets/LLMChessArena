@@ -14,7 +14,7 @@ export interface MoveData {
   san: string;
   fenAfter: string;
   narration: string | null;
-  trashTalk: string | null;
+  tableTalk: string | null;
   centipawns: number | null;
   mateIn: number | null;
   winProbability: number | null;
@@ -60,6 +60,15 @@ export interface GameState {
   termination: string | null;
   openingEco: string | null;
   openingName: string | null;
+  whiteTemperature: number | null;
+  blackTemperature: number | null;
+  whiteReasoningEffort: string | null;
+  blackReasoningEffort: string | null;
+  whiteIsHuman: boolean;
+  blackIsHuman: boolean;
+  whiteIsStockfish: boolean;
+  blackIsStockfish: boolean;
+  awaitingHumanMove: string | null; // color ("white"|"black") or null
   moves: MoveData[];
   illegalMoves: IllegalMoveData[];
   currentFen: string;
@@ -73,10 +82,11 @@ export type GameAction =
   | { type: "CATCH_UP"; payload: Record<string, unknown> }
   | { type: "MOVE_PLAYED"; payload: Record<string, unknown> }
   | { type: "STATUS_UPDATE"; payload: { message: string } }
-  | { type: "GAME_STARTED"; payload: { game_id: string; white_model: string; black_model: string } }
+  | { type: "GAME_STARTED"; payload: { game_id: string; white_model: string; black_model: string; white_is_human?: boolean; black_is_human?: boolean; white_is_stockfish?: boolean; black_is_stockfish?: boolean } }
   | { type: "GAME_OVER"; payload: Record<string, unknown> }
   | { type: "SET_SELECTED_INDEX"; payload: number }
   | { type: "NAVIGATE"; payload: "first" | "prev" | "next" | "last" }
   | { type: "TOGGLE_AUTO_FOLLOW" }
   | { type: "CONNECTION_STATUS"; payload: GameState["connectionStatus"] }
-  | { type: "ILLEGAL_MOVE_ATTEMPT"; payload: IllegalMoveData };
+  | { type: "ILLEGAL_MOVE_ATTEMPT"; payload: IllegalMoveData }
+  | { type: "AWAITING_HUMAN_MOVE"; payload: { color: string } };
