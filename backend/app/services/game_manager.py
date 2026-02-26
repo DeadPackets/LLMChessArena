@@ -1,0 +1,300 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from sqlmodel import select
+
+from app.database import Game, Move, LLMModel, get_session_factory
+from app.models.chess_models import GameConfig, GameResult, MoveRecord
+from app.services.elo_service import calculate_elo_change
+from app.services.game_engine import GameEngine
+from app.services.opening_detector import OpeningDetector
+from app.services.stockfish_service import StockfishService
+
+logger = logging.getLogger(__name__)
+
+
+class GameManager:
+    """Manages active games as background tasks and persists results to the DB."""
+
+    def __init__(
+        self,
+        stockfish: StockfishService,
+        opening_detector: OpeningDetector | None = None,
+    ):
+        self.stockfish = stockfish
+        self.opening_detector = opening_detector
+        self.active_games: dict[str, asyncio.Task] = {}
+        self.event_queues: dict[str, list[asyncio.Queue]] = {}
+
+    async def start_game(self, config: GameConfig) -> str:
+        """Create a game record and start it as a background task."""
+        game_id = uuid4().hex[:12]
+        now = datetime.now(timezone.utc)
+
+        await self._ensure_model(config.white_model)
+        await self._ensure_model(config.black_model)
+
+        async with get_session_factory()() as session:
+            game = Game(
+                id=game_id,
+                white_model=config.white_model,
+                black_model=config.black_model,
+                status="active",
+                started_at=now,
+            )
+            session.add(game)
+            await session.commit()
+
+        task = asyncio.create_task(self._run_game(game_id, config))
+        self.active_games[game_id] = task
+        return game_id
+
+    def subscribe(self, game_id: str) -> asyncio.Queue:
+        """Subscribe to real-time events for a game."""
+        queue: asyncio.Queue = asyncio.Queue()
+        self.event_queues.setdefault(game_id, []).append(queue)
+        return queue
+
+    def unsubscribe(self, game_id: str, queue: asyncio.Queue) -> None:
+        queues = self.event_queues.get(game_id, [])
+        if queue in queues:
+            queues.remove(queue)
+
+    async def stop_game(self, game_id: str) -> bool:
+        """Cancel an active game."""
+        task = self.active_games.get(game_id)
+        if task and not task.done():
+            task.cancel()
+            async with get_session_factory()() as session:
+                game = await session.get(Game, game_id)
+                if game:
+                    game.status = "completed"
+                    game.outcome = "draw"
+                    game.termination = "cancelled"
+                    game.completed_at = datetime.now(timezone.utc)
+                    session.add(game)
+                    await session.commit()
+            return True
+        return False
+
+    async def get_catch_up_state(self, game_id: str) -> dict | None:
+        """Get full game state for a late-joining WebSocket client."""
+        async with get_session_factory()() as session:
+            game = await session.get(Game, game_id)
+            if not game:
+                return None
+
+            results = await session.exec(
+                select(Move).where(Move.game_id == game_id).order_by(Move.id)  # type: ignore[arg-type]
+            )
+            move_rows = results.all()
+
+        moves = []
+        last_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        for m in move_rows:
+            last_fen = m.fen_after
+            moves.append({
+                "move_number": m.move_number,
+                "color": m.color,
+                "uci": m.uci,
+                "san": m.san,
+                "fen_after": m.fen_after,
+                "narration": m.narration,
+                "centipawns": m.centipawns,
+                "mate_in": m.mate_in,
+                "win_probability": m.win_probability,
+                "best_move_uci": m.best_move_uci,
+                "classification": m.classification,
+                "response_time_ms": m.response_time_ms or 0,
+                "opening_eco": m.opening_eco,
+                "opening_name": m.opening_name,
+                "input_tokens": m.input_tokens,
+                "output_tokens": m.output_tokens,
+                "cost_usd": m.cost_usd,
+            })
+
+        return {
+            "type": "catch_up",
+            "data": {
+                "game_id": game.id,
+                "white_model": game.white_model,
+                "black_model": game.black_model,
+                "status": game.status,
+                "outcome": game.outcome,
+                "termination": game.termination,
+                "fen": last_fen,
+                "moves": moves,
+            },
+        }
+
+    async def _run_game(self, game_id: str, config: GameConfig) -> None:
+        """Execute a full game and persist results."""
+        engine = GameEngine(
+            config, stockfish=self.stockfish, opening_detector=self.opening_detector
+        )
+
+        async def on_move(record: MoveRecord) -> None:
+            await self._persist_move(game_id, record)
+            await self._broadcast(game_id, {
+                "type": "move_played",
+                "data": record.model_dump(),
+            })
+
+        async def on_status(message: str) -> None:
+            await self._broadcast(game_id, {
+                "type": "status",
+                "data": {"message": message},
+            })
+
+        engine.move_callbacks.append(on_move)
+        engine.status_callback = on_status
+
+        # Broadcast game started
+        await self._broadcast(game_id, {
+            "type": "game_started",
+            "data": {
+                "game_id": game_id,
+                "white_model": config.white_model,
+                "black_model": config.black_model,
+            },
+        })
+
+        try:
+            result = await engine.play_game()
+            await self._persist_result(game_id, result)
+            await self._update_elo(result)
+            await self._broadcast(game_id, {
+                "type": "game_over",
+                "data": {
+                    "outcome": result.outcome,
+                    "termination": result.termination,
+                    "total_moves": result.total_moves,
+                    "total_cost_usd": result.total_cost_usd,
+                    "total_input_tokens": result.total_input_tokens,
+                    "total_output_tokens": result.total_output_tokens,
+                    "pgn": result.pgn,
+                },
+            })
+        except asyncio.CancelledError:
+            logger.info("Game %s cancelled", game_id)
+        except Exception:
+            logger.exception("Game %s failed", game_id)
+            async with get_session_factory()() as session:
+                game = await session.get(Game, game_id)
+                if game:
+                    game.status = "completed"
+                    game.outcome = "draw"
+                    game.termination = "error"
+                    game.completed_at = datetime.now(timezone.utc)
+                    session.add(game)
+                    await session.commit()
+            await self._broadcast(game_id, {
+                "type": "game_over",
+                "data": {"outcome": "draw", "termination": "error", "total_moves": 0},
+            })
+        finally:
+            self.active_games.pop(game_id, None)
+            # Signal end to any remaining subscribers
+            for q in self.event_queues.pop(game_id, []):
+                await q.put(None)
+
+    async def _persist_move(self, game_id: str, record: MoveRecord) -> None:
+        async with get_session_factory()() as session:
+            move = Move(
+                game_id=game_id,
+                move_number=record.move_number,
+                color=record.color,
+                uci=record.uci,
+                san=record.san,
+                fen_after=record.fen_after,
+                narration=record.narration,
+                centipawns=record.eval_after.centipawns if record.eval_after else None,
+                mate_in=record.eval_after.mate_in if record.eval_after else None,
+                win_probability=record.eval_after.win_probability_white if record.eval_after else None,
+                best_move_uci=record.best_move_uci,
+                classification=record.classification,
+                response_time_ms=record.response_time_ms,
+                opening_eco=record.opening_eco,
+                opening_name=record.opening_name,
+                input_tokens=record.input_tokens,
+                output_tokens=record.output_tokens,
+                cost_usd=record.cost_usd,
+                timestamp=datetime.now(timezone.utc),
+            )
+            session.add(move)
+            await session.commit()
+
+    async def _persist_result(self, game_id: str, result: GameResult) -> None:
+        now = datetime.now(timezone.utc)
+        async with get_session_factory()() as session:
+            game = await session.get(Game, game_id)
+            if game:
+                game.status = "completed"
+                game.outcome = result.outcome
+                game.termination = result.termination
+                game.opening_eco = result.opening_eco
+                game.opening_name = result.opening_name
+                game.pgn = result.pgn
+                game.total_moves = result.total_moves
+                game.total_cost_usd = result.total_cost_usd
+                game.completed_at = now
+                session.add(game)
+                await session.commit()
+
+    async def _update_elo(self, result: GameResult) -> None:
+        """Update ELO ratings for both models after a game."""
+        if "white_wins" in result.outcome:
+            score_white = 1.0
+        elif "black_wins" in result.outcome:
+            score_white = 0.0
+        else:
+            score_white = 0.5
+
+        async with get_session_factory()() as session:
+            w = await session.get(LLMModel, result.white_model)
+            b = await session.get(LLMModel, result.black_model)
+
+            if not w or not b:
+                return
+
+            new_w, new_b = calculate_elo_change(w.elo_rating, b.elo_rating, score_white)
+
+            w.elo_rating = new_w
+            w.games_played += 1
+            w.wins += 1 if score_white == 1.0 else 0
+            w.draws += 1 if score_white == 0.5 else 0
+            w.losses += 1 if score_white == 0.0 else 0
+            session.add(w)
+
+            b.elo_rating = new_b
+            b.games_played += 1
+            b.wins += 1 if score_white == 0.0 else 0
+            b.draws += 1 if score_white == 0.5 else 0
+            b.losses += 1 if score_white == 1.0 else 0
+            session.add(b)
+
+            await session.commit()
+
+    async def _ensure_model(self, model_id: str) -> None:
+        """Insert the model into the models table if it doesn't exist."""
+        async with get_session_factory()() as session:
+            existing = await session.get(LLMModel, model_id)
+            if not existing:
+                model = LLMModel(
+                    id=model_id,
+                    display_name=model_id.split("/")[-1],
+                    elo_rating=1500.0,
+                )
+                session.add(model)
+                await session.commit()
+
+    async def _broadcast(self, game_id: str, event: dict) -> None:
+        for q in self.event_queues.get(game_id, []):
+            try:
+                q.put_nowait(event)
+            except asyncio.QueueFull:
+                pass

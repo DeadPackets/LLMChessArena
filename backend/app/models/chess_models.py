@@ -1,0 +1,64 @@
+from __future__ import annotations
+
+from pydantic import BaseModel, Field
+
+
+class ChessMove(BaseModel):
+    """Structured output the LLM must return."""
+
+    move: str = Field(description="The move in UCI notation (e.g. 'e2e4', 'g1f3', 'e7e8q' for promotion)")
+    narration: str = Field(description="Brief commentary on your move, max 128 characters", max_length=128)
+
+
+class GameConfig(BaseModel):
+    white_model: str  # OpenRouter model ID, e.g. "anthropic/claude-sonnet-4-5"
+    black_model: str
+    max_moves: int = 200  # per side
+
+
+class PositionEval(BaseModel):
+    """Stockfish evaluation of a single position."""
+
+    centipawns: int  # from White's perspective; positive = White advantage
+    mate_in: int | None = None  # positive = White mates in N, negative = Black mates
+    win_probability_white: float  # 0.0 to 1.0
+    wdl_white: dict[str, int] = Field(default_factory=dict)  # {"w": wins, "d": draws, "l": losses} per mille
+    best_move_uci: str | None = None
+    depth: int = 0
+
+
+class MoveRecord(BaseModel):
+    move_number: int
+    color: str  # "white" or "black"
+    uci: str
+    san: str
+    fen_after: str
+    narration: str
+    response_time_ms: int = 0
+    # Evaluation fields (populated by Stockfish in Phase 2)
+    eval_before: PositionEval | None = None
+    eval_after: PositionEval | None = None
+    classification: str | None = None  # MoveClassification value
+    best_move_uci: str | None = None
+    opening_eco: str | None = None
+    opening_name: str | None = None
+    # Token & cost tracking (from OpenRouter)
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    cost_usd: float | None = None
+
+
+class GameResult(BaseModel):
+    outcome: str  # "white_wins", "black_wins", "draw", "forfeit_white", "forfeit_black"
+    termination: str  # "checkmate", "stalemate", "insufficient_material", "repetition", "fifty_moves", "max_moves", "illegal_moves"
+    moves: list[MoveRecord]
+    pgn: str
+    total_moves: int
+    white_model: str
+    black_model: str
+    opening_eco: str | None = None
+    opening_name: str | None = None
+    # Aggregated token & cost tracking
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    total_cost_usd: float = 0.0
