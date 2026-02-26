@@ -18,8 +18,20 @@ export default function MoveList({ moves, selectedIndex, onSelect }: Props) {
   const selectedRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (selectedRef.current) {
-      selectedRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (selectedRef.current && containerRef.current) {
+      // Scroll within the move list container only, not the page
+      const container = containerRef.current;
+      const el = selectedRef.current;
+      const elTop = el.offsetTop;
+      const elBottom = elTop + el.offsetHeight;
+      const viewTop = container.scrollTop;
+      const viewBottom = viewTop + container.clientHeight;
+
+      if (elBottom > viewBottom) {
+        container.scrollTop = elBottom - container.clientHeight;
+      } else if (elTop < viewTop) {
+        container.scrollTop = elTop;
+      }
     }
   }, [selectedIndex]);
 

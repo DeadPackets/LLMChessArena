@@ -18,6 +18,10 @@ from app.models.api_models import (
 )
 
 
+# Cap per-move loss to avoid mate scores (±9999cp) from destroying the average
+MAX_LOSS_PER_MOVE = 1000
+
+
 def compute_accuracy(acpl: float) -> float:
     """Chess.com accuracy formula."""
     if acpl < 0:
@@ -48,20 +52,25 @@ async def compute_game_analysis(session: AsyncSession, game_id: str) -> GameAnal
     black_cost = 0.0
 
     for i, move in enumerate(moves):
-        cp_before = moves[i - 1].centipawns if i > 0 and moves[i - 1].centipawns is not None else 0
-        cp_after = move.centipawns if move.centipawns is not None else cp_before
+        # Only compute loss for moves with evaluation data
+        has_eval = move.centipawns is not None
+        if has_eval:
+            cp_before = moves[i - 1].centipawns if i > 0 and moves[i - 1].centipawns is not None else 0
+            cp_after = move.centipawns
 
         if move.color == "white":
-            loss = max(0, cp_before - cp_after)
-            white_losses.append(loss)
+            if has_eval:
+                loss = min(max(0, cp_before - cp_after), MAX_LOSS_PER_MOVE)
+                white_losses.append(loss)
             if move.classification:
                 white_cls[move.classification] = white_cls.get(move.classification, 0) + 1
             white_times.append(move.response_time_ms or 0)
             white_tokens += (move.input_tokens or 0) + (move.output_tokens or 0)
             white_cost += move.cost_usd or 0.0
         else:
-            loss = max(0, cp_after - cp_before)
-            black_losses.append(loss)
+            if has_eval:
+                loss = min(max(0, cp_after - cp_before), MAX_LOSS_PER_MOVE)
+                black_losses.append(loss)
             if move.classification:
                 black_cls[move.classification] = black_cls.get(move.classification, 0) + 1
             black_times.append(move.response_time_ms or 0)
@@ -155,15 +164,17 @@ async def compute_model_aggregate_stats(session: AsyncSession, model_id: str) ->
             if move.color != color:
                 continue
 
-            cp_before = moves[i - 1].centipawns if i > 0 and moves[i - 1].centipawns is not None else 0
-            cp_after = move.centipawns if move.centipawns is not None else cp_before
+            # Only compute loss for moves with evaluation data
+            if move.centipawns is not None:
+                cp_before = moves[i - 1].centipawns if i > 0 and moves[i - 1].centipawns is not None else 0
+                cp_after = move.centipawns
 
-            if color == "white":
-                loss = max(0, cp_before - cp_after)
-            else:
-                loss = max(0, cp_after - cp_before)
+                if color == "white":
+                    loss = min(max(0, cp_before - cp_after), MAX_LOSS_PER_MOVE)
+                else:
+                    loss = min(max(0, cp_after - cp_before), MAX_LOSS_PER_MOVE)
 
-            all_losses.append(loss)
+                all_losses.append(loss)
             all_times.append(move.response_time_ms or 0)
             total_cost += move.cost_usd or 0.0
 

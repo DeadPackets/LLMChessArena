@@ -1,6 +1,6 @@
 import { useReducer, useCallback, useEffect } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
-import type { GameState, GameAction, MoveData, PositionEval, GameOverData } from "../types/websocket";
+import type { GameState, GameAction, MoveData, PositionEval, GameOverData, IllegalMoveData } from "../types/websocket";
 
 const STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -15,6 +15,7 @@ const initialState: GameState = {
   openingEco: null,
   openingName: null,
   moves: [],
+  illegalMoves: [],
   currentFen: STARTING_FEN,
   selectedIndex: -1,
   autoFollow: true,
@@ -41,6 +42,7 @@ function normalizeCatchUpMove(raw: Record<string, unknown>): MoveData {
     san: raw.san as string,
     fenAfter: raw.fen_after as string,
     narration: (raw.narration as string | null) ?? null,
+    trashTalk: (raw.trash_talk as string | null) ?? null,
     centipawns: (raw.centipawns as number | null) ?? null,
     mateIn: (raw.mate_in as number | null) ?? null,
     winProbability: (raw.win_probability as number | null) ?? null,
@@ -70,6 +72,7 @@ function normalizeLiveMove(raw: Record<string, unknown>): MoveData {
     san: raw.san as string,
     fenAfter: raw.fen_after as string,
     narration: (raw.narration as string | null) ?? null,
+    trashTalk: (raw.trash_talk as string | null) ?? null,
     centipawns: evalAfter?.centipawns ?? null,
     mateIn: evalAfter?.mate_in ?? null,
     winProbability: evalAfter?.win_probability_white ?? null,
@@ -231,6 +234,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case "CONNECTION_STATUS":
       return { ...state, connectionStatus: action.payload };
 
+    case "ILLEGAL_MOVE_ATTEMPT":
+      return {
+        ...state,
+        illegalMoves: [...state.illegalMoves, action.payload],
+      };
+
     default:
       return state;
   }
@@ -262,6 +271,20 @@ export function useGameWebSocket(gameId: string) {
           case "game_over":
             dispatch({ type: "GAME_OVER", payload: msg.data });
             break;
+          case "illegal_move_attempt": {
+            const d = msg.data;
+            const illegalMove: IllegalMoveData = {
+              color: d.color as "white" | "black",
+              model: d.model as string,
+              attemptedMove: d.attempted_move as string,
+              reason: d.reason as string,
+              attempt: d.attempt as number,
+              maxAttempts: d.max_attempts as number,
+              moveNumber: d.move_number as number,
+            };
+            dispatch({ type: "ILLEGAL_MOVE_ATTEMPT", payload: illegalMove });
+            break;
+          }
         }
       } catch {
         // ignore malformed messages

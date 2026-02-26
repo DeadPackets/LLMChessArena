@@ -14,6 +14,7 @@ export interface MoveData {
   san: string;
   fenAfter: string;
   narration: string | null;
+  trashTalk: string | null;
   centipawns: number | null;
   mateIn: number | null;
   winProbability: number | null;
@@ -39,6 +40,16 @@ export interface GameOverData {
   pgn: string;
 }
 
+export interface IllegalMoveData {
+  color: "white" | "black";
+  model: string;
+  attemptedMove: string;
+  reason: string;
+  attempt: number;
+  maxAttempts: number;
+  moveNumber: number;
+}
+
 export interface GameState {
   connectionStatus: "connecting" | "connected" | "disconnected" | "error";
   gameId: string | null;
@@ -50,6 +61,7 @@ export interface GameState {
   openingEco: string | null;
   openingName: string | null;
   moves: MoveData[];
+  illegalMoves: IllegalMoveData[];
   currentFen: string;
   selectedIndex: number;
   autoFollow: boolean;
@@ -66,4 +78,5 @@ export type GameAction =
   | { type: "SET_SELECTED_INDEX"; payload: number }
   | { type: "NAVIGATE"; payload: "first" | "prev" | "next" | "last" }
   | { type: "TOGGLE_AUTO_FOLLOW" }
-  | { type: "CONNECTION_STATUS"; payload: GameState["connectionStatus"] };
+  | { type: "CONNECTION_STATUS"; payload: GameState["connectionStatus"] }
+  | { type: "ILLEGAL_MOVE_ATTEMPT"; payload: IllegalMoveData };

@@ -43,6 +43,7 @@ class Move(SQLModel, table=True):
     san: str
     fen_after: str
     narration: Optional[str] = None
+    trash_talk: Optional[str] = None
     centipawns: Optional[int] = None
     mate_in: Optional[int] = None
     win_probability: Optional[float] = None

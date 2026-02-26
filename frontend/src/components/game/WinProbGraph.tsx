@@ -12,6 +12,23 @@ import {
 import type { MoveData } from "../../types/websocket";
 import type { CriticalMoment } from "../../types/api";
 
+const CLASSIFICATION_DOT_COLORS: Record<string, string> = {
+  brilliant: "#26c2a3",
+  great: "#5b8bb4",
+  inaccuracy: "#e6b422",
+  mistake: "#e08832",
+  blunder: "#ca3431",
+};
+
+const LARGE_DOT_CLASSIFICATIONS = new Set(["brilliant", "blunder"]);
+
+interface DotInfo {
+  index: number;
+  y: number;
+  color: string;
+  r: number;
+}
+
 interface Props {
   moves: MoveData[];
   selectedIndex: number;
@@ -53,6 +70,47 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
 
   const selectedDataIndex = selectedIndex + 1; // offset by 1 for "Start" point
 
+  // Build classification-aware dots from moves and critical moments
+  const dots = useMemo<DotInfo[]>(() => {
+    const seen = new Set<number>();
+    const result: DotInfo[] = [];
+
+    // Add dots for moves with notable classifications
+    for (let i = 0; i < moves.length; i++) {
+      const cls = moves[i].classification;
+      if (cls && CLASSIFICATION_DOT_COLORS[cls]) {
+        const wp = moves[i].winProbability != null ? moves[i].winProbability! * 100 : 50;
+        result.push({
+          index: i,
+          y: wp,
+          color: CLASSIFICATION_DOT_COLORS[cls],
+          r: LARGE_DOT_CLASSIFICATIONS.has(cls) ? 4 : 3,
+        });
+        seen.add(i);
+      }
+    }
+
+    // Add critical moments that weren't already included (e.g. large swings without classification)
+    if (criticalMoments) {
+      for (const cm of criticalMoments) {
+        if (!seen.has(cm.move_index)) {
+          const cls = cm.classification;
+          const color = cls && CLASSIFICATION_DOT_COLORS[cls]
+            ? CLASSIFICATION_DOT_COLORS[cls]
+            : cm.swing > 0.25 ? "#ca3431" : "#e6b422";
+          result.push({
+            index: cm.move_index,
+            y: cm.win_prob_after * 100,
+            color,
+            r: 3,
+          });
+        }
+      }
+    }
+
+    return result;
+  }, [moves, criticalMoments]);
+
   return (
     <div className="win-prob-graph panel">
       <ResponsiveContainer width="100%" height={100}>
@@ -71,20 +129,20 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
           {selectedDataIndex >= 0 && selectedDataIndex < data.length && (
             <ReferenceLine x={data[selectedDataIndex]?.index} stroke="#d4a843" strokeWidth={1.5} />
           )}
-          {criticalMoments?.map((cm) => (
+          {dots.map((dot) => (
             <ReferenceDot
-              key={cm.move_index}
-              x={cm.move_index}
-              y={cm.win_prob_after * 100}
-              r={3}
-              fill={cm.swing > 0.25 ? "#ca3431" : "#e6b422"}
+              key={`dot-${dot.index}`}
+              x={dot.index}
+              y={dot.y}
+              r={dot.r}
+              fill={dot.color}
               stroke="none"
             />
           ))}
           <Area
             type="monotone"
             dataKey="wp"
-            stroke="#908e87"
+            stroke="#a5a39c"
             strokeWidth={1.5}
             fill="url(#wpGradient)"
             isAnimationActive={false}

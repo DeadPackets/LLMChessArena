@@ -7,7 +7,7 @@ from typing import Callable, Awaitable
 import chess
 import chess.pgn
 
-from app.config import MAX_MOVES_PER_SIDE, MAX_ILLEGAL_MOVE_RETRIES
+from app.config import MAX_MOVES_PER_SIDE, MAX_CONSECUTIVE_ILLEGAL_MOVES
 from app.models.chess_models import ChessMove, GameConfig, GameResult, MoveRecord, PositionEval
 from app.services.chess_agent import chess_agent, ChessGameContext, build_user_prompt
 from app.services.move_classifier import classify_move, MoveClassification, CLASSIFICATION_SYMBOLS
@@ -30,10 +30,12 @@ class GameEngine:
         self.board = chess.Board()
         self.move_history: list[MoveRecord] = []
         self.move_callbacks: list[Callable[[MoveRecord], Awaitable[None]]] = []
+        self.illegal_move_callbacks: list[Callable[[dict], Awaitable[None]]] = []
         self.status_callback: Callable[[str], Awaitable[None]] | None = None
         self.stockfish = stockfish
         self.opening_detector = opening_detector
         self._last_opening: dict[str, str] | None = None
+        self._consecutive_illegal_moves = 0
 
     async def play_game(self) -> GameResult:
         """Run the main game loop until completion."""
@@ -65,7 +67,7 @@ class GameEngine:
                     termination="illegal_moves",
                 )
 
-            chess_move, narration, elapsed_ms, usage_data = move_result
+            chess_move, narration, trash_talk, elapsed_ms, usage_data = move_result
 
             # Record the SAN before pushing
             san = self.board.san(chess_move)
@@ -110,6 +112,7 @@ class GameEngine:
                 san=san,
                 fen_after=self.board.fen(),
                 narration=narration,
+                trash_talk=trash_talk,
                 response_time_ms=elapsed_ms,
                 eval_before=eval_before,
                 eval_after=eval_after,
@@ -138,23 +141,29 @@ class GameEngine:
 
     async def _get_llm_move(
         self, model_name: str, color: str
-    ) -> tuple[chess.Move, str, int, dict] | None:
+    ) -> tuple[chess.Move, str, str, int, dict] | None:
         """Get a legal move from the LLM, with retries for illegal moves.
 
-        Returns (move, narration, elapsed_ms, usage_data) or None on forfeit.
+        Uses a game-wide consecutive illegal move counter. Resets on each legal move.
+        Returns (move, narration, trash_talk, elapsed_ms, usage_data) or None on forfeit.
         usage_data contains input_tokens, output_tokens, cost_usd.
         """
         history_dicts = [r.model_dump() for r in self.move_history]
         error_context = ""
 
-        for attempt in range(MAX_ILLEGAL_MOVE_RETRIES):
+        while self._consecutive_illegal_moves < MAX_CONSECUTIVE_ILLEGAL_MOVES:
             ctx = ChessGameContext(
                 board=self.board.copy(),
                 color=color,
                 move_history=history_dicts,
             )
 
-            user_prompt = build_user_prompt(self.board, color, history_dicts, error_context)
+            # After 3 consecutive illegal moves, inject legal moves as a lifeline
+            show_legal = self._consecutive_illegal_moves >= 3
+            user_prompt = build_user_prompt(
+                self.board, color, history_dicts, error_context,
+                include_legal_moves=show_legal,
+            )
 
             start = time.monotonic()
             try:
@@ -164,7 +173,13 @@ class GameEngine:
                     model=f"openrouter:{model_name}",
                 )
             except Exception as e:
+                self._consecutive_illegal_moves += 1
                 error_context = f"API error: {e}"
+                await self._emit_illegal_move(
+                    color=color, model=model_name,
+                    attempted_move="(API error)", reason=str(e),
+                    attempt=self._consecutive_illegal_moves,
+                )
                 continue
             elapsed_ms = int((time.monotonic() - start) * 1000)
 
@@ -179,20 +194,59 @@ class GameEngine:
 
             uci_str = result.output.move.strip()
             narration = result.output.narration
+            trash_talk = result.output.trash_talk
 
             try:
                 move = chess.Move.from_uci(uci_str)
                 if move in self.board.legal_moves:
-                    return move, narration, elapsed_ms, usage_data
+                    self._consecutive_illegal_moves = 0  # Reset on legal move
+                    return move, narration, trash_talk, elapsed_ms, usage_data
                 else:
+                    self._consecutive_illegal_moves += 1
                     error_context = (
-                        f"'{uci_str}' is not a legal move in this position. "
-                        f"Check the board carefully and try a different move."
+                        f"ILLEGAL MOVE: '{uci_str}' is valid UCI notation but is not a "
+                        f"legal move in this position. The piece cannot move there. "
+                        f"Re-read the board and pick a different move."
+                    )
+                    await self._emit_illegal_move(
+                        color=color, model=model_name,
+                        attempted_move=uci_str, reason="Illegal move",
+                        attempt=self._consecutive_illegal_moves,
                     )
             except (ValueError, chess.InvalidMoveError):
-                error_context = f"'{uci_str}' is not valid UCI notation."
+                self._consecutive_illegal_moves += 1
+                error_context = (
+                    f"INVALID UCI: '{uci_str}' is not valid UCI notation. "
+                    f"UCI moves must be 4-5 lowercase characters: source square + "
+                    f"destination square (e.g. 'e2e4', 'g1f3', 'e7e8q'). "
+                    f"Do NOT use SAN notation like 'Nf3' or 'O-O'."
+                )
+                await self._emit_illegal_move(
+                    color=color, model=model_name,
+                    attempted_move=uci_str, reason="Invalid UCI notation",
+                    attempt=self._consecutive_illegal_moves,
+                )
 
-        return None  # Forfeit after max retries
+        return None  # Forfeit after MAX_CONSECUTIVE_ILLEGAL_MOVES consecutive illegal moves
+
+    async def _emit_illegal_move(
+        self, *, color: str, model: str, attempted_move: str, reason: str, attempt: int
+    ) -> None:
+        """Notify all illegal move callbacks."""
+        event = {
+            "color": color,
+            "model": model,
+            "attempted_move": attempted_move,
+            "reason": reason,
+            "attempt": attempt,
+            "max_attempts": MAX_CONSECUTIVE_ILLEGAL_MOVES,
+            "move_number": self.board.fullmove_number,
+        }
+        for cb in self.illegal_move_callbacks:
+            try:
+                await cb(event)
+            except Exception:
+                logger.warning("Illegal move callback failed", exc_info=True)
 
     def _build_result_from_board(self) -> GameResult:
         """Build result from the board's game-over state."""

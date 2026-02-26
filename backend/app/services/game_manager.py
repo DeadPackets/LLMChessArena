@@ -104,6 +104,7 @@ class GameManager:
                 "san": m.san,
                 "fen_after": m.fen_after,
                 "narration": m.narration,
+                "trash_talk": m.trash_talk,
                 "centipawns": m.centipawns,
                 "mate_in": m.mate_in,
                 "win_probability": m.win_probability,
@@ -150,7 +151,11 @@ class GameManager:
                 "data": {"message": message},
             })
 
+        async def on_illegal_move(event: dict) -> None:
+            await self._handle_illegal_move(game_id, event)
+
         engine.move_callbacks.append(on_move)
+        engine.illegal_move_callbacks.append(on_illegal_move)
         engine.status_callback = on_status
 
         # Broadcast game started
@@ -202,6 +207,35 @@ class GameManager:
             for q in self.event_queues.pop(game_id, []):
                 await q.put(None)
 
+    async def _handle_illegal_move(self, game_id: str, event: dict) -> None:
+        """Broadcast illegal move attempt and update DB counters."""
+        await self._broadcast(game_id, {
+            "type": "illegal_move_attempt",
+            "data": event,
+        })
+
+        # Update counters in DB
+        color = event.get("color", "white")
+        model_id = event.get("model", "")
+        try:
+            async with get_session_factory()() as session:
+                game = await session.get(Game, game_id)
+                if game:
+                    if color == "white":
+                        game.white_illegal_moves += 1
+                    else:
+                        game.black_illegal_moves += 1
+                    session.add(game)
+                    await session.commit()
+
+                model = await session.get(LLMModel, model_id)
+                if model:
+                    model.total_illegal_moves += 1
+                    session.add(model)
+                    await session.commit()
+        except Exception:
+            logger.warning("Failed to update illegal move counters", exc_info=True)
+
     async def _persist_move(self, game_id: str, record: MoveRecord) -> None:
         async with get_session_factory()() as session:
             move = Move(
@@ -212,6 +246,7 @@ class GameManager:
                 san=record.san,
                 fen_after=record.fen_after,
                 narration=record.narration,
+                trash_talk=record.trash_talk,
                 centipawns=record.eval_after.centipawns if record.eval_after else None,
                 mate_in=record.eval_after.mate_in if record.eval_after else None,
                 win_probability=record.eval_after.win_probability_white if record.eval_after else None,

@@ -6,8 +6,9 @@ from pydantic import BaseModel, Field
 class ChessMove(BaseModel):
     """Structured output the LLM must return."""
 
-    move: str = Field(description="The move in UCI notation (e.g. 'e2e4', 'g1f3', 'e7e8q' for promotion)")
+    move: str = Field(description="Your move in UCI notation: 4 chars (source square + destination square), or 5 chars for promotion. Examples: 'e2e4', 'g1f3', 'e7e8q'. Lowercase only, no hyphens, no SAN.")
     narration: str = Field(description="Brief commentary on your move, max 128 characters", max_length=128)
+    trash_talk: str = Field(description="A short trash-talk message directed at your opponent, max 128 characters", max_length=128)
 
 
 class GameConfig(BaseModel):
@@ -34,6 +35,7 @@ class MoveRecord(BaseModel):
     san: str
     fen_after: str
     narration: str
+    trash_talk: str = ""
     response_time_ms: int = 0
     # Evaluation fields (populated by Stockfish in Phase 2)
     eval_before: PositionEval | None = None

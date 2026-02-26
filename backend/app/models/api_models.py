@@ -35,6 +35,7 @@ class MoveDetail(BaseModel):
     san: str
     fen_after: str
     narration: str | None = None
+    trash_talk: str | None = None
     centipawns: int | None = None
     mate_in: int | None = None
     win_probability: float | None = None

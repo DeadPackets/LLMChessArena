@@ -106,6 +106,7 @@ async def get_game(game_id: str, session: AsyncSession = Depends(get_session)):
                 san=m.san,
                 fen_after=m.fen_after,
                 narration=m.narration,
+                trash_talk=m.trash_talk,
                 centipawns=m.centipawns,
                 mate_in=m.mate_in,
                 win_probability=m.win_probability,

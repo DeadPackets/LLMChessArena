@@ -13,7 +13,38 @@ import GameInfoHeader from "../components/game/GameInfoHeader";
 import GameOverBanner from "../components/game/GameOverBanner";
 import WinProbGraph from "../components/game/WinProbGraph";
 import ResponseTimeGraph from "../components/game/ResponseTimeGraph";
+import TrashTalkPanel from "../components/game/TrashTalkPanel";
+import CapturedMaterial from "../components/game/CapturedMaterial";
 import AnalysisPanel from "../components/game/AnalysisPanel";
+import type { IllegalMoveData } from "../types/websocket";
+
+function IllegalMoveIndicator({ illegalMoves }: { illegalMoves: IllegalMoveData[] }) {
+  const invalidUCI = illegalMoves.filter((m) => m.reason === "Invalid UCI notation").length;
+  const illegalMovesCt = illegalMoves.length - invalidUCI;
+  const whiteCt = illegalMoves.filter((m) => m.color === "white").length;
+  const blackCt = illegalMoves.filter((m) => m.color === "black").length;
+  const latest = illegalMoves[illegalMoves.length - 1];
+  const latestModel = latest.model.split("/").pop() ?? latest.model;
+  const latestType = latest.reason === "Invalid UCI notation" ? "invalid UCI" : "illegal move";
+
+  return (
+    <div className="illegal-moves-indicator panel">
+      <div className="illegal-moves-indicator__title">Move Errors</div>
+      <div className="illegal-moves-indicator__counts">
+        <span>White: <span className="illegal-moves-indicator__count-value">{whiteCt}</span></span>
+        <span>Black: <span className="illegal-moves-indicator__count-value">{blackCt}</span></span>
+        <span style={{ marginLeft: "auto", fontSize: "0.7rem" }}>
+          {illegalMovesCt > 0 && <span>{illegalMovesCt} illegal</span>}
+          {illegalMovesCt > 0 && invalidUCI > 0 && " / "}
+          {invalidUCI > 0 && <span style={{ color: "var(--mistake)" }}>{invalidUCI} invalid UCI</span>}
+        </span>
+      </div>
+      <div className="illegal-moves-indicator__latest">
+        {latestModel}: <code>{latest.attemptedMove}</code> &mdash; {latestType}
+      </div>
+    </div>
+  );
+}
 
 export default function GameViewerPage() {
   const { gameId } = useParams<{ gameId: string }>();
@@ -82,25 +113,19 @@ export default function GameViewerPage() {
       )}
 
       <div className="game-viewer__main">
-        <div className="game-viewer__board-col">
-          <EvalBar {...evalData} />
-          <ChessboardPanel
-            fen={state.currentFen}
-            selectedMove={selectedMove}
-            previousMove={previousMove}
-          />
+        <div className="game-viewer__board-col-wrap">
+          <div className="game-viewer__board-col">
+            <EvalBar {...evalData} />
+            <ChessboardPanel
+              fen={state.currentFen}
+              selectedMove={selectedMove}
+              previousMove={previousMove}
+            />
+          </div>
+          <CapturedMaterial fen={state.currentFen} />
         </div>
 
-        <div className="game-viewer__sidebar">
-          {state.moves.length > 0 && (
-            <WinProbGraph
-              moves={state.moves}
-              selectedIndex={state.selectedIndex}
-              onSelectMove={selectMove}
-              criticalMoments={gameDetail?.analysis?.critical_moments}
-            />
-          )}
-
+        <div className="game-viewer__moves-col">
           <MoveList
             moves={state.moves}
             selectedIndex={state.selectedIndex}
@@ -123,15 +148,31 @@ export default function GameViewerPage() {
             pgn={state.gameOverData?.pgn}
             gameId={gameId}
           />
+        </div>
 
-          <NarrationPanel move={selectedMove} />
-
-          {isCompleted && state.moves.length > 0 && (
-            <ResponseTimeGraph
+        <div className="game-viewer__info-col">
+          {state.moves.length > 0 && (
+            <WinProbGraph
               moves={state.moves}
               selectedIndex={state.selectedIndex}
               onSelectMove={selectMove}
+              criticalMoments={gameDetail?.analysis?.critical_moments}
             />
+          )}
+
+          <NarrationPanel move={selectedMove} />
+
+          <TrashTalkPanel
+            moves={state.moves}
+            illegalMoves={state.illegalMoves}
+            selectedIndex={state.selectedIndex}
+            whiteModel={state.whiteModel}
+            blackModel={state.blackModel}
+            onSelectMove={selectMove}
+          />
+
+          {state.illegalMoves.length > 0 && (
+            <IllegalMoveIndicator illegalMoves={state.illegalMoves} />
           )}
 
           {state.statusMessage && (
@@ -142,6 +183,14 @@ export default function GameViewerPage() {
           )}
         </div>
       </div>
+
+      {isCompleted && state.moves.length > 0 && (
+        <ResponseTimeGraph
+          moves={state.moves}
+          selectedIndex={state.selectedIndex}
+          onSelectMove={selectMove}
+        />
+      )}
 
       {gameDetail?.analysis && (
         <AnalysisPanel

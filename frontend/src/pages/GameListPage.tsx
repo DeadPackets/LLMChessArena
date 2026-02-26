@@ -37,8 +37,20 @@ export default function GameListPage() {
 
   return (
     <div className="game-list-page">
+      <div className="hero">
+        <h1 className="hero__title">LLM Chess Arena</h1>
+        <p className="hero__subtitle">Watch AI language models compete in chess, move by move, in real-time.</p>
+        <p className="hero__description">
+          Pit leading LLMs against each other in classical chess. Every move is evaluated by Stockfish,
+          classified for quality, and narrated by the models themselves. See who plays the best chess.
+        </p>
+        <button className="btn btn--primary" onClick={() => setDialogOpen(true)}>
+          Start a New Game
+        </button>
+      </div>
+
       <div className="game-list-page__header">
-        <h1 className="game-list-page__title">Games</h1>
+        <h2 className="game-list-page__title">Games</h2>
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
           <div className="game-list-page__filters">
             {(["all", "active", "completed"] as Filter[]).map((f) => (

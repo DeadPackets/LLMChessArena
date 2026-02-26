@@ -19,6 +19,7 @@ export interface MoveDetail {
   san: string;
   fen_after: string;
   narration: string | null;
+  trash_talk: string | null;
   centipawns: number | null;
   mate_in: number | null;
   win_probability: number | null;
