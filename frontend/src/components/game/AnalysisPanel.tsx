@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import type { GameAnalysis, CriticalMoment } from "../../types/api";
 import type { MoveData } from "../../types/websocket";
 import ClassificationBadge from "../shared/ClassificationBadge";
@@ -9,6 +10,8 @@ interface Props {
   blackModel: string | null;
   onSelectMove?: (index: number) => void;
   moves?: MoveData[];
+  onExport?: () => void;
+  exporting?: boolean;
 }
 
 function formatModelName(name: string | null): string {
@@ -71,10 +74,25 @@ function CriticalMomentItem({ cm, onClick }: { cm: CriticalMoment; onClick: () =
   );
 }
 
-export default function AnalysisPanel({ analysis, whiteModel, blackModel, onSelectMove, moves }: Props) {
+const AnalysisPanel = forwardRef<HTMLDivElement, Props>(function AnalysisPanel(
+  { analysis, whiteModel, blackModel, onSelectMove, moves, onExport, exporting },
+  ref,
+) {
   return (
-    <div className="analysis-panel panel">
-      <div className="analysis-panel__title">Post-Game Analysis</div>
+    <div className="analysis-panel panel" ref={ref}>
+      <div className="analysis-panel__title">
+        Post-Game Analysis
+        {onExport && (
+          <button
+            className="btn btn--ghost btn--sm analysis-panel__export-btn"
+            onClick={onExport}
+            disabled={exporting}
+            title="Export analysis as PNG"
+          >
+            {exporting ? "Exporting..." : "\u{1F4F7} Export PNG"}
+          </button>
+        )}
+      </div>
 
       {/* Accuracy cards */}
       <div className="analysis-panel__accuracy-row">
@@ -139,4 +157,6 @@ export default function AnalysisPanel({ analysis, whiteModel, blackModel, onSele
       {moves && moves.length > 0 && <TokensPerMoveChart moves={moves} />}
     </div>
   );
-}
+});
+
+export default AnalysisPanel;

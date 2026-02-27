@@ -1,4 +1,4 @@
-import type { GameDetail, ModelStats, EnhancedModelStats, ModelDetailStats, HeadToHeadRecord, CreateGameRequest, GameCreatedResponse, PlatformOverview, OpenRouterModel, PaginatedGamesResponse } from "../types/api";
+import type { GameDetail, ModelStats, EnhancedModelStats, ModelDetailStats, HeadToHeadRecord, HeadToHeadComparison, OpeningStats, EloHistoryPoint, CreateGameRequest, GameCreatedResponse, PlatformOverview, OpenRouterModel, PaginatedGamesResponse } from "../types/api";
 
 const BASE = "/api";
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -80,6 +80,19 @@ export async function getModelHeadToHead(modelId: string): Promise<HeadToHeadRec
 
 export async function getStatsOverview(): Promise<PlatformOverview> {
   return request<PlatformOverview>("/stats/overview");
+}
+
+export async function getOpeningStats(): Promise<OpeningStats[]> {
+  return request<OpeningStats[]>("/stats/openings");
+}
+
+export async function compareModels(modelA: string, modelB: string): Promise<HeadToHeadComparison> {
+  const qs = new URLSearchParams({ model_a: modelA, model_b: modelB });
+  return request<HeadToHeadComparison>(`/models/compare?${qs}`);
+}
+
+export async function getEloHistory(modelId: string): Promise<EloHistoryPoint[]> {
+  return request<EloHistoryPoint[]>(`/models/${modelId}/elo-history`);
 }
 
 // Module-level cache for OpenRouter models with 5-minute TTL

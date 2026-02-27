@@ -170,6 +170,42 @@ class PlatformOverview(BaseModel):
     model_breakdowns: list[ModelCostBreakdown] = []
 
 
+class HeadToHeadComparison(BaseModel):
+    model_a: str
+    model_b: str
+    model_a_display: str | None = None
+    model_b_display: str | None = None
+    model_a_elo: float = 1500.0
+    model_b_elo: float = 1500.0
+    model_a_wins: int = 0
+    model_b_wins: int = 0
+    draws: int = 0
+    total_games: int = 0
+    model_a_avg_accuracy: float | None = None
+    model_b_avg_accuracy: float | None = None
+    model_a_avg_acpl: float | None = None
+    model_b_avg_acpl: float | None = None
+    recent_games: list[GameSummary] = []
+
+
+class OpeningStats(BaseModel):
+    eco: str
+    name: str
+    total_games: int = 0
+    white_wins: int = 0
+    black_wins: int = 0
+    draws: int = 0
+
+
+class EloHistoryPoint(BaseModel):
+    game_id: str
+    elo_after: float
+    elo_change: float
+    opponent: str
+    outcome: str
+    played_at: datetime | None = None
+
+
 class PaginatedGamesResponse(BaseModel):
     games: list[GameSummary]
     total_count: int

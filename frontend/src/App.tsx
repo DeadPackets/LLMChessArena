@@ -5,6 +5,8 @@ import GameViewerPage from "./pages/GameViewerPage";
 import LeaderboardPage from "./pages/LeaderboardPage";
 import ModelDetailPage from "./pages/ModelDetailPage";
 import CostDashboardPage from "./pages/CostDashboardPage";
+import HeadToHeadPage from "./pages/HeadToHeadPage";
+import OpeningExplorerPage from "./pages/OpeningExplorerPage";
 
 /** Forces full remount of GameViewerPage when gameId changes (e.g. rematch) */
 function GameViewerPageKeyed() {
@@ -20,6 +22,8 @@ export default function App() {
         <Route path="/game/:gameId" element={<GameViewerPageKeyed />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
         <Route path="/costs" element={<CostDashboardPage />} />
+        <Route path="/head-to-head" element={<HeadToHeadPage />} />
+        <Route path="/openings" element={<OpeningExplorerPage />} />
         <Route path="/model/*" element={<ModelDetailPage />} />
       </Route>
     </Routes>

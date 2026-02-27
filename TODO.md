@@ -68,17 +68,17 @@
 
 ### Analysis & Stats
 
-27. **Live engine lines** — Show Stockfish's top 3 candidate moves alongside the eval bar.
+27. **~~Live engine lines~~** ✅ — ~~Stockfish multipv=3 returns top 3 candidate moves. EngineLinesPanel shows eval + UCI move for each line when data exists.~~
 
-28. **Head-to-head comparison page** — Pick any two models and see their record and accuracy comparison.
+28. **~~Head-to-head comparison page~~** ✅ — ~~`/head-to-head` page with model selector dropdowns, score banner (W-D-W), accuracy/ACPL comparison, recent games list. URL-synced via `?a=&b=`.~~
 
-29. **Opening explorer** — Show win rates by opening across all games per model.
+29. **~~Opening explorer~~** ✅ — ~~`/openings` page with sortable table: ECO code, opening name, games count, white/black/draw win rates, result bar. ECO links filter game list.~~
 
-30. **ELO history graph** — Track ELO over time per model. Currently only the current rating is stored.
+30. **~~ELO history graph~~** ✅ — ~~recharts LineChart on model detail page showing ELO progression. Replays all completed games chronologically from 1500 start. Tooltip shows opponent and outcome.~~
 
 31. **Game annotations / bookmarks** — Let users mark interesting games or positions.
 
-32. **Export analysis as PDF/image** — Share post-game analysis outside the app.
+32. **~~Export analysis as PNG~~** ✅ — ~~html2canvas captures analysis panel to PNG. Export button in analysis header. Downloads as `analysis-{gameId}.png`.~~
 
 ### Platform & Infrastructure
 

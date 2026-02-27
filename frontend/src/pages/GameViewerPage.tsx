@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import html2canvas from "html2canvas";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useGameWebSocket } from "../hooks/useGameWebSocket";
 import { useReplayControls } from "../hooks/useReplayControls";
@@ -17,6 +18,7 @@ import TableTalkPanel from "../components/game/TableTalkPanel";
 import CapturedMaterial from "../components/game/CapturedMaterial";
 import AnalysisPanel from "../components/game/AnalysisPanel";
 import BoardThemeSelector from "../components/game/BoardThemeSelector";
+import EngineLinesPanel from "../components/game/EngineLinesPanel";
 import KeyboardShortcutsModal from "../components/game/KeyboardShortcutsModal";
 import { useChessSound } from "../hooks/useChessSound";
 import { useBoardTheme } from "../hooks/useBoardTheme";
@@ -209,6 +211,29 @@ export default function GameViewerPage() {
     }
   }, [state.illegalMoves.length, playSound]);
 
+  // Export analysis as PNG
+  const analysisRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
+  const handleExportPNG = useCallback(async () => {
+    if (!analysisRef.current || exporting) return;
+    setExporting(true);
+    try {
+      const canvas = await html2canvas(analysisRef.current, {
+        backgroundColor: "#0e1017",
+        scale: 2,
+        useCORS: true,
+      });
+      const link = document.createElement("a");
+      link.download = `analysis-${gameId || "game"}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch {
+      // silently fail
+    } finally {
+      setExporting(false);
+    }
+  }, [exporting, gameId]);
+
   // Fetch full game detail for completed games (includes analysis)
   const [gameDetail, setGameDetail] = useState<GameDetail | null>(null);
   useEffect(() => {
@@ -365,6 +390,13 @@ export default function GameViewerPage() {
             />
           )}
 
+          {selectedMove?.evalAfter?.engine_lines && selectedMove.evalAfter.engine_lines.length > 0 && (
+            <EngineLinesPanel
+              lines={selectedMove.evalAfter.engine_lines}
+              depth={selectedMove.evalAfter.depth}
+            />
+          )}
+
           <NarrationPanel move={selectedMove} />
 
           <TableTalkPanel
@@ -431,11 +463,14 @@ export default function GameViewerPage() {
 
       {gameDetail?.analysis && (
         <AnalysisPanel
+          ref={analysisRef}
           analysis={gameDetail.analysis}
           whiteModel={state.whiteModel}
           blackModel={state.blackModel}
           onSelectMove={selectMove}
           moves={state.moves}
+          onExport={handleExportPNG}
+          exporting={exporting}
         />
       )}
 

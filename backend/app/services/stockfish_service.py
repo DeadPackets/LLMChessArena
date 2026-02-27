@@ -8,7 +8,7 @@ import chess
 import chess.engine
 
 from app.config import STOCKFISH_PATH
-from app.models.chess_models import PositionEval
+from app.models.chess_models import EngineLine, PositionEval
 
 logger = logging.getLogger(__name__)
 
@@ -42,28 +42,44 @@ class StockfishService:
             raise RuntimeError("Stockfish not started. Call start() first.")
         return self._engine
 
-    async def evaluate(self, board: chess.Board, depth: int = 18) -> PositionEval:
-        """Evaluate a position and return structured evaluation data."""
+    async def evaluate(self, board: chess.Board, depth: int = 18, multipv: int = 3) -> PositionEval:
+        """Evaluate a position and return structured evaluation data with top N lines."""
         start = time.monotonic()
-        info = await self.engine.analyse(
+        infos = await self.engine.analyse(
             board,
             chess.engine.Limit(depth=depth),
+            multipv=multipv,
         )
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
-        score = info["score"].white()  # Always from White's perspective
+        # multipv returns a list of InfoDicts; single PV returns a single dict
+        if not isinstance(infos, list):
+            infos = [infos]
+
+        # Primary line (rank 1)
+        primary = infos[0] if infos else {}
+        score = primary["score"].white()
         cp = score.score(mate_score=10000)
         mate_in = score.mate()
-
-        # Win probability using Lichess sigmoid formula
         win_prob = self.cp_to_win_probability(cp)
-
-        # WDL from Stockfish model
         wdl = score.wdl()
-
-        # Best move from principal variation
-        pv = info.get("pv", [])
+        pv = primary.get("pv", [])
         best_move = pv[0].uci() if pv else None
+
+        # Build engine lines from all multipv results
+        engine_lines: list[EngineLine] = []
+        for rank_idx, info in enumerate(infos):
+            line_score = info["score"].white()
+            line_cp = line_score.score(mate_score=10000)
+            line_mate = line_score.mate()
+            line_pv = info.get("pv", [])
+            if line_pv:
+                engine_lines.append(EngineLine(
+                    rank=rank_idx + 1,
+                    move_uci=line_pv[0].uci(),
+                    centipawns=line_cp,
+                    mate_in=line_mate,
+                ))
 
         eval_result = PositionEval(
             centipawns=cp,
@@ -71,11 +87,12 @@ class StockfishService:
             win_probability_white=win_prob,
             wdl_white={"w": wdl.wins, "d": wdl.draws, "l": wdl.losses},
             best_move_uci=best_move,
-            depth=info.get("depth", depth),
+            depth=primary.get("depth", depth),
+            engine_lines=engine_lines,
         )
         logger.debug(
-            "Stockfish eval: depth=%d, cp=%d, mate=%s, best=%s, %dms",
-            info.get("depth", depth), cp, mate_in, best_move, elapsed_ms,
+            "Stockfish eval: depth=%d, cp=%d, mate=%s, best=%s, lines=%d, %dms",
+            primary.get("depth", depth), cp, mate_in, best_move, len(engine_lines), elapsed_ms,
         )
         return eval_result
 

@@ -47,6 +47,7 @@ function normalizeEval(raw: Record<string, unknown>): PositionEval {
     wdl_white: (raw.wdl_white as { w: number; d: number; l: number }) ?? { w: 500, d: 0, l: 500 },
     best_move_uci: (raw.best_move_uci as string | null) ?? null,
     depth: (raw.depth as number) ?? 0,
+    engine_lines: (raw.engine_lines as PositionEval["engine_lines"]) ?? [],
   };
 }
 

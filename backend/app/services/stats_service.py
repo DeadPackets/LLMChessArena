@@ -12,9 +12,11 @@ from sqlalchemy import func as sa_func
 
 from app.models.api_models import (
     CriticalMoment,
+    EloHistoryPoint,
     GameAnalysis,
     HeadToHeadRecord,
     ModelCostBreakdown,
+    OpeningStats,
     PlatformOverview,
 )
 
@@ -454,3 +456,111 @@ async def compute_platform_overview(session: AsyncSession) -> PlatformOverview:
         avg_game_cost=round(total_cost / total_games, 6) if total_games > 0 else 0.0,
         model_breakdowns=model_breakdowns,
     )
+
+
+async def compute_opening_stats(session: AsyncSession) -> list[OpeningStats]:
+    """Compute opening statistics across all completed games."""
+    results = await session.exec(
+        select(Game).where(
+            Game.status == "completed",
+            Game.opening_eco.isnot(None),  # type: ignore[union-attr]
+        )
+    )
+    games = results.all()
+
+    openings: dict[str, dict] = defaultdict(lambda: {
+        "name": "", "total": 0, "white_wins": 0, "black_wins": 0, "draws": 0,
+    })
+
+    for g in games:
+        eco = g.opening_eco
+        if not eco:
+            continue
+        openings[eco]["name"] = g.opening_name or eco
+        openings[eco]["total"] += 1
+        if g.outcome and "white" in g.outcome:
+            openings[eco]["white_wins"] += 1
+        elif g.outcome and "black" in g.outcome:
+            openings[eco]["black_wins"] += 1
+        else:
+            openings[eco]["draws"] += 1
+
+    return sorted(
+        [
+            OpeningStats(
+                eco=eco,
+                name=data["name"],
+                total_games=data["total"],
+                white_wins=data["white_wins"],
+                black_wins=data["black_wins"],
+                draws=data["draws"],
+            )
+            for eco, data in openings.items()
+        ],
+        key=lambda x: x.total_games,
+        reverse=True,
+    )
+
+
+async def compute_elo_history(session: AsyncSession, model_id: str) -> list[EloHistoryPoint]:
+    """Compute ELO history for a model by replaying all completed games chronologically."""
+    results = await session.exec(
+        select(Game).where(
+            Game.status == "completed",
+            (Game.white_model == model_id) | (Game.black_model == model_id),
+            Game.chaos_mode != True,  # noqa: E712
+        ).order_by(Game.completed_at.asc())  # type: ignore[union-attr]
+    )
+    games = results.all()
+
+    # Filter out games with limited Stockfish (those skip ELO)
+    eligible = [
+        g for g in games
+        if g.white_stockfish_elo is None and g.black_stockfish_elo is None
+    ]
+
+    if not eligible:
+        return []
+
+    # Get all model ratings to replay ELO progression
+    # We replay from 1500 start
+    elo = 1500.0
+    history: list[EloHistoryPoint] = []
+
+    # We need opponents' ratings too. Simplification: track from the model table
+    # Instead of exact replay, compute from stored rating changes
+    # Actually: we can compute the running ELO by knowing all game outcomes
+    # For simplicity, look at the EloHistory table if it exists, else build from games
+    for g in eligible:
+        is_white = g.white_model == model_id
+        opponent = g.black_model if is_white else g.white_model
+
+        if is_white:
+            score = 1.0 if g.outcome and "white" in g.outcome else (0.0 if g.outcome and "black" in g.outcome else 0.5)
+        else:
+            score = 1.0 if g.outcome and "black" in g.outcome else (0.0 if g.outcome and "white" in g.outcome else 0.5)
+
+        # Get opponent's approximate rating (use 1500 as default)
+        opp_model = await session.get(LLMModel, opponent)
+        opp_elo = opp_model.elo_rating if opp_model else 1500.0
+
+        from app.services.elo_service import calculate_elo_change
+        if is_white:
+            new_elo, _ = calculate_elo_change(elo, opp_elo, score)
+        else:
+            _, new_elo = calculate_elo_change(opp_elo, elo, 1.0 - score)
+
+        change = round(new_elo - elo, 1)
+        elo = new_elo
+
+        outcome_label = "win" if score == 1.0 else ("loss" if score == 0.0 else "draw")
+        history.append(EloHistoryPoint(
+            game_id=g.id,
+            elo_after=round(elo, 1),
+            elo_change=change,
+            opponent=opponent,
+            outcome=outcome_label,
+            played_at=g.completed_at,
+        ))
+
+    return history

@@ -140,6 +140,42 @@ export interface PlatformOverview {
   model_breakdowns: ModelCostBreakdown[];
 }
 
+export interface HeadToHeadComparison {
+  model_a: string;
+  model_b: string;
+  model_a_display: string | null;
+  model_b_display: string | null;
+  model_a_elo: number;
+  model_b_elo: number;
+  model_a_wins: number;
+  model_b_wins: number;
+  draws: number;
+  total_games: number;
+  model_a_avg_accuracy: number | null;
+  model_b_avg_accuracy: number | null;
+  model_a_avg_acpl: number | null;
+  model_b_avg_acpl: number | null;
+  recent_games: GameSummary[];
+}
+
+export interface OpeningStats {
+  eco: string;
+  name: string;
+  total_games: number;
+  white_wins: number;
+  black_wins: number;
+  draws: number;
+}
+
+export interface EloHistoryPoint {
+  game_id: string;
+  elo_after: number;
+  elo_change: number;
+  opponent: string;
+  outcome: string;
+  played_at: string | null;
+}
+
 export interface PaginatedGamesResponse {
   games: GameSummary[];
   total_count: number;

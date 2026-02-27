@@ -4,6 +4,7 @@ import { getModelDetail } from "../api/client";
 import type { ModelDetailStats } from "../types/api";
 import GameCard from "../components/gamelist/GameCard";
 import HeadToHeadTable from "../components/model/HeadToHeadTable";
+import EloHistoryChart from "../components/model/EloHistoryChart";
 import ClassificationBadge from "../components/shared/ClassificationBadge";
 
 const CLASS_ORDER = ["best", "excellent", "good", "inaccuracy", "mistake", "blunder"];
@@ -136,6 +137,9 @@ export default function ModelDetailPage() {
           </div>
         )}
       </div>
+
+      {/* ELO History */}
+      <EloHistoryChart modelId={model.id} currentElo={model.elo_rating} />
 
       {/* Head to head */}
       {model.head_to_head.length > 0 && (

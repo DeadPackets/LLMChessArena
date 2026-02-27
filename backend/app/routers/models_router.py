@@ -6,13 +6,16 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.database import Game, LLMModel, get_session
 from app.models.api_models import (
+    EloHistoryPoint,
     EnhancedModelStats,
     GameSummary,
+    HeadToHeadComparison,
     HeadToHeadRecord,
     ModelDetailStats,
     ModelStats,
 )
 from app.services.stats_service import (
+    compute_elo_history,
     compute_head_to_head,
     compute_model_aggregate_stats,
 )
@@ -54,6 +57,91 @@ async def leaderboard(session: AsyncSession = Depends(get_session)):
             illegal_move_rate=round((r.total_illegal_moves or 0) / gp, 2),
         ))
     return enhanced
+
+
+@router.get("/compare", response_model=HeadToHeadComparison)
+async def compare_models(
+    model_a: str,
+    model_b: str,
+    session: AsyncSession = Depends(get_session),
+):
+    """Compare two models head-to-head."""
+    ma = await session.get(LLMModel, model_a)
+    mb = await session.get(LLMModel, model_b)
+    if not ma or not mb:
+        raise HTTPException(404, "One or both models not found")
+
+    # Get direct matchups
+    results = await session.exec(
+        select(Game).where(
+            Game.status == "completed",
+            Game.chaos_mode != True,  # noqa: E712
+            (
+                ((Game.white_model == model_a) & (Game.black_model == model_b))
+                | ((Game.white_model == model_b) & (Game.black_model == model_a))
+            ),
+        ).order_by(Game.completed_at.desc())  # type: ignore[union-attr]
+    )
+    games = results.all()
+
+    a_wins = 0
+    b_wins = 0
+    draws = 0
+    for g in games:
+        if g.white_model == model_a:
+            if g.outcome and "white" in g.outcome:
+                a_wins += 1
+            elif g.outcome and "black" in g.outcome:
+                b_wins += 1
+            else:
+                draws += 1
+        else:
+            if g.outcome and "black" in g.outcome:
+                a_wins += 1
+            elif g.outcome and "white" in g.outcome:
+                b_wins += 1
+            else:
+                draws += 1
+
+    # Aggregate stats
+    agg_a = await compute_model_aggregate_stats(session, model_a)
+    agg_b = await compute_model_aggregate_stats(session, model_b)
+
+    recent = [
+        GameSummary(
+            id=g.id, white_model=g.white_model, black_model=g.black_model,
+            status=g.status, outcome=g.outcome, termination=g.termination,
+            opening_eco=g.opening_eco, opening_name=g.opening_name,
+            total_moves=g.total_moves or 0, started_at=g.started_at,
+            completed_at=g.completed_at,
+            white_is_human=bool(g.white_is_human), black_is_human=bool(g.black_is_human),
+            white_is_stockfish=bool(g.white_is_stockfish), black_is_stockfish=bool(g.black_is_stockfish),
+            chaos_mode=bool(g.chaos_mode),
+        )
+        for g in games[:10]
+    ]
+
+    return HeadToHeadComparison(
+        model_a=model_a, model_b=model_b,
+        model_a_display=ma.display_name, model_b_display=mb.display_name,
+        model_a_elo=ma.elo_rating, model_b_elo=mb.elo_rating,
+        model_a_wins=a_wins, model_b_wins=b_wins, draws=draws,
+        total_games=len(games),
+        model_a_avg_accuracy=agg_a.get("avg_accuracy"),
+        model_b_avg_accuracy=agg_b.get("avg_accuracy"),
+        model_a_avg_acpl=agg_a.get("avg_acpl"),
+        model_b_avg_acpl=agg_b.get("avg_acpl"),
+        recent_games=recent,
+    )
+
+
+@router.get("/{model_id:path}/elo-history", response_model=list[EloHistoryPoint])
+async def elo_history(model_id: str, session: AsyncSession = Depends(get_session)):
+    """Get ELO rating history for a model."""
+    model = await session.get(LLMModel, model_id)
+    if not model:
+        raise HTTPException(404, "Model not found")
+    return await compute_elo_history(session, model_id)
 
 
 @router.get("/{model_id:path}/head-to-head", response_model=list[HeadToHeadRecord])

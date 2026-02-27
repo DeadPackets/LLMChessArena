@@ -1,3 +1,10 @@
+export interface EngineLine {
+  rank: number;
+  move_uci: string;
+  centipawns: number;
+  mate_in: number | null;
+}
+
 export interface PositionEval {
   centipawns: number;
   mate_in: number | null;
@@ -5,6 +12,7 @@ export interface PositionEval {
   wdl_white: { w: number; d: number; l: number };
   best_move_uci: string | null;
   depth: number;
+  engine_lines: EngineLine[];
 }
 
 export interface MoveData {

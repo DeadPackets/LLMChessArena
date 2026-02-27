@@ -26,6 +26,22 @@ export default function Header() {
           Leaderboard
         </NavLink>
         <NavLink
+          to="/openings"
+          className={({ isActive }) =>
+            `app-header__link${isActive ? " app-header__link--active" : ""}`
+          }
+        >
+          Openings
+        </NavLink>
+        <NavLink
+          to="/head-to-head"
+          className={({ isActive }) =>
+            `app-header__link${isActive ? " app-header__link--active" : ""}`
+          }
+        >
+          H2H
+        </NavLink>
+        <NavLink
           to="/costs"
           className={({ isActive }) =>
             `app-header__link${isActive ? " app-header__link--active" : ""}`

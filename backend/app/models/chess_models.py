@@ -30,6 +30,14 @@ class GameConfig(BaseModel):
     draw_adjudication: bool = True  # Auto-draw if eval within ±20cp for 30+ moves
 
 
+class EngineLine(BaseModel):
+    """A single candidate move from Stockfish multipv."""
+    rank: int  # 1 = best, 2 = second, etc.
+    move_uci: str
+    centipawns: int
+    mate_in: int | None = None
+
+
 class PositionEval(BaseModel):
     """Stockfish evaluation of a single position."""
 
@@ -39,6 +47,7 @@ class PositionEval(BaseModel):
     wdl_white: dict[str, int] = Field(default_factory=dict)  # {"w": wins, "d": draws, "l": losses} per mille
     best_move_uci: str | None = None
     depth: int = 0
+    engine_lines: list[EngineLine] = Field(default_factory=list)  # top N candidate moves
 
 
 class MoveRecord(BaseModel):
