@@ -795,10 +795,12 @@ button {
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(4px);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 200;
   animation: fade-in 0.15s ease;
+  overflow-y: auto;
+  padding: 2rem 0;
 }
 
 @keyframes fade-in {
@@ -810,6 +812,7 @@ button {
   width: 440px;
   max-width: 95vw;
   padding: 1.5rem;
+  margin: auto 0;
   animation: dialog-in 0.2s ease-out;
 }
 
