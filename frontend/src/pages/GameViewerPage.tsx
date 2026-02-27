@@ -50,6 +50,51 @@ function IllegalMoveIndicator({ illegalMoves }: { illegalMoves: IllegalMoveData[
   );
 }
 
+function MoveTimer({ timeLimit, active }: { timeLimit: number; active: boolean }) {
+  const [remaining, setRemaining] = useState(timeLimit);
+  const startTimeRef = useRef(Date.now());
+
+  useEffect(() => {
+    if (!active) {
+      setRemaining(timeLimit);
+      return;
+    }
+    startTimeRef.current = Date.now();
+    setRemaining(timeLimit);
+
+    const interval = setInterval(() => {
+      const elapsed = (Date.now() - startTimeRef.current) / 1000;
+      const left = Math.max(0, timeLimit - elapsed);
+      setRemaining(left);
+      if (left <= 0) clearInterval(interval);
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [active, timeLimit]);
+
+  const fraction = remaining / timeLimit;
+  const urgency = fraction > 0.25 ? "normal" : fraction > 0.1 ? "warning" : "critical";
+
+  const mins = Math.floor(remaining / 60);
+  const secs = Math.floor(remaining % 60);
+  const display = mins > 0 ? `${mins}:${secs.toString().padStart(2, "0")}` : `${secs}s`;
+
+  return (
+    <div className={`move-timer move-timer--${urgency}`}>
+      <div className="move-timer__bar">
+        <div
+          className="move-timer__bar-fill"
+          style={{ width: `${fraction * 100}%` }}
+        />
+      </div>
+      <div className="move-timer__text">
+        <span className="move-timer__time">{display}</span>
+        <span className="move-timer__label">Your turn — drag a piece to move</span>
+      </div>
+    </div>
+  );
+}
+
 function detectSoundType(san: string): SoundType {
   if (san.endsWith("#")) return "checkmate";
   if (san.endsWith("+")) return "check";
@@ -269,11 +314,13 @@ export default function GameViewerPage() {
             <IllegalMoveIndicator illegalMoves={state.illegalMoves} />
           )}
 
-          {isHumanTurn && (
+          {isHumanTurn && state.moveTimeLimit != null ? (
+            <MoveTimer timeLimit={state.moveTimeLimit} active={isHumanTurn} />
+          ) : isHumanTurn ? (
             <div className="human-turn-indicator">
               Your turn — drag a piece to move
             </div>
-          )}
+          ) : null}
 
           {humanColor && isLive && !isHumanTurn && state.awaitingHumanMove === null && (
             <div className="status-message">

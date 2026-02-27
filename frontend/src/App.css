@@ -226,12 +226,9 @@ button {
 .game-info__player-icon--black { color: #555; }
 
 .game-info__player-name {
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-family: var(--font-mono);
   font-size: 0.82rem;
+  white-space: nowrap;
 }
 
 .game-info__vs {
@@ -1209,6 +1206,77 @@ button {
 @keyframes pulse-glow {
   0%, 100% { box-shadow: 0 0 8px rgba(212, 168, 67, 0.2); }
   50% { box-shadow: 0 0 16px rgba(212, 168, 67, 0.4); }
+}
+
+/* Move timer for human players */
+.move-timer {
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--amber-dim);
+  background: var(--bg-tertiary);
+}
+
+.move-timer__bar {
+  height: 4px;
+  background: var(--bg-secondary);
+}
+
+.move-timer__bar-fill {
+  height: 100%;
+  background: var(--amber-bright);
+  transition: width 0.15s linear;
+  border-radius: 0 2px 2px 0;
+}
+
+.move-timer__text {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.move-timer__time {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--amber-bright);
+  min-width: 3ch;
+  text-align: center;
+}
+
+.move-timer__label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--amber-bright);
+  opacity: 0.85;
+}
+
+/* Warning state (<25% time) */
+.move-timer--warning {
+  border-color: var(--mistake);
+  animation: pulse-glow-warning 1s ease-in-out infinite;
+}
+.move-timer--warning .move-timer__bar-fill { background: var(--mistake); }
+.move-timer--warning .move-timer__time { color: var(--mistake); }
+.move-timer--warning .move-timer__label { color: var(--mistake); }
+
+/* Critical state (<10% time) */
+.move-timer--critical {
+  border-color: var(--blunder);
+  animation: pulse-glow-critical 0.5s ease-in-out infinite;
+}
+.move-timer--critical .move-timer__bar-fill { background: var(--blunder); }
+.move-timer--critical .move-timer__time { color: var(--blunder); }
+.move-timer--critical .move-timer__label { color: var(--blunder); }
+
+@keyframes pulse-glow-warning {
+  0%, 100% { box-shadow: 0 0 8px rgba(224, 136, 50, 0.2); }
+  50% { box-shadow: 0 0 16px rgba(224, 136, 50, 0.5); }
+}
+
+@keyframes pulse-glow-critical {
+  0%, 100% { box-shadow: 0 0 8px rgba(202, 52, 49, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(202, 52, 49, 0.6); }
 }
 
 .resign-btn {
