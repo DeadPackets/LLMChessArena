@@ -724,6 +724,140 @@ button {
   color: var(--text-muted);
 }
 
+/* Search & filter bar */
+.game-list-page__search-bar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0 0.25rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.game-list-page__search-input {
+  flex: 1;
+  min-width: 180px;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.game-list-page__search-input:focus {
+  border-color: var(--amber-dim);
+}
+
+.game-list-page__search-input--small {
+  flex: 0;
+  min-width: 0;
+  width: 7rem;
+}
+
+.game-list-page__filter-select {
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.game-list-page__filter-select:focus {
+  border-color: var(--amber-dim);
+}
+
+.btn--sm {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+}
+
+/* Keyboard shortcuts modal */
+.keyboard-shortcuts-modal {
+  width: 340px;
+  max-width: 90vw;
+  margin: 15vh auto;
+  padding: 1.25rem;
+}
+
+.keyboard-shortcuts-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.keyboard-shortcuts-modal__title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--amber);
+  margin: 0;
+}
+
+.keyboard-shortcuts-modal__close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+
+.keyboard-shortcuts-modal__close:hover {
+  color: var(--text-primary);
+}
+
+.keyboard-shortcuts-modal__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.keyboard-shortcuts-modal__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.keyboard-shortcuts-modal__keys {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.keyboard-shortcuts-modal__kbd {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+.keyboard-shortcuts-modal__label {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+/* Copy link and shortcut buttons */
+.game-controls__copy-btn,
+.game-controls__shortcut-btn {
+  font-size: 0.85rem !important;
+  min-width: 2rem;
+}
+
 .game-card {
   display: grid;
   grid-template-columns: 1fr auto auto;

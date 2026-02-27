@@ -4,6 +4,20 @@ import { Chess } from "chess.js";
 import type { Arrow, Piece, PromotionPieceOption, Square } from "react-chessboard/dist/chessboard/types";
 import type { MoveData } from "../../types/websocket";
 
+type HighlightColor = "rgba(235, 97, 80, 0.8)" | "rgba(82, 176, 220, 0.8)" | "rgba(172, 206, 89, 0.8)" | "rgba(255, 170, 0, 0.8)";
+const HIGHLIGHT_COLORS: HighlightColor[] = [
+  "rgba(235, 97, 80, 0.8)",   // red
+  "rgba(82, 176, 220, 0.8)",  // blue
+  "rgba(172, 206, 89, 0.8)",  // green
+  "rgba(255, 170, 0, 0.8)",   // orange
+];
+const ARROW_COLORS = [
+  "rgba(235, 97, 80, 0.85)",
+  "rgba(82, 176, 220, 0.85)",
+  "rgba(172, 206, 89, 0.85)",
+  "rgba(255, 170, 0, 0.85)",
+];
+
 interface BoardThemeColors {
   light: string;
   dark: string;
@@ -79,6 +93,17 @@ export default function ChessboardPanel({
   const [legalTargets, setLegalTargets] = useState<Square[]>([]);
   // Click-to-move promotion
   const [pendingPromotion, setPendingPromotion] = useState<{ from: Square; to: Square } | null>(null);
+
+  // User-drawn arrows and highlighted squares (right-click)
+  const [userArrows, setUserArrows] = useState<Arrow[]>([]);
+  const [userHighlights, setUserHighlights] = useState<Record<string, string>>({});
+  const rightClickColorRef = useRef(0); // index into HIGHLIGHT_COLORS
+
+  // Clear user annotations when position changes
+  useEffect(() => {
+    setUserArrows([]);
+    setUserHighlights({});
+  }, [fen]);
 
   const displayFen = optimisticFen ?? fen;
 
@@ -201,20 +226,42 @@ export default function ChessboardPanel({
     return styles;
   }, [legalTargets, selectedSquare, displayFen, boardTheme.highlight]);
 
-  // Merge last-move highlights with legal-move indicators
+  // User highlight styles
+  const userHighlightStyles = useMemo(() => {
+    const styles: Record<string, React.CSSProperties> = {};
+    for (const [sq, color] of Object.entries(userHighlights)) {
+      styles[sq] = { background: color };
+    }
+    return styles;
+  }, [userHighlights]);
+
+  // Merge last-move highlights with legal-move indicators and user highlights
   const combinedSquareStyles = useMemo(
-    () => ({ ...lastMoveSquares, ...legalMoveStyles }),
-    [lastMoveSquares, legalMoveStyles],
+    () => ({ ...userHighlightStyles, ...lastMoveSquares, ...legalMoveStyles }),
+    [lastMoveSquares, legalMoveStyles, userHighlightStyles],
   );
 
-  // Arrow showing the current move
+  // Arrow showing the current move + user-drawn arrows
   const moveArrow = useMemo<Arrow[]>(() => {
     const move = selectedMove;
-    if (!move?.uci || move.uci.length < 4) return [];
-    const from = move.uci.slice(0, 2) as Square;
-    const to = move.uci.slice(2, 4) as Square;
-    return [[from, to, "rgba(240, 192, 80, 0.9)"]];
-  }, [selectedMove]);
+    const base: Arrow[] = move?.uci && move.uci.length >= 4
+      ? [[move.uci.slice(0, 2) as Square, move.uci.slice(2, 4) as Square, "rgba(240, 192, 80, 0.9)"]]
+      : [];
+    return [...base, ...userArrows];
+  }, [selectedMove, userArrows]);
+
+  // Right-click on a square to toggle highlight
+  function handleSquareRightClick(square: Square) {
+    setUserHighlights((prev) => {
+      const copy = { ...prev };
+      if (copy[square]) {
+        delete copy[square];
+      } else {
+        copy[square] = HIGHLIGHT_COLORS[rightClickColorRef.current % HIGHLIGHT_COLORS.length];
+      }
+      return copy;
+    });
+  }
 
   // Only allow dragging the human's own pieces
   function isDraggablePiece({ piece }: { piece: Piece; sourceSquare: Square }) {
@@ -397,6 +444,10 @@ export default function ChessboardPanel({
         customArrows={moveArrow}
         customPieces={customPieces}
         animationDuration={250}
+        onSquareRightClick={handleSquareRightClick}
+        onArrowsChange={(arrows: Arrow[]) => {
+          setUserArrows(arrows.map(a => [a[0], a[1], a[2] || ARROW_COLORS[rightClickColorRef.current % ARROW_COLORS.length]]));
+        }}
       />
     </div>
   );

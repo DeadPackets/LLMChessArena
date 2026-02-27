@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 interface Props {
   canGoFirst: boolean;
   canGoPrev: boolean;
@@ -18,6 +20,8 @@ interface Props {
   // Sound
   muted?: boolean;
   onToggleMute?: () => void;
+  // Keyboard legend
+  onShowShortcuts?: () => void;
 }
 
 const SPEEDS = [0.5, 1, 2, 5];
@@ -49,7 +53,17 @@ export default function GameControls({
   gameId,
   muted,
   onToggleMute,
+  onShowShortcuts,
 }: Props) {
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  function copyPositionLink() {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    });
+  }
+
   return (
     <div className="game-controls" role="toolbar" aria-label="Move navigation">
       <button
@@ -148,6 +162,26 @@ export default function GameControls({
           aria-label={muted ? "Unmute sounds" : "Mute sounds"}
         >
           {muted ? "\uD83D\uDD07" : "\uD83D\uDD0A"}
+        </button>
+      )}
+
+      <button
+        className="game-controls__btn game-controls__copy-btn"
+        onClick={copyPositionLink}
+        title="Copy link to this position"
+        aria-label="Copy link to current position"
+      >
+        {linkCopied ? "\u2713" : "\uD83D\uDD17"}
+      </button>
+
+      {onShowShortcuts && (
+        <button
+          className="game-controls__btn game-controls__shortcut-btn"
+          onClick={onShowShortcuts}
+          title="Keyboard shortcuts (?)"
+          aria-label="Show keyboard shortcuts"
+        >
+          ?
         </button>
       )}
     </div>

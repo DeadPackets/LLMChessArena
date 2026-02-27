@@ -76,17 +76,33 @@ async def create_game(req: CreateGameRequest, request: Request):
 async def list_games(
     status: str | None = None,
     model: str | None = None,
+    outcome: str | None = None,
+    opening: str | None = None,
+    q: str | None = None,
     limit: int = 20,
     offset: int = 0,
     session: AsyncSession = Depends(get_session),
 ):
-    """List games with pagination, optionally filtered by status or model."""
+    """List games with pagination, optionally filtered by status, model, outcome, opening, or search query."""
     # Build base filter conditions
     conditions = []
     if status:
         conditions.append(Game.status == status)
     if model:
         conditions.append((Game.white_model == model) | (Game.black_model == model))
+    if outcome:
+        conditions.append(Game.outcome == outcome)
+    if opening:
+        conditions.append(Game.opening_eco == opening)
+    if q:
+        # Search by model name or opening name (case-insensitive)
+        like_pattern = f"%{q}%"
+        conditions.append(
+            Game.white_model.ilike(like_pattern)  # type: ignore[union-attr]
+            | Game.black_model.ilike(like_pattern)  # type: ignore[union-attr]
+            | Game.opening_name.ilike(like_pattern)  # type: ignore[union-attr]
+            | Game.opening_eco.ilike(like_pattern)  # type: ignore[union-attr]
+        )
 
     # Count query
     count_query = select(func.count()).select_from(Game)

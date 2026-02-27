@@ -26,12 +26,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export async function listGames(params?: {
   status?: string;
   model?: string;
+  outcome?: string;
+  opening?: string;
+  q?: string;
   limit?: number;
   offset?: number;
 }): Promise<PaginatedGamesResponse> {
   const qs = new URLSearchParams();
   if (params?.status) qs.set("status", params.status);
   if (params?.model) qs.set("model", params.model);
+  if (params?.outcome) qs.set("outcome", params.outcome);
+  if (params?.opening) qs.set("opening", params.opening);
+  if (params?.q) qs.set("q", params.q);
   if (params?.limit) qs.set("limit", String(params.limit));
   if (params?.offset) qs.set("offset", String(params.offset));
   const query = qs.toString();

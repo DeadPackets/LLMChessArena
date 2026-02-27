@@ -56,15 +56,15 @@
 
 21. **~~Board themes~~** ✅ — ~~5 board color themes (Classic, Tournament, Ice, Walnut, Midnight) + 3 piece styles (Standard, Neo, Classic). Selector below board, persisted to localStorage.~~
 
-22. **Board arrows / highlights** — No way to draw arrows or highlight squares for analysis.
+22. **~~Board arrows / highlights~~** ✅ — ~~Right-click to highlight squares, right-drag to draw arrows. Clears on position change.~~
 
-23. **Game search and filtering** — Can only filter by status tab. No search by model name, date range, opening, or outcome.
+23. **~~Game search and filtering~~** ✅ — ~~Search by model name or opening, filter by outcome (white/black/draw), filter by ECO code. Backend supports q, outcome, opening params.~~
 
-24. **URL-synced filters** — Filter state isn't in the URL. Refreshing resets everything.
+24. **~~URL-synced filters~~** ✅ — ~~All filter state (status, search query, outcome, opening) synced to URL via useSearchParams. Shareable/bookmarkable.~~
 
-25. **Shareable game links with position** — `/game/{id}?move=15` to link to a specific position.
+25. **~~Shareable game links with position~~** ✅ — ~~`/game/{id}?move=15` links to specific position. URL updates on navigation. Copy link button in game controls.~~
 
-26. **Keyboard shortcut legend** — Arrow keys work but no UI hint tells users.
+26. **~~Keyboard shortcut legend~~** ✅ — ~~"?" button in game controls opens modal. Also toggleable with "?" key. Shows all shortcuts.~~
 
 ### Analysis & Stats
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { listGames } from "../api/client";
 import type { GameSummary } from "../types/api";
 import GameCard from "../components/gamelist/GameCard";
@@ -7,22 +8,97 @@ import NewGameDialog from "../components/gamelist/NewGameDialog";
 const PAGE_SIZE = 20;
 
 type Filter = "all" | "active" | "completed";
+type Outcome = "" | "white" | "black" | "draw";
 
 export default function GameListPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Read filters from URL
+  const filter = (searchParams.get("status") as Filter) || "all";
+  const searchQuery = searchParams.get("q") || "";
+  const outcome = (searchParams.get("outcome") as Outcome) || "";
+  const opening = searchParams.get("opening") || "";
+
   const [games, setGames] = useState<GameSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
-  const [filter, setFilter] = useState<Filter>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const filterRef = useRef(filter);
-  filterRef.current = filter;
+
+  // Local search input (debounced before pushing to URL)
+  const [searchInput, setSearchInput] = useState(searchQuery);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Sync searchInput when URL param changes externally
+  useEffect(() => {
+    setSearchInput(searchParams.get("q") || "");
+  }, [searchParams]);
+
+  // Update URL params (replaces history entry for filters)
+  const updateParams = useCallback(
+    (updates: Record<string, string>) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [key, value] of Object.entries(updates)) {
+          if (value) {
+            next.set(key, value);
+          } else {
+            next.delete(key);
+          }
+        }
+        // Always reset offset when filters change
+        next.delete("offset");
+        return next;
+      }, { replace: true });
+    },
+    [setSearchParams],
+  );
+
+  const setFilter = useCallback(
+    (f: Filter) => updateParams({ status: f === "all" ? "" : f }),
+    [updateParams],
+  );
+
+  const setOutcome = useCallback(
+    (o: Outcome) => updateParams({ outcome: o }),
+    [updateParams],
+  );
+
+  const setOpening = useCallback(
+    (eco: string) => updateParams({ opening: eco }),
+    [updateParams],
+  );
+
+  const handleSearchInput = useCallback(
+    (value: string) => {
+      setSearchInput(value);
+      clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        updateParams({ q: value });
+      }, 350);
+    },
+    [updateParams],
+  );
+
+  // Build API params from URL state
+  const buildApiParams = useCallback(() => {
+    const params: Record<string, string | number> = { limit: PAGE_SIZE, offset: 0 };
+    if (filter !== "all") params.status = filter;
+    if (searchQuery) params.q = searchQuery;
+    if (outcome) params.outcome = outcome;
+    if (opening) params.opening = opening;
+    return params;
+  }, [filter, searchQuery, outcome, opening]);
+
+  // Keep a ref so polling sees latest filters
+  const filtersRef = useRef({ filter, searchQuery, outcome, opening });
+  filtersRef.current = { filter, searchQuery, outcome, opening };
 
   const fetchFirstPage = useCallback(async () => {
     try {
-      const params = filter === "all" ? {} : { status: filter };
-      const data = await listGames({ ...params, limit: PAGE_SIZE, offset: 0 });
+      const params = buildApiParams();
+      const data = await listGames(params as Parameters<typeof listGames>[0]);
       setGames(data.games);
       setTotalCount(data.total_count);
       setHasMore(data.has_more);
@@ -31,7 +107,7 @@ export default function GameListPage() {
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [buildApiParams]);
 
   // Initial fetch + filter change
   useEffect(() => {
@@ -44,22 +120,25 @@ export default function GameListPage() {
   const [, setTick] = useState(0);
 
   // Poll for updates every 10s — refresh first page only
-  // Also bumps tick to refresh timeAgo displays
   useEffect(() => {
     const interval = setInterval(async () => {
       setTick((t) => t + 1);
       try {
-        const params = filterRef.current === "all" ? {} : { status: filterRef.current };
-        const data = await listGames({ ...params, limit: PAGE_SIZE, offset: 0 });
+        const f = filtersRef.current;
+        const params: Record<string, string | number> = { limit: PAGE_SIZE, offset: 0 };
+        if (f.filter !== "all") params.status = f.filter;
+        if (f.searchQuery) params.q = f.searchQuery;
+        if (f.outcome) params.outcome = f.outcome;
+        if (f.opening) params.opening = f.opening;
+        const data = await listGames(params as Parameters<typeof listGames>[0]);
         setGames((prev) => {
-          // Merge: replace the first PAGE_SIZE entries, keep any "load more" entries
           const loadedExtra = prev.slice(PAGE_SIZE);
           return [...data.games, ...loadedExtra];
         });
         setTotalCount(data.total_count);
         setHasMore(data.has_more);
       } catch {
-        // ignore — tick still forces timeAgo refresh
+        // ignore
       }
     }, 10000);
     return () => clearInterval(interval);
@@ -69,8 +148,9 @@ export default function GameListPage() {
     if (loadingMore) return;
     setLoadingMore(true);
     try {
-      const params = filter === "all" ? {} : { status: filter };
-      const data = await listGames({ ...params, limit: PAGE_SIZE, offset: games.length });
+      const params = buildApiParams();
+      params.offset = games.length;
+      const data = await listGames(params as Parameters<typeof listGames>[0]);
       setGames((prev) => [...prev, ...data.games]);
       setTotalCount(data.total_count);
       setHasMore(data.has_more);
@@ -79,7 +159,21 @@ export default function GameListPage() {
     } finally {
       setLoadingMore(false);
     }
-  }, [filter, games.length, loadingMore]);
+  }, [buildApiParams, games.length, loadingMore]);
+
+  const hasActiveFilters = searchQuery || outcome || opening;
+
+  const clearFilters = useCallback(() => {
+    setSearchInput("");
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("q");
+      next.delete("outcome");
+      next.delete("opening");
+      next.delete("offset");
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   return (
     <div className="game-list-page">
@@ -114,6 +208,40 @@ export default function GameListPage() {
         </div>
       </div>
 
+      {/* Search & filter bar */}
+      <div className="game-list-page__search-bar">
+        <input
+          className="game-list-page__search-input"
+          type="text"
+          placeholder="Search by model or opening..."
+          value={searchInput}
+          onChange={(e) => handleSearchInput(e.target.value)}
+        />
+        <select
+          className="game-list-page__filter-select"
+          value={outcome}
+          onChange={(e) => setOutcome(e.target.value as Outcome)}
+        >
+          <option value="">Any outcome</option>
+          <option value="white">White wins</option>
+          <option value="black">Black wins</option>
+          <option value="draw">Draw</option>
+        </select>
+        <input
+          className="game-list-page__search-input game-list-page__search-input--small"
+          type="text"
+          placeholder="ECO (e.g. B20)"
+          value={opening}
+          onChange={(e) => setOpening(e.target.value.toUpperCase())}
+          maxLength={5}
+        />
+        {hasActiveFilters && (
+          <button className="btn btn--ghost btn--sm" onClick={clearFilters}>
+            Clear
+          </button>
+        )}
+      </div>
+
       {loading ? (
         <div className="spinner-page">
           <div className="spinner-lg" />
@@ -122,9 +250,11 @@ export default function GameListPage() {
         <div className="empty-state panel">
           <div className="empty-state__icon">&#9816;</div>
           <div className="empty-state__text">
-            {filter === "all"
-              ? "No games yet. Start a new game!"
-              : `No ${filter} games found.`}
+            {hasActiveFilters
+              ? "No games match your filters."
+              : filter === "all"
+                ? "No games yet. Start a new game!"
+                : `No ${filter} games found.`}
           </div>
         </div>
       ) : (

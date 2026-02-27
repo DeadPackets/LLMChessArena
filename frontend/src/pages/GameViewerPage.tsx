@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { useGameWebSocket } from "../hooks/useGameWebSocket";
 import { useReplayControls } from "../hooks/useReplayControls";
 import { getGame, stopGame } from "../api/client";
@@ -17,6 +17,7 @@ import TableTalkPanel from "../components/game/TableTalkPanel";
 import CapturedMaterial from "../components/game/CapturedMaterial";
 import AnalysisPanel from "../components/game/AnalysisPanel";
 import BoardThemeSelector from "../components/game/BoardThemeSelector";
+import KeyboardShortcutsModal from "../components/game/KeyboardShortcutsModal";
 import { useChessSound } from "../hooks/useChessSound";
 import { useBoardTheme } from "../hooks/useBoardTheme";
 import type { SoundType } from "../hooks/useChessSound";
@@ -107,10 +108,62 @@ function detectSoundType(san: string): SoundType {
 
 export default function GameViewerPage() {
   const { gameId } = useParams<{ gameId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer, playerSecret } = useGameWebSocket(gameId!);
 
   // Board theme
   const { boardColorPreset, customPieces, theme, setBoardColor, setPieceStyle } = useBoardTheme();
+
+  // Feature 25: Sync selectedIndex to URL (?move=N) for shareable position links
+  const initialMoveApplied = useRef(false);
+
+  // On initial load, jump to ?move=N if present
+  useEffect(() => {
+    if (initialMoveApplied.current) return;
+    const moveParam = searchParams.get("move");
+    if (moveParam !== null && state.moves.length > 0) {
+      const idx = parseInt(moveParam, 10);
+      if (!isNaN(idx) && idx >= -1 && idx < state.moves.length) {
+        selectMove(idx);
+      }
+      initialMoveApplied.current = true;
+    }
+  }, [searchParams, state.moves.length, selectMove]);
+
+  // Update URL when selectedIndex changes (after initial load)
+  useEffect(() => {
+    if (!initialMoveApplied.current && state.moves.length === 0) return;
+    initialMoveApplied.current = true;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (state.selectedIndex >= 0) {
+        next.set("move", String(state.selectedIndex));
+      } else {
+        next.delete("move");
+      }
+      return next;
+    }, { replace: true });
+  }, [state.selectedIndex, state.moves.length, setSearchParams]);
+
+  // Keyboard shortcuts modal
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const toggleShortcuts = useCallback(() => setShortcutsOpen((v) => !v), []);
+
+  // Listen for "?" key to toggle shortcuts legend
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "?" || (e.key === "/" && e.shiftKey)) {
+        e.preventDefault();
+        setShortcutsOpen((v) => !v);
+      }
+      if (e.key === "Escape" && shortcutsOpen) {
+        setShortcutsOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [shortcutsOpen]);
 
   // Sound effects
   const { playSound, muted, toggleMute } = useChessSound();
@@ -298,6 +351,7 @@ export default function GameViewerPage() {
             gameId={gameId}
             muted={muted}
             onToggleMute={toggleMute}
+            onShowShortcuts={toggleShortcuts}
           />
         </div>
 
@@ -384,6 +438,8 @@ export default function GameViewerPage() {
           moves={state.moves}
         />
       )}
+
+      <KeyboardShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
       <NewGameDialog
         open={rematchOpen}
