@@ -1,4 +1,4 @@
-import type { GameSummary, GameDetail, ModelStats, EnhancedModelStats, ModelDetailStats, HeadToHeadRecord, CreateGameRequest, GameCreatedResponse, PlatformOverview, OpenRouterModel } from "../types/api";
+import type { GameDetail, ModelStats, EnhancedModelStats, ModelDetailStats, HeadToHeadRecord, CreateGameRequest, GameCreatedResponse, PlatformOverview, OpenRouterModel, PaginatedGamesResponse } from "../types/api";
 
 const BASE = "/api";
 
@@ -19,14 +19,14 @@ export async function listGames(params?: {
   model?: string;
   limit?: number;
   offset?: number;
-}): Promise<GameSummary[]> {
+}): Promise<PaginatedGamesResponse> {
   const qs = new URLSearchParams();
   if (params?.status) qs.set("status", params.status);
   if (params?.model) qs.set("model", params.model);
   if (params?.limit) qs.set("limit", String(params.limit));
   if (params?.offset) qs.set("offset", String(params.offset));
   const query = qs.toString();
-  return request<GameSummary[]>(`/games${query ? `?${query}` : ""}`);
+  return request<PaginatedGamesResponse>(`/games${query ? `?${query}` : ""}`);
 }
 
 export async function getGame(gameId: string): Promise<GameDetail> {

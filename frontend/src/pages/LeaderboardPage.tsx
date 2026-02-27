@@ -57,6 +57,7 @@ export default function LeaderboardPage() {
         </div>
       ) : (
         <div className="panel">
+          <div className="leaderboard-table-wrap">
           <table className="leaderboard-table leaderboard-table--enhanced">
             <thead>
               <tr>
@@ -124,6 +125,7 @@ export default function LeaderboardPage() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

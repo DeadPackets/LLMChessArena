@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { Chessboard } from "react-chessboard";
 import { Chess } from "chess.js";
 import type { Arrow, Piece, PromotionPieceOption, Square } from "react-chessboard/dist/chessboard/types";
@@ -322,31 +322,50 @@ export default function ChessboardPanel({
     return true;
   }
 
+  // Dynamic board sizing via ResizeObserver
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [boardWidth, setBoardWidth] = useState(540);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const w = Math.floor(entry.contentRect.width);
+        setBoardWidth(Math.min(w, 540));
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <Chessboard
-      id="game-board"
-      position={displayFen}
-      arePiecesDraggable={isHumanTurn}
-      isDraggablePiece={isDraggablePiece}
-      onPieceDragBegin={handlePieceDragBegin}
-      onPieceDragEnd={handlePieceDragEnd}
-      onPieceDrop={onPieceDrop}
-      onSquareClick={handleSquareClick}
-      onPromotionCheck={onPromotionCheck}
-      onPromotionPieceSelect={onPromotionPieceSelect}
-      showPromotionDialog={!!pendingPromotion}
-      promotionToSquare={pendingPromotion?.to ?? null}
-      boardOrientation={boardOrientation}
-      boardWidth={540}
-      customBoardStyle={{
-        borderRadius: "8px",
-        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5)",
-      }}
-      customDarkSquareStyle={{ backgroundColor: "#7a6b4e" }}
-      customLightSquareStyle={{ backgroundColor: "#c8b891" }}
-      customSquareStyles={combinedSquareStyles}
-      customArrows={moveArrow}
-      animationDuration={250}
-    />
+    <div ref={containerRef} className="chessboard-panel__board-container">
+      <Chessboard
+        id="game-board"
+        position={displayFen}
+        arePiecesDraggable={isHumanTurn}
+        isDraggablePiece={isDraggablePiece}
+        onPieceDragBegin={handlePieceDragBegin}
+        onPieceDragEnd={handlePieceDragEnd}
+        onPieceDrop={onPieceDrop}
+        onSquareClick={handleSquareClick}
+        onPromotionCheck={onPromotionCheck}
+        onPromotionPieceSelect={onPromotionPieceSelect}
+        showPromotionDialog={!!pendingPromotion}
+        promotionToSquare={pendingPromotion?.to ?? null}
+        boardOrientation={boardOrientation}
+        boardWidth={boardWidth}
+        customBoardStyle={{
+          borderRadius: "8px",
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5)",
+        }}
+        customDarkSquareStyle={{ backgroundColor: "#7a6b4e" }}
+        customLightSquareStyle={{ backgroundColor: "#c8b891" }}
+        customSquareStyles={combinedSquareStyles}
+        customArrows={moveArrow}
+        animationDuration={250}
+      />
+    </div>
   );
 }

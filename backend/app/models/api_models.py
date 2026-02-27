@@ -162,6 +162,12 @@ class PlatformOverview(BaseModel):
     model_breakdowns: list[ModelCostBreakdown] = []
 
 
+class PaginatedGamesResponse(BaseModel):
+    games: list[GameSummary]
+    total_count: int
+    has_more: bool
+
+
 class GameCreatedResponse(BaseModel):
     id: str
     status: str

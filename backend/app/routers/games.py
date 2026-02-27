@@ -6,6 +6,7 @@ import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -16,6 +17,7 @@ from app.models.api_models import (
     GameDetail,
     GameSummary,
     MoveDetail,
+    PaginatedGamesResponse,
 )
 from app.models.chess_models import GameConfig
 from app.services.stats_service import compute_game_analysis
@@ -66,26 +68,38 @@ async def create_game(req: CreateGameRequest, request: Request):
     return GameCreatedResponse(id=game_id, status="active", player_secret=player_secret)
 
 
-@router.get("", response_model=list[GameSummary])
+@router.get("", response_model=PaginatedGamesResponse)
 async def list_games(
     status: str | None = None,
     model: str | None = None,
-    limit: int = 50,
+    limit: int = 20,
     offset: int = 0,
     session: AsyncSession = Depends(get_session),
 ):
-    """List games, optionally filtered by status or model."""
-    query = select(Game).order_by(Game.started_at.desc()).limit(limit).offset(offset)  # type: ignore[union-attr]
-
+    """List games with pagination, optionally filtered by status or model."""
+    # Build base filter conditions
+    conditions = []
     if status:
-        query = query.where(Game.status == status)
+        conditions.append(Game.status == status)
     if model:
-        query = query.where((Game.white_model == model) | (Game.black_model == model))
+        conditions.append((Game.white_model == model) | (Game.black_model == model))
+
+    # Count query
+    count_query = select(func.count()).select_from(Game)
+    for cond in conditions:
+        count_query = count_query.where(cond)
+    count_result = await session.exec(count_query)  # type: ignore[arg-type]
+    total_count = count_result.one()
+
+    # Data query
+    query = select(Game).order_by(Game.started_at.desc()).limit(limit).offset(offset)  # type: ignore[union-attr]
+    for cond in conditions:
+        query = query.where(cond)
 
     results = await session.exec(query)
     rows = results.all()
 
-    return [
+    games = [
         GameSummary(
             id=r.id,
             white_model=r.white_model,
@@ -110,6 +124,12 @@ async def list_games(
         )
         for r in rows
     ]
+
+    return PaginatedGamesResponse(
+        games=games,
+        total_count=total_count,
+        has_more=(offset + limit) < total_count,
+    )
 
 
 @router.get("/{game_id}", response_model=GameDetail)

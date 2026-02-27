@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useGameWebSocket } from "../hooks/useGameWebSocket";
 import { useReplayControls } from "../hooks/useReplayControls";
@@ -16,6 +16,8 @@ import ResponseTimeGraph from "../components/game/ResponseTimeGraph";
 import TableTalkPanel from "../components/game/TableTalkPanel";
 import CapturedMaterial from "../components/game/CapturedMaterial";
 import AnalysisPanel from "../components/game/AnalysisPanel";
+import { useChessSound } from "../hooks/useChessSound";
+import type { SoundType } from "../hooks/useChessSound";
 import type { IllegalMoveData } from "../types/websocket";
 
 function IllegalMoveIndicator({ illegalMoves }: { illegalMoves: IllegalMoveData[] }) {
@@ -46,9 +48,61 @@ function IllegalMoveIndicator({ illegalMoves }: { illegalMoves: IllegalMoveData[
   );
 }
 
+function detectSoundType(san: string): SoundType {
+  if (san.endsWith("#")) return "checkmate";
+  if (san.endsWith("+")) return "check";
+  if (san.includes("x")) return "capture";
+  if (san.startsWith("O-O")) return "castle";
+  return "move";
+}
+
 export default function GameViewerPage() {
   const { gameId } = useParams<{ gameId: string }>();
   const { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer, playerSecret } = useGameWebSocket(gameId!);
+
+  // Sound effects
+  const { playSound, muted, toggleMute } = useChessSound();
+  const prevMovesLengthRef = useRef(0);
+  const initialLoadDoneRef = useRef(false);
+  const prevStatusRef = useRef(state.status);
+  const prevIllegalLengthRef = useRef(0);
+
+  // Play sounds on new moves
+  useEffect(() => {
+    const prevLen = prevMovesLengthRef.current;
+    const curLen = state.moves.length;
+    prevMovesLengthRef.current = curLen;
+
+    if (!initialLoadDoneRef.current) {
+      if (curLen > 0) initialLoadDoneRef.current = true;
+      return;
+    }
+
+    if (curLen > prevLen) {
+      const latestMove = state.moves[curLen - 1];
+      if (latestMove?.san) {
+        playSound(detectSoundType(latestMove.san));
+      }
+    }
+  }, [state.moves.length, state.moves, playSound]);
+
+  // Play sound on game end
+  useEffect(() => {
+    if (prevStatusRef.current !== "completed" && state.status === "completed") {
+      playSound("gameEnd");
+    }
+    prevStatusRef.current = state.status;
+  }, [state.status, playSound]);
+
+  // Play sound on illegal move
+  useEffect(() => {
+    const prevLen = prevIllegalLengthRef.current;
+    const curLen = state.illegalMoves.length;
+    prevIllegalLengthRef.current = curLen;
+    if (curLen > prevLen && initialLoadDoneRef.current) {
+      playSound("illegal");
+    }
+  }, [state.illegalMoves.length, playSound]);
 
   // Fetch full game detail for completed games (includes analysis)
   const [gameDetail, setGameDetail] = useState<GameDetail | null>(null);
@@ -171,6 +225,8 @@ export default function GameViewerPage() {
             onChangeSpeed={isCompleted ? replay.setPlaySpeed : undefined}
             pgn={state.gameOverData?.pgn}
             gameId={gameId}
+            muted={muted}
+            onToggleMute={toggleMute}
           />
         </div>
 

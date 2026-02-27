@@ -136,6 +136,12 @@ export interface PlatformOverview {
   model_breakdowns: ModelCostBreakdown[];
 }
 
+export interface PaginatedGamesResponse {
+  games: GameSummary[];
+  total_count: number;
+  has_more: boolean;
+}
+
 export interface CreateGameRequest {
   white_model: string;
   black_model: string;

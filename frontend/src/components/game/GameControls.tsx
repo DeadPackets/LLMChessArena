@@ -15,6 +15,9 @@ interface Props {
   // PGN download
   pgn?: string | null;
   gameId?: string;
+  // Sound
+  muted?: boolean;
+  onToggleMute?: () => void;
 }
 
 const SPEEDS = [0.5, 1, 2, 5];
@@ -44,6 +47,8 @@ export default function GameControls({
   onChangeSpeed,
   pgn,
   gameId,
+  muted,
+  onToggleMute,
 }: Props) {
   return (
     <div className="game-controls" role="toolbar" aria-label="Move navigation">
@@ -132,6 +137,17 @@ export default function GameControls({
           aria-label="Download PGN file"
         >
           &#x2B07; PGN
+        </button>
+      )}
+
+      {onToggleMute && (
+        <button
+          className="game-controls__btn game-controls__mute-btn"
+          onClick={onToggleMute}
+          title={muted ? "Unmute sounds" : "Mute sounds"}
+          aria-label={muted ? "Unmute sounds" : "Mute sounds"}
+        >
+          {muted ? "\uD83D\uDD07" : "\uD83D\uDD0A"}
         </button>
       )}
     </div>

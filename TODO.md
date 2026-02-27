@@ -6,7 +6,7 @@
 
 1. **WebSocket reconnection uses stale state** — `shouldReconnect: () => state.status === "active"` captures a stale closure. If the game ends while disconnected, it won't know to stop reconnecting. Should use a ref.
 
-2. **Game list has no pagination** — Hardcoded `limit=50` with no offset. Games beyond 50 are invisible. Need infinite scroll or a "load more" button.
+2. **~~Game list has no pagination~~** ✅ — ~~Hardcoded `limit=50` with no offset. Games beyond 50 are invisible. Need infinite scroll or a "load more" button.~~
 
 3. **Human move has no server acknowledgment** — Client shows an optimistic FEN immediately after submitting a move, but if the server rejects it, the board shows a phantom position until the next real move arrives.
 
