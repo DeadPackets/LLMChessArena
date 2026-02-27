@@ -152,6 +152,15 @@ export interface CreateGameRequest {
 export interface GameCreatedResponse {
   id: string;
   status: string;
+  player_secret: string | null;
+}
+
+export interface OpenRouterModel {
+  id: string;
+  name: string;
+  context_length: number;
+  pricing_prompt: string;
+  pricing_completion: string;
 }
 
 export type Classification =

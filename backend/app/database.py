@@ -38,6 +38,7 @@ class Game(SQLModel, table=True):
     black_is_human: Optional[bool] = Field(default=False)
     white_is_stockfish: Optional[bool] = Field(default=False)
     black_is_stockfish: Optional[bool] = Field(default=False)
+    player_secret: Optional[str] = None
 
 
 class Move(SQLModel, table=True):
@@ -119,6 +120,7 @@ async def _migrate_add_columns(conn) -> None:
         ("games", "black_is_human", "BOOLEAN DEFAULT 0"),
         ("games", "white_is_stockfish", "BOOLEAN DEFAULT 0"),
         ("games", "black_is_stockfish", "BOOLEAN DEFAULT 0"),
+        ("games", "player_secret", "VARCHAR"),
     ]
     for table, column, col_type in migrations:
         try:

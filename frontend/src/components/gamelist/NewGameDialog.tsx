@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createGame } from "../../api/client";
+import { useOpenRouterModels } from "../../hooks/useOpenRouterModels";
+import ModelSelector from "./ModelSelector";
 
 interface Props {
   open: boolean;
@@ -139,6 +141,7 @@ function ModelSettingsPanel({
 
 export default function NewGameDialog({ open, onClose }: Props) {
   const navigate = useNavigate();
+  const { models: openRouterModels, loading: modelsLoading } = useOpenRouterModels();
   const [whiteModel, setWhiteModel] = useState("");
   const [blackModel, setBlackModel] = useState("");
   const [whiteType, setWhiteType] = useState<PlayerType>("llm");
@@ -215,6 +218,9 @@ export default function NewGameDialog({ open, onClose }: Props) {
         white_is_stockfish: whiteType === "stockfish",
         black_is_stockfish: blackType === "stockfish",
       });
+      if (resp.player_secret) {
+        localStorage.setItem(`chess_player_secret_${resp.id}`, resp.player_secret);
+      }
       onClose();
       navigate(`/game/${resp.id}`);
     } catch (err) {
@@ -251,12 +257,13 @@ export default function NewGameDialog({ open, onClose }: Props) {
             disableNonLLM={whiteNonLLMDisabled}
           />
           {whiteIsLLM && (
-            <input
+            <ModelSelector
               id="white-model"
-              className="new-game-dialog__input"
+              models={openRouterModels}
+              loading={modelsLoading}
               value={whiteModel}
-              onChange={(e) => setWhiteModel(e.target.value)}
-              placeholder="e.g. openai/gpt-4o"
+              onChange={setWhiteModel}
+              placeholder="Search models... (e.g. gpt-4o, claude)"
               autoFocus
             />
           )}
@@ -272,12 +279,13 @@ export default function NewGameDialog({ open, onClose }: Props) {
             disableNonLLM={blackNonLLMDisabled}
           />
           {blackIsLLM && (
-            <input
+            <ModelSelector
               id="black-model"
-              className="new-game-dialog__input"
+              models={openRouterModels}
+              loading={modelsLoading}
               value={blackModel}
-              onChange={(e) => setBlackModel(e.target.value)}
-              placeholder="e.g. anthropic/claude-sonnet-4"
+              onChange={setBlackModel}
+              placeholder="Search models... (e.g. gemini, qwen)"
             />
           )}
         </div>

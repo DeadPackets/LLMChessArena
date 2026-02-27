@@ -84,11 +84,13 @@ from app.routers.games import router as games_router
 from app.routers.models_router import router as models_router
 from app.routers.stats_router import router as stats_router
 from app.routers.ws import router as ws_router
+from app.routers.openrouter_proxy import router as openrouter_router
 
 app.include_router(games_router)
 app.include_router(models_router)
 app.include_router(stats_router)
 app.include_router(ws_router)
+app.include_router(openrouter_router)
 
 
 @app.get("/health")

@@ -1,4 +1,4 @@
-import type { GameSummary, GameDetail, ModelStats, EnhancedModelStats, ModelDetailStats, HeadToHeadRecord, CreateGameRequest, GameCreatedResponse, PlatformOverview } from "../types/api";
+import type { GameSummary, GameDetail, ModelStats, EnhancedModelStats, ModelDetailStats, HeadToHeadRecord, CreateGameRequest, GameCreatedResponse, PlatformOverview, OpenRouterModel } from "../types/api";
 
 const BASE = "/api";
 
@@ -62,4 +62,14 @@ export async function getModelHeadToHead(modelId: string): Promise<HeadToHeadRec
 
 export async function getStatsOverview(): Promise<PlatformOverview> {
   return request<PlatformOverview>("/stats/overview");
+}
+
+// Module-level cache for OpenRouter models (persists across dialog open/close)
+let _openRouterCache: OpenRouterModel[] | null = null;
+
+export async function fetchOpenRouterModels(): Promise<OpenRouterModel[]> {
+  if (_openRouterCache !== null) return _openRouterCache;
+  const models = await request<OpenRouterModel[]>("/openrouter/models");
+  _openRouterCache = models;
+  return models;
 }

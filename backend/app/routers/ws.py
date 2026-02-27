@@ -45,6 +45,14 @@ async def _receive_messages(websocket: WebSocket, game_id: str) -> None:
 
         msg_type = msg.get("type")
         if msg_type == "human_move":
+            player_secret = msg.get("player_secret")
+            if not manager.validate_player_secret(game_id, player_secret):
+                logger.warning("WebSocket unauthorized human_move: game=%s", game_id)
+                await websocket.send_text(json.dumps({
+                    "type": "error",
+                    "data": {"message": "Unauthorized"},
+                }))
+                continue
             uci = msg.get("uci", "").strip()
             if uci:
                 logger.info("WebSocket human move received: game=%s, uci=%s", game_id, uci)
@@ -52,6 +60,14 @@ async def _receive_messages(websocket: WebSocket, game_id: str) -> None:
             else:
                 logger.warning("WebSocket human_move missing uci: game=%s", game_id)
         elif msg_type == "resign":
+            player_secret = msg.get("player_secret")
+            if not manager.validate_player_secret(game_id, player_secret):
+                logger.warning("WebSocket unauthorized resign: game=%s", game_id)
+                await websocket.send_text(json.dumps({
+                    "type": "error",
+                    "data": {"message": "Unauthorized"},
+                }))
+                continue
             logger.info("WebSocket resignation received: game=%s", game_id)
             await manager.submit_human_move(game_id, "resign")
         else:

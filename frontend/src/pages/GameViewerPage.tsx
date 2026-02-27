@@ -48,7 +48,7 @@ function IllegalMoveIndicator({ illegalMoves }: { illegalMoves: IllegalMoveData[
 
 export default function GameViewerPage() {
   const { gameId } = useParams<{ gameId: string }>();
-  const { state, selectMove, navigate, toggleAutoFollow, submitMove, resign } = useGameWebSocket(gameId!);
+  const { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer } = useGameWebSocket(gameId!);
 
   // Fetch full game detail for completed games (includes analysis)
   const [gameDetail, setGameDetail] = useState<GameDetail | null>(null);
@@ -100,8 +100,10 @@ export default function GameViewerPage() {
   const isCompleted = state.status === "completed";
   const isLive = state.status === "active";
 
-  // Human player logic
-  const humanColor = state.whiteIsHuman ? "white" : state.blackIsHuman ? "black" : null;
+  // Human player logic — only the game creator (with secret) gets player controls
+  const humanColor = isPlayer
+    ? (state.whiteIsHuman ? "white" : state.blackIsHuman ? "black" : null)
+    : null;
   const isHumanTurn = !!(humanColor && state.awaitingHumanMove === humanColor && isLive);
   const boardOrientation: "white" | "black" = humanColor === "black" ? "black" : "white";
 

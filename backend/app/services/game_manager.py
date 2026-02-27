@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import secrets as secrets_mod
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -31,6 +32,7 @@ class GameManager:
         self.event_queues: dict[str, list[asyncio.Queue]] = {}
         self.human_move_queues: dict[str, asyncio.Queue] = {}
         self._awaiting_human_move: dict[str, str | None] = {}  # game_id -> color or None
+        self.player_secrets: dict[str, str] = {}  # game_id -> secret token
 
     async def recover_orphaned_games(self) -> None:
         """Mark any games left as 'active' in the DB but with no running task.
@@ -60,7 +62,7 @@ class GameManager:
                 await session.commit()
                 logger.info("Recovered %d orphaned game(s)", len(orphaned))
 
-    async def start_game(self, config: GameConfig) -> str:
+    async def start_game(self, config: GameConfig, player_secret: str | None = None) -> str:
         """Create a game record and start it as a background task."""
         game_id = uuid4().hex[:12]
         now = datetime.now(timezone.utc)
@@ -83,6 +85,9 @@ class GameManager:
         await self._ensure_model(white_label)
         await self._ensure_model(black_label)
 
+        if player_secret:
+            self.player_secrets[game_id] = player_secret
+
         async with get_session_factory()() as session:
             game = Game(
                 id=game_id,
@@ -98,6 +103,7 @@ class GameManager:
                 black_is_human=config.black_is_human,
                 white_is_stockfish=config.white_is_stockfish,
                 black_is_stockfish=config.black_is_stockfish,
+                player_secret=player_secret,
             )
             session.add(game)
             await session.commit()
@@ -138,6 +144,13 @@ class GameManager:
                     await session.commit()
             return True
         return False
+
+    def validate_player_secret(self, game_id: str, secret: str | None) -> bool:
+        """Check if the provided secret matches the game's player secret."""
+        expected = self.player_secrets.get(game_id)
+        if expected is None:
+            return True  # No human side or LLM-vs-LLM
+        return secrets_mod.compare_digest(expected, secret or "")
 
     async def submit_human_move(self, game_id: str, uci: str) -> bool:
         """Submit a human move for an active game. Returns True if queued."""
@@ -318,6 +331,7 @@ class GameManager:
             self.active_games.pop(game_id, None)
             self.human_move_queues.pop(game_id, None)
             self._awaiting_human_move.pop(game_id, None)
+            self.player_secrets.pop(game_id, None)
             # Signal end to any remaining subscribers
             for q in self.event_queues.pop(game_id, []):
                 await q.put(None)

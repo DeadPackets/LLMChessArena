@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
@@ -56,9 +57,13 @@ async def create_game(req: CreateGameRequest, request: Request):
         white_is_stockfish=req.white_is_stockfish,
         black_is_stockfish=req.black_is_stockfish,
     )
-    game_id = await manager.start_game(config)
+    player_secret = None
+    if req.white_is_human or req.black_is_human:
+        player_secret = secrets.token_urlsafe(32)
+
+    game_id = await manager.start_game(config, player_secret=player_secret)
     logger.info("API: game created — id=%s", game_id)
-    return GameCreatedResponse(id=game_id, status="active")
+    return GameCreatedResponse(id=game_id, status="active", player_secret=player_secret)
 
 
 @router.get("", response_model=list[GameSummary])

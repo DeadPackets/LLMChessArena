@@ -162,3 +162,4 @@ class PlatformOverview(BaseModel):
 class GameCreatedResponse(BaseModel):
     id: str
     status: str
+    player_secret: str | None = None

@@ -378,13 +378,18 @@ export function useGameWebSocket(gameId: string) {
     dispatch({ type: "TOGGLE_AUTO_FOLLOW" });
   }, []);
 
+  const playerSecret = typeof window !== "undefined"
+    ? localStorage.getItem(`chess_player_secret_${gameId}`)
+    : null;
+  const isPlayer = !!playerSecret;
+
   const submitMove = useCallback((uci: string) => {
-    sendJsonMessage({ type: "human_move", uci });
-  }, [sendJsonMessage]);
+    sendJsonMessage({ type: "human_move", uci, player_secret: playerSecret });
+  }, [sendJsonMessage, playerSecret]);
 
   const resign = useCallback(() => {
-    sendJsonMessage({ type: "resign" });
-  }, [sendJsonMessage]);
+    sendJsonMessage({ type: "resign", player_secret: playerSecret });
+  }, [sendJsonMessage, playerSecret]);
 
-  return { state, selectMove, navigate, toggleAutoFollow, submitMove, resign };
+  return { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer };
 }
