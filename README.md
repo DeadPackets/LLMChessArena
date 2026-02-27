@@ -31,6 +31,7 @@ LLM Chess Arena is a full-stack web application that pits large language models 
 - **Stockfish as opponent** — Pit any LLM against the strongest classical chess engine to benchmark raw chess ability
 - **Game creator controls** — Only the person who started a game can play human moves or stop it, secured by a per-game secret token
 - **Stop active games** — Game creators can stop any in-progress game; stopped games get their own distinct status and are excluded from ELO calculations
+- **Chaos Mode** — Toggle that allows illegal LLM moves to be pushed to the board instead of retried, creating wild and entertaining games. Chaos games are excluded from ELO and stats, with distinct gold CHAOS badges and yellow Table Talk alerts
 - **Real-time WebSocket streaming** — Watch moves, evaluations, and table talk appear live
 - **Stockfish-powered analysis** — Every move gets engine evaluation, win probability, and classification (brilliant, great, best, good, inaccuracy, mistake, blunder)
 - **Table talk** — LLMs provide honest, natural reactions to the position after each move — confident when ahead, frustrated when behind
@@ -48,6 +49,7 @@ LLM Chess Arena is a full-stack web application that pits large language models 
 | **LLM vs LLM** | Two AI models play each other. Both provide table talk and narration. |
 | **Human vs LLM** | You play against an AI model with an interactive board — legal move highlights, click-to-move, drag-and-drop, and pawn promotion. |
 | **LLM vs Stockfish** | An AI model plays against the Stockfish engine. Stockfish plays instantly with no table talk or narration — a pure chess skill benchmark. |
+| **Chaos Mode** | Any game mode with at least one LLM. Illegal LLM moves are force-pushed to the board instead of retried — creating impossible positions and chaotic games. Excluded from ELO. |
 
 > **Note:** Every game must have at least one LLM. Human vs Stockfish games are not allowed — this is an LLM arena, not a chess website.
 
@@ -184,10 +186,11 @@ The frontend dev server runs at **http://localhost:5173** and proxies API reques
 2. **Watch live** — The board updates in real-time with move animations, engine evaluation, and table talk between the models
 3. **Play as Human** — Select "Human" for one side to play interactively with legal move highlighting, click-to-move, and drag-and-drop
 4. **Benchmark against Stockfish** — Select "Stockfish" for one side to test an LLM against the strongest classical engine
-5. **Stop a game** — The game creator can click "Stop Game" at any time to end an in-progress game (stopped games are excluded from ELO)
-6. **Review games** — Click any completed game to see full analysis with accuracy scores, critical moments, and replay controls
-7. **Track models** — Visit the Leaderboard to see ELO rankings (LLMs, Human, and Stockfish all ranked together), or click a model name for detailed stats
-8. **Monitor costs** — The Cost & Performance page shows platform-wide spending and token usage across all models
+5. **Enable Chaos Mode** — Check the "Chaos Mode" toggle to allow illegal LLM moves (e.g. a pawn moving like a knight) — games are marked with a gold CHAOS badge and excluded from ELO
+6. **Stop a game** — The game creator can click "Stop Game" at any time to end an in-progress game (stopped games are excluded from ELO)
+7. **Review games** — Click any completed game to see full analysis with accuracy scores, critical moments, and replay controls
+8. **Track models** — Visit the Leaderboard to see ELO rankings (LLMs, Human, and Stockfish all ranked together), or click a model name for detailed stats
+9. **Monitor costs** — The Cost & Performance page shows platform-wide spending and token usage across all models
 
 ---
 
