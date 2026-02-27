@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import type { MoveData, IllegalMoveData, ChaosMoveData } from "../../types/websocket";
 
 interface Props {
@@ -32,6 +32,7 @@ export default function TableTalkPanel({
   onSelectMove,
 }: Props) {
   const chatRef = useRef<HTMLDivElement>(null);
+  const [hideErrors, setHideErrors] = useState(false);
 
   // Build interleaved chat entries sorted by move number.
   // Groups illegal/chaos moves by (moveNumber, color) to avoid interleaving
@@ -133,13 +134,30 @@ export default function TableTalkPanel({
     }
   }, [selectedIndex]);
 
+  const visibleEntries = hideErrors
+    ? entries.filter((e) => e.type === "move")
+    : entries;
+
   if (entries.length === 0) return null;
+
+  const hasErrors = entries.some((e) => e.type === "illegal" || e.type === "chaos");
 
   return (
     <div className="table-talk-panel panel">
-      <div className="table-talk-panel__label">Table Talk</div>
+      <div className="table-talk-panel__label">
+        Table Talk
+        {hasErrors && (
+          <button
+            className={`table-talk-panel__filter-toggle${hideErrors ? " table-talk-panel__filter-toggle--active" : ""}`}
+            onClick={() => setHideErrors((v) => !v)}
+            title={hideErrors ? "Show errors" : "Hide errors"}
+          >
+            {hideErrors ? "Show errors" : "Hide errors"}
+          </button>
+        )}
+      </div>
       <div className="table-talk-chat" ref={chatRef}>
-        {entries.map((entry, i) => {
+        {visibleEntries.map((entry, i) => {
           if (entry.type === "illegal") {
             const d = entry.data;
             const model = shortModelName(d.model);

@@ -1995,6 +1995,33 @@ button {
   padding: 0 0.5rem 0.35rem;
 }
 
+.table-talk-panel__filter-toggle {
+  margin-left: auto;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.62rem;
+  font-family: var(--font-body);
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.table-talk-panel__filter-toggle:hover {
+  color: var(--text-secondary);
+  border-color: var(--border-light);
+  background: var(--bg-tertiary);
+}
+
+.table-talk-panel__filter-toggle--active {
+  color: var(--amber);
+  border-color: var(--amber-dim);
+  background: var(--amber-glow);
+}
+
 .table-talk-chat {
   display: flex;
   flex-direction: column;
