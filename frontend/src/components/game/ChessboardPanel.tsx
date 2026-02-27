@@ -4,6 +4,12 @@ import { Chess } from "chess.js";
 import type { Arrow, Piece, PromotionPieceOption, Square } from "react-chessboard/dist/chessboard/types";
 import type { MoveData } from "../../types/websocket";
 
+interface BoardThemeColors {
+  light: string;
+  dark: string;
+  highlight: string;
+}
+
 interface Props {
   fen: string;
   selectedMove: MoveData | null;
@@ -12,6 +18,8 @@ interface Props {
   humanColor?: "white" | "black" | null;
   onHumanMove?: (uci: string) => void;
   boardOrientation?: "white" | "black";
+  boardTheme?: BoardThemeColors;
+  customPieces?: Record<string, (props?: { squareWidth?: number }) => React.JSX.Element>;
 }
 
 /**
@@ -47,6 +55,12 @@ function isInCheck(selectedMove: MoveData | null): boolean {
   return selectedMove.san.endsWith("+") || selectedMove.san.endsWith("#");
 }
 
+const DEFAULT_THEME: BoardThemeColors = {
+  light: "#c8b891",
+  dark: "#7a6b4e",
+  highlight: "rgba(212, 168, 67, 0.45)",
+};
+
 export default function ChessboardPanel({
   fen,
   selectedMove,
@@ -55,6 +69,8 @@ export default function ChessboardPanel({
   humanColor = null,
   onHumanMove,
   boardOrientation = "white",
+  boardTheme = DEFAULT_THEME,
+  customPieces,
 }: Props) {
   // Optimistic FEN: shown immediately after human drops a piece, before server confirms
   const [optimisticFen, setOptimisticFen] = useState<string | null>(null);
@@ -127,9 +143,10 @@ export default function ChessboardPanel({
     if (!move?.uci) return {};
     const from = move.uci.slice(0, 2);
     const to = move.uci.slice(2, 4);
+    const hl = boardTheme.highlight;
     const styles: Record<string, React.CSSProperties> = {
-      [from]: { background: "rgba(212, 168, 67, 0.35)" },
-      [to]: { background: "rgba(212, 168, 67, 0.45)" },
+      [from]: { background: hl.replace(/[\d.]+\)$/, (m) => `${Math.max(0, parseFloat(m) - 0.1)})`) },
+      [to]: { background: hl },
     };
 
     if (isInCheck(selectedMove)) {
@@ -144,7 +161,7 @@ export default function ChessboardPanel({
     }
 
     return styles;
-  }, [selectedMove, previousMove, displayFen]);
+  }, [selectedMove, previousMove, displayFen, boardTheme.highlight]);
 
   // Legal move indicator styles (dots for empty squares, rings for captures)
   const legalMoveStyles = useMemo(() => {
@@ -177,12 +194,12 @@ export default function ChessboardPanel({
 
     if (selectedSquare) {
       styles[selectedSquare] = {
-        background: "rgba(212, 168, 67, 0.55)",
+        background: boardTheme.highlight.replace(/[\d.]+\)$/, "0.55)"),
       };
     }
 
     return styles;
-  }, [legalTargets, selectedSquare, displayFen]);
+  }, [legalTargets, selectedSquare, displayFen, boardTheme.highlight]);
 
   // Merge last-move highlights with legal-move indicators
   const combinedSquareStyles = useMemo(
@@ -374,10 +391,11 @@ export default function ChessboardPanel({
           borderRadius: "8px",
           boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5)",
         }}
-        customDarkSquareStyle={{ backgroundColor: "#7a6b4e" }}
-        customLightSquareStyle={{ backgroundColor: "#c8b891" }}
+        customDarkSquareStyle={{ backgroundColor: boardTheme.dark }}
+        customLightSquareStyle={{ backgroundColor: boardTheme.light }}
         customSquareStyles={combinedSquareStyles}
         customArrows={moveArrow}
+        customPieces={customPieces}
         animationDuration={250}
       />
     </div>

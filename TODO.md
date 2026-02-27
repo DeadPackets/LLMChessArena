@@ -54,7 +54,7 @@
 
 20. **~~Move animations~~** ✅ — ~~The board jumps between positions. Smooth piece animation would make live viewing more engaging.~~
 
-21. **Board themes** — Only one board/piece style. Users typically expect at least 3-4 options.
+21. **~~Board themes~~** ✅ — ~~5 board color themes (Classic, Tournament, Ice, Walnut, Midnight) + 3 piece styles (Standard, Neo, Classic). Selector below board, persisted to localStorage.~~
 
 22. **Board arrows / highlights** — No way to draw arrows or highlight squares for analysis.
 

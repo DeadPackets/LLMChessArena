@@ -16,7 +16,9 @@ import ResponseTimeGraph from "../components/game/ResponseTimeGraph";
 import TableTalkPanel from "../components/game/TableTalkPanel";
 import CapturedMaterial from "../components/game/CapturedMaterial";
 import AnalysisPanel from "../components/game/AnalysisPanel";
+import BoardThemeSelector from "../components/game/BoardThemeSelector";
 import { useChessSound } from "../hooks/useChessSound";
+import { useBoardTheme } from "../hooks/useBoardTheme";
 import type { SoundType } from "../hooks/useChessSound";
 import type { IllegalMoveData } from "../types/websocket";
 import NewGameDialog from "../components/gamelist/NewGameDialog";
@@ -106,6 +108,9 @@ function detectSoundType(san: string): SoundType {
 export default function GameViewerPage() {
   const { gameId } = useParams<{ gameId: string }>();
   const { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer, playerSecret } = useGameWebSocket(gameId!);
+
+  // Board theme
+  const { boardColorPreset, customPieces, theme, setBoardColor, setPieceStyle } = useBoardTheme();
 
   // Sound effects
   const { playSound, muted, toggleMute } = useChessSound();
@@ -256,8 +261,16 @@ export default function GameViewerPage() {
               humanColor={humanColor}
               onHumanMove={submitMove}
               boardOrientation={boardOrientation}
+              boardTheme={boardColorPreset}
+              customPieces={customPieces}
             />
           </div>
+          <BoardThemeSelector
+            activeBoardColor={theme.boardColor}
+            activePieceStyle={theme.pieceStyle}
+            onBoardColorChange={setBoardColor}
+            onPieceStyleChange={setPieceStyle}
+          />
           <CapturedMaterial fen={state.currentFen} />
         </div>
 
