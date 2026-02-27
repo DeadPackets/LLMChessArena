@@ -5,6 +5,7 @@ import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -57,9 +58,7 @@ async def create_game(req: CreateGameRequest, request: Request):
         white_is_stockfish=req.white_is_stockfish,
         black_is_stockfish=req.black_is_stockfish,
     )
-    player_secret = None
-    if req.white_is_human or req.black_is_human:
-        player_secret = secrets.token_urlsafe(32)
+    player_secret = secrets.token_urlsafe(32)
 
     game_id = await manager.start_game(config, player_secret=player_secret)
     logger.info("API: game created — id=%s", game_id)
@@ -188,11 +187,17 @@ async def get_pgn(game_id: str, session: AsyncSession = Depends(get_session)):
     return PlainTextResponse(game.pgn, media_type="application/x-chess-pgn")
 
 
+class StopGameRequest(BaseModel):
+    player_secret: str
+
+
 @router.post("/{game_id}/stop")
-async def stop_game(game_id: str, request: Request):
-    """Force-stop an active game."""
+async def stop_game(game_id: str, body: StopGameRequest, request: Request):
+    """Force-stop an active game. Requires the creator's player secret."""
     logger.info("API: stop game — id=%s", game_id)
     manager = request.app.state.game_manager
+    if not manager.validate_player_secret(game_id, body.player_secret):
+        raise HTTPException(403, "Unauthorized")
     stopped = await manager.stop_game(game_id)
     if not stopped:
         raise HTTPException(404, "Game not found or already completed")

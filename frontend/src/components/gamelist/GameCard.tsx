@@ -95,6 +95,11 @@ export default function GameCard({ game }: Props) {
             <span className="status-badge__dot status-badge__dot--live" />
             Live
           </span>
+        ) : game.status === "stopped" ? (
+          <span className="status-badge status-badge--stopped">
+            <span className="status-badge__dot status-badge__dot--stopped" />
+            Stopped
+          </span>
         ) : game.status === "completed" ? (
           <span className="status-badge status-badge--completed">
             <span className="status-badge__dot status-badge__dot--completed" />

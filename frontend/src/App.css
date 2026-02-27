@@ -287,6 +287,12 @@ button {
   border: 1px solid rgba(212, 168, 67, 0.3);
 }
 
+.status-badge--stopped {
+  background: rgba(202, 52, 49, 0.15);
+  color: var(--mistake);
+  border: 1px solid rgba(202, 52, 49, 0.3);
+}
+
 .status-badge--completed {
   background: rgba(100, 100, 100, 0.15);
   color: var(--text-secondary);
@@ -303,6 +309,10 @@ button {
 .status-badge__dot--live {
   background: var(--amber);
   animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.status-badge__dot--stopped {
+  background: var(--mistake);
 }
 
 .status-badge__dot--completed {

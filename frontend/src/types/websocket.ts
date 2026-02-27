@@ -55,7 +55,7 @@ export interface GameState {
   gameId: string | null;
   whiteModel: string | null;
   blackModel: string | null;
-  status: "active" | "completed" | "pending" | null;
+  status: "active" | "completed" | "stopped" | "pending" | null;
   outcome: string | null;
   termination: string | null;
   openingEco: string | null;

@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { useGameWebSocket } from "../hooks/useGameWebSocket";
 import { useReplayControls } from "../hooks/useReplayControls";
-import { getGame } from "../api/client";
+import { getGame, stopGame } from "../api/client";
 import type { GameDetail } from "../types/api";
 import ChessboardPanel from "../components/game/ChessboardPanel";
 import EvalBar from "../components/game/EvalBar";
@@ -48,7 +48,7 @@ function IllegalMoveIndicator({ illegalMoves }: { illegalMoves: IllegalMoveData[
 
 export default function GameViewerPage() {
   const { gameId } = useParams<{ gameId: string }>();
-  const { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer } = useGameWebSocket(gameId!);
+  const { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer, playerSecret } = useGameWebSocket(gameId!);
 
   // Fetch full game detail for completed games (includes analysis)
   const [gameDetail, setGameDetail] = useState<GameDetail | null>(null);
@@ -57,6 +57,19 @@ export default function GameViewerPage() {
       getGame(gameId).then(setGameDetail).catch(() => {});
     }
   }, [state.status, gameId]);
+
+  const [stopping, setStopping] = useState(false);
+  const handleStopGame = useCallback(async () => {
+    if (!gameId || !playerSecret || stopping) return;
+    setStopping(true);
+    try {
+      await stopGame(gameId, playerSecret);
+    } catch {
+      // game_over event from WS will handle UI update
+    } finally {
+      setStopping(false);
+    }
+  }, [gameId, playerSecret, stopping]);
 
   // Replay controls (for completed games)
   const replay = useReplayControls({
@@ -202,6 +215,16 @@ export default function GameViewerPage() {
           {humanColor && isLive && (
             <button className="btn btn--ghost resign-btn" onClick={resign}>
               Resign
+            </button>
+          )}
+
+          {isPlayer && isLive && (
+            <button
+              className="btn btn--ghost stop-btn"
+              onClick={handleStopGame}
+              disabled={stopping}
+            >
+              {stopping ? "Stopping..." : "Stop Game"}
             </button>
           )}
 

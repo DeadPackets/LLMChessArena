@@ -40,8 +40,11 @@ export async function createGame(req: CreateGameRequest): Promise<GameCreatedRes
   });
 }
 
-export async function stopGame(gameId: string): Promise<{ status: string }> {
-  return request<{ status: string }>(`/games/${gameId}/stop`, { method: "POST" });
+export async function stopGame(gameId: string, playerSecret: string): Promise<{ status: string }> {
+  return request<{ status: string }>(`/games/${gameId}/stop`, {
+    method: "POST",
+    body: JSON.stringify({ player_secret: playerSecret }),
+  });
 }
 
 export async function listModels(): Promise<ModelStats[]> {

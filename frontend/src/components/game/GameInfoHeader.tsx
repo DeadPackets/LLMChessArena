@@ -73,6 +73,12 @@ export default function GameInfoHeader({ state }: Props) {
             Live
           </span>
         )}
+        {state.status === "stopped" && (
+          <span className="status-badge status-badge--stopped">
+            <span className="status-badge__dot status-badge__dot--stopped" />
+            Stopped
+          </span>
+        )}
         {state.status === "completed" && (
           <span className="status-badge status-badge--completed">
             <span className="status-badge__dot status-badge__dot--completed" />

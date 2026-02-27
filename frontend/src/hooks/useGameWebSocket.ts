@@ -191,9 +191,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         totalOutputTokens: (d.total_output_tokens as number) ?? 0,
         pgn: (d.pgn as string) ?? "",
       };
+      const newStatus = gameOverData.termination === "stopped" ? "stopped" : "completed";
       return {
         ...state,
-        status: "completed",
+        status: newStatus,
         outcome: gameOverData.outcome,
         termination: gameOverData.termination,
         gameOverData,
@@ -391,5 +392,5 @@ export function useGameWebSocket(gameId: string) {
     sendJsonMessage({ type: "resign", player_secret: playerSecret });
   }, [sendJsonMessage, playerSecret]);
 
-  return { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer };
+  return { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer, playerSecret };
 }

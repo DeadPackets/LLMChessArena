@@ -26,8 +26,11 @@ LLM Chess Arena is a full-stack web application that pits large language models 
 ### Highlights
 
 - **Any LLM vs Any LLM** — Supports any model available on OpenRouter (GPT-4o, Claude, Gemini, Llama, etc.)
+- **OpenRouter model browser** — Searchable dropdown populated live from the OpenRouter API, showing model name, pricing per 1M tokens, and context length
 - **Human vs LLM** — Play against any AI model with interactive drag-and-drop or click-to-move, legal move highlighting, and promotion dialogs
 - **Stockfish as opponent** — Pit any LLM against the strongest classical chess engine to benchmark raw chess ability
+- **Game creator controls** — Only the person who started a game can play human moves or stop it, secured by a per-game secret token
+- **Stop active games** — Game creators can stop any in-progress game; stopped games get their own distinct status and are excluded from ELO calculations
 - **Real-time WebSocket streaming** — Watch moves, evaluations, and table talk appear live
 - **Stockfish-powered analysis** — Every move gets engine evaluation, win probability, and classification (brilliant, great, best, good, inaccuracy, mistake, blunder)
 - **Table talk** — LLMs provide honest, natural reactions to the position after each move — confident when ahead, frustrated when behind
@@ -77,7 +80,7 @@ LLM Chess Arena is a full-stack web application that pits large language models 
 <summary><b>➕ New Game Dialog</b></summary>
 <br />
 <img src="docs/screenshots/new-game-dialog.png" alt="New Game Dialog" width="800" />
-<p>Three-way player type toggle (LLM / Human / Stockfish) per side with automatic enforcement of the "at least one LLM" rule. Advanced settings for temperature and reasoning effort per LLM side.</p>
+<p>Three-way player type toggle (LLM / Human / Stockfish) per side with a searchable model dropdown powered by the OpenRouter API. Shows pricing per 1M tokens, context length, and supports advanced settings for temperature and reasoning effort.</p>
 </details>
 
 <details>
@@ -177,13 +180,14 @@ The frontend dev server runs at **http://localhost:5173** and proxies API reques
 
 ## Usage
 
-1. **Start a game** — Click "New Game", choose player types (LLM / Human / Stockfish) per side, enter model IDs for LLM sides, and click Start
+1. **Start a game** — Click "New Game", choose player types (LLM / Human / Stockfish) per side, pick models from the searchable OpenRouter dropdown, and click Start
 2. **Watch live** — The board updates in real-time with move animations, engine evaluation, and table talk between the models
 3. **Play as Human** — Select "Human" for one side to play interactively with legal move highlighting, click-to-move, and drag-and-drop
 4. **Benchmark against Stockfish** — Select "Stockfish" for one side to test an LLM against the strongest classical engine
-5. **Review games** — Click any completed game to see full analysis with accuracy scores, critical moments, and replay controls
-6. **Track models** — Visit the Leaderboard to see ELO rankings (LLMs, Human, and Stockfish all ranked together), or click a model name for detailed stats
-7. **Monitor costs** — The Cost & Performance page shows platform-wide spending and token usage across all models
+5. **Stop a game** — The game creator can click "Stop Game" at any time to end an in-progress game (stopped games are excluded from ELO)
+6. **Review games** — Click any completed game to see full analysis with accuracy scores, critical moments, and replay controls
+7. **Track models** — Visit the Leaderboard to see ELO rankings (LLMs, Human, and Stockfish all ranked together), or click a model name for detailed stats
+8. **Monitor costs** — The Cost & Performance page shows platform-wide spending and token usage across all models
 
 ---
 
@@ -200,8 +204,9 @@ LLMChessArena/
 │   │   │   ├── api_models.py    # Pydantic request/response models
 │   │   │   └── chess_models.py  # GameConfig, ChessMove, MoveRecord, GameResult
 │   │   ├── routers/
-│   │   │   ├── games.py         # Game CRUD + analysis
+│   │   │   ├── games.py         # Game CRUD + stop with auth
 │   │   │   ├── models_router.py # Leaderboard + model detail
+│   │   │   ├── openrouter_proxy.py # OpenRouter model list proxy + cache
 │   │   │   ├── stats_router.py  # Cost/token overview
 │   │   │   └── ws.py            # WebSocket game streaming + human moves
 │   │   └── services/
@@ -219,7 +224,7 @@ LLMChessArena/
 │   ├── src/
 │   │   ├── pages/               # GameList, GameViewer, Leaderboard, ModelDetail, CostDashboard
 │   │   ├── components/          # ChessboardPanel, EvalBar, MoveList, WinProbGraph, TableTalkPanel, etc.
-│   │   ├── hooks/               # useGameWebSocket, useReplayControls
+│   │   ├── hooks/               # useGameWebSocket, useReplayControls, useOpenRouterModels
 │   │   ├── api/client.ts        # REST API client
 │   │   └── types/               # TypeScript interfaces
 │   ├── Dockerfile
@@ -238,8 +243,9 @@ LLMChessArena/
 | `GET` | `/api/games` | List games (filter by status, model) |
 | `POST` | `/api/games` | Create a new game (LLM/Human/Stockfish) |
 | `GET` | `/api/games/:id` | Game detail with moves and analysis |
-| `POST` | `/api/games/:id/stop` | Stop an active game |
+| `POST` | `/api/games/:id/stop` | Stop an active game (requires player secret) |
 | `GET` | `/api/games/:id/pgn` | Download PGN |
+| `GET` | `/api/openrouter/models` | Cached, filtered list of OpenRouter models |
 | `GET` | `/api/models` | List all models |
 | `GET` | `/api/models/leaderboard` | ELO leaderboard with enhanced stats |
 | `GET` | `/api/models/:id` | Model detail (stats, head-to-head, recent games) |

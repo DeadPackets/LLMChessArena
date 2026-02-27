@@ -2,7 +2,7 @@ export interface GameSummary {
   id: string;
   white_model: string;
   black_model: string;
-  status: "active" | "completed" | "pending";
+  status: "active" | "completed" | "stopped" | "pending";
   outcome: string | null;
   termination: string | null;
   opening_eco: string | null;

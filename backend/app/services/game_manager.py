@@ -128,20 +128,31 @@ class GameManager:
         logger.debug("Game %s: WebSocket subscriber removed", game_id)
 
     async def stop_game(self, game_id: str) -> bool:
-        """Cancel an active game."""
+        """Stop an active game. Does not count for ELO."""
         task = self.active_games.get(game_id)
         if task and not task.done():
             logger.info("Game %s: stop requested, cancelling task", game_id)
-            task.cancel()
+            total_moves = 0
             async with get_session_factory()() as session:
                 game = await session.get(Game, game_id)
                 if game:
-                    game.status = "completed"
-                    game.outcome = "draw"
-                    game.termination = "cancelled"
+                    game.status = "stopped"
+                    game.outcome = "*"
+                    game.termination = "stopped"
                     game.completed_at = datetime.now(timezone.utc)
+                    total_moves = game.total_moves or 0
                     session.add(game)
                     await session.commit()
+            # Broadcast game_over so WS clients update cleanly
+            await self._broadcast(game_id, {
+                "type": "game_over",
+                "data": {
+                    "outcome": "*",
+                    "termination": "stopped",
+                    "total_moves": total_moves,
+                },
+            })
+            task.cancel()
             return True
         return False
 
@@ -149,7 +160,7 @@ class GameManager:
         """Check if the provided secret matches the game's player secret."""
         expected = self.player_secrets.get(game_id)
         if expected is None:
-            return True  # No human side or LLM-vs-LLM
+            return True  # Game not in memory (already finished or legacy)
         return secrets_mod.compare_digest(expected, secret or "")
 
     async def submit_human_move(self, game_id: str, uci: str) -> bool:
