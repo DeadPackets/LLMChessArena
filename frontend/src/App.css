@@ -1599,6 +1599,21 @@ button {
   color: var(--amber);
 }
 
+/* ─── Recharts Tooltip Override ─── */
+.recharts-default-tooltip {
+  background-color: var(--bg-secondary) !important;
+  border-color: var(--border-light) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+.recharts-default-tooltip .recharts-tooltip-label {
+  color: var(--text-primary) !important;
+}
+
+.recharts-default-tooltip .recharts-tooltip-item {
+  color: var(--text-secondary) !important;
+}
+
 
 /* ========================================================================
    RESPONSE TIME GRAPH (in-game sidebar)

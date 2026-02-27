@@ -67,9 +67,11 @@ export default function TableTalkPanel({
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (chatRef.current) {
-      chatRef.current.scrollTop = chatRef.current.scrollHeight;
-    }
+    requestAnimationFrame(() => {
+      if (chatRef.current) {
+        chatRef.current.scrollTop = chatRef.current.scrollHeight;
+      }
+    });
   }, [entries.length]);
 
   // Scroll to the selected bubble when user clicks a move

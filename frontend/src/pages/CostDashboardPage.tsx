@@ -40,13 +40,16 @@ function formatTokens(n: number): string {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const ChartTooltipStyle: any = {
-  background: "#14161f",
+  backgroundColor: "#14161f",
   border: "1px solid #272b3d",
   borderRadius: "6px",
   fontSize: "0.75rem",
   fontFamily: "var(--font-mono)",
   color: "#e8e4dd",
 };
+
+const ChartTooltipLabelStyle = { color: "#e8e4dd" };
+const ChartTooltipItemStyle = { color: "#c8c4bb" };
 
 export default function CostDashboardPage() {
   const [data, setData] = useState<PlatformOverview | null>(null);
@@ -172,6 +175,8 @@ export default function CostDashboardPage() {
                 <YAxis type="category" dataKey="name" width={120} tick={{ fill: "#c8c4bb", fontSize: 11 }} />
                 <Tooltip
                   contentStyle={ChartTooltipStyle}
+                  labelStyle={ChartTooltipLabelStyle}
+                  itemStyle={ChartTooltipItemStyle}
                   formatter={(value: number | undefined) => [`$${(value ?? 0).toFixed(6)}`, "Cost"]}
                 />
                 <Bar dataKey="cost" radius={[0, 4, 4, 0]} maxBarSize={24}>
@@ -194,7 +199,9 @@ export default function CostDashboardPage() {
                 <YAxis type="category" dataKey="name" width={120} tick={{ fill: "#c8c4bb", fontSize: 11 }} />
                 <Tooltip
                   contentStyle={ChartTooltipStyle}
-                  formatter={(value: number | undefined, name: string | undefined) => [formatTokens(value ?? 0), name === "input" ? "Input Tokens" : "Output Tokens"]}
+                  labelStyle={ChartTooltipLabelStyle}
+                  itemStyle={ChartTooltipItemStyle}
+                  formatter={(value: number | undefined, name: string | undefined) => [formatTokens(value ?? 0), name === "Input" ? "Input Tokens" : "Output Tokens"]}
                 />
                 <Legend wrapperStyle={{ color: "#908e87", fontSize: "0.75rem" }} />
                 <Bar dataKey="input" stackId="tokens" fill="#6ba5e7" name="Input" radius={[0, 0, 0, 0]} maxBarSize={24} />
@@ -214,6 +221,8 @@ export default function CostDashboardPage() {
                 <YAxis type="category" dataKey="name" width={120} tick={{ fill: "#c8c4bb", fontSize: 11 }} />
                 <Tooltip
                   contentStyle={ChartTooltipStyle}
+                  labelStyle={ChartTooltipLabelStyle}
+                  itemStyle={ChartTooltipItemStyle}
                   formatter={(value: number | undefined) => [`${((value ?? 0) / 1000).toFixed(2)}s`, "Avg Response"]}
                 />
                 <Bar dataKey="ms" radius={[0, 4, 4, 0]} maxBarSize={24}>

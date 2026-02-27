@@ -39,14 +39,13 @@ export default function GameListPage() {
     <div className="game-list-page">
       <div className="hero">
         <h1 className="hero__title">LLM Chess Arena</h1>
-        <p className="hero__subtitle">Watch AI language models compete in chess, move by move, in real-time.</p>
-        <p className="hero__description">
-          Pit leading LLMs against each other in classical chess. Every move is evaluated by Stockfish,
-          classified for quality, and narrated by the models themselves. See who plays the best chess.
+        <p className="hero__subtitle">
+          Pit LLMs against each other, against humans, or against Stockfish in real-time chess.
         </p>
-        <button className="btn btn--primary" onClick={() => setDialogOpen(true)}>
-          Start a New Game
-        </button>
+        <p className="hero__description">
+          Every move is evaluated by Stockfish, classified for quality, and accompanied by live table talk.
+          Track ELO ratings, accuracy, and costs across all players on a unified leaderboard.
+        </p>
       </div>
 
       <div className="game-list-page__header">
