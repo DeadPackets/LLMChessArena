@@ -1,9 +1,10 @@
 import { useEffect, useRef, useMemo } from "react";
-import type { MoveData, IllegalMoveData } from "../../types/websocket";
+import type { MoveData, IllegalMoveData, ChaosMoveData } from "../../types/websocket";
 
 interface Props {
   moves: MoveData[];
   illegalMoves: IllegalMoveData[];
+  chaosMoves: ChaosMoveData[];
   selectedIndex: number;
   whiteModel: string | null;
   blackModel: string | null;
@@ -18,11 +19,13 @@ function shortModelName(model: string | null): string {
 
 type ChatEntry =
   | { type: "move"; index: number; move: MoveData }
-  | { type: "illegal"; data: IllegalMoveData };
+  | { type: "illegal"; data: IllegalMoveData }
+  | { type: "chaos"; data: ChaosMoveData };
 
 export default function TableTalkPanel({
   moves,
   illegalMoves,
+  chaosMoves,
   selectedIndex,
   whiteModel,
   blackModel,
@@ -34,8 +37,9 @@ export default function TableTalkPanel({
   const entries = useMemo<ChatEntry[]>(() => {
     const result: ChatEntry[] = [];
 
-    // Tracks which illegal moves belong before which move number
+    // Tracks which illegal/chaos moves belong before which move number
     let illegalIdx = 0;
+    let chaosIdx = 0;
 
     for (let i = 0; i < moves.length; i++) {
       const m = moves[i];
@@ -48,8 +52,17 @@ export default function TableTalkPanel({
         result.push({ type: "illegal", data: illegalMoves[illegalIdx] });
         illegalIdx++;
       }
-      // Only include moves that have table talk
-      if (m.tableTalk) {
+      // Insert any chaos moves that happened at this move number
+      while (
+        chaosIdx < chaosMoves.length &&
+        chaosMoves[chaosIdx].moveNumber <= m.moveNumber &&
+        chaosMoves[chaosIdx].color === m.color
+      ) {
+        result.push({ type: "chaos", data: chaosMoves[chaosIdx] });
+        chaosIdx++;
+      }
+      // Only include moves that have table talk or are chaos moves
+      if (m.tableTalk || m.isChaosMove) {
         result.push({ type: "move", index: i, move: m });
       }
     }
@@ -59,9 +72,13 @@ export default function TableTalkPanel({
       result.push({ type: "illegal", data: illegalMoves[illegalIdx] });
       illegalIdx++;
     }
+    while (chaosIdx < chaosMoves.length) {
+      result.push({ type: "chaos", data: chaosMoves[chaosIdx] });
+      chaosIdx++;
+    }
 
     return result;
-  }, [moves, illegalMoves]);
+  }, [moves, illegalMoves, chaosMoves]);
 
   const selectedBubbleRef = useRef<HTMLDivElement>(null);
 
@@ -124,6 +141,28 @@ export default function TableTalkPanel({
             );
           }
 
+          if (entry.type === "chaos") {
+            const d = entry.data;
+            const model = shortModelName(d.model);
+            return (
+              <div
+                key={`chaos-${i}`}
+                className={`table-talk-bubble table-talk-bubble--chaos table-talk-bubble--${d.color}`}
+              >
+                <div className="table-talk-bubble__header">
+                  <span className="table-talk-bubble__model">{model}</span>
+                  <span className="table-talk-bubble__move">chaos move detected</span>
+                </div>
+                <div className="table-talk-bubble__illegal-text" style={{ color: "var(--inaccuracy)" }}>
+                  <code>{d.attemptedMove}</code>
+                </div>
+                <div className="table-talk-bubble__illegal-reason" style={{ fontStyle: "italic" }}>
+                  Illegal move allowed in Chaos Mode
+                </div>
+              </div>
+            );
+          }
+
           const m = entry.move;
           const isSelected = entry.index === selectedIndex;
           const model =
@@ -144,9 +183,10 @@ export default function TableTalkPanel({
                 <span className="table-talk-bubble__model">{model}</span>
                 <span className="table-talk-bubble__move">
                   {m.moveNumber}{m.color === "black" ? "..." : "."} {m.san}
+                  {m.isChaosMove && <span className="table-talk-bubble__chaos-tag">CHAOS</span>}
                 </span>
               </div>
-              <div className="table-talk-bubble__text">{m.tableTalk}</div>
+              {m.tableTalk && <div className="table-talk-bubble__text">{m.tableTalk}</div>}
             </div>
           );
         })}

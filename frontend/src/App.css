@@ -299,6 +299,14 @@ button {
   border: 1px solid rgba(100, 100, 100, 0.2);
 }
 
+.status-badge--chaos {
+  background: rgba(230, 180, 34, 0.2);
+  color: #e6b422;
+  border: 1px solid rgba(230, 180, 34, 0.35);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
 .status-badge__dot {
   width: 6px;
   height: 6px;
@@ -1183,6 +1191,34 @@ button {
   border-color: var(--blunder);
 }
 
+.new-game-dialog__checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.new-game-dialog__checkbox {
+  accent-color: #e6b422;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.new-game-dialog__chaos-warning {
+  background: rgba(230, 180, 34, 0.1);
+  border: 1px solid rgba(230, 180, 34, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.78rem;
+  color: #e6b422;
+  margin-bottom: 0.5rem;
+}
+
 .new-game-dialog__actions {
   display: flex;
   justify-content: flex-end;
@@ -1939,10 +1975,32 @@ button {
   color: var(--mistake);
 }
 
+.table-talk-bubble--chaos {
+  background: rgba(230, 180, 34, 0.08);
+  border-color: rgba(230, 180, 34, 0.25) !important;
+  max-width: 90%;
+}
+
+.table-talk-bubble__chaos-tag {
+  display: inline-block;
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: #e6b422;
+  background: rgba(230, 180, 34, 0.2);
+  border: 1px solid rgba(230, 180, 34, 0.35);
+  border-radius: 3px;
+  padding: 0 0.25rem;
+  margin-left: 0.35rem;
+  vertical-align: middle;
+  letter-spacing: 0.05em;
+}
+
 .table-talk-bubble--illegal.table-talk-bubble--white,
-.table-talk-bubble--invalid-uci.table-talk-bubble--white { align-self: flex-start; }
+.table-talk-bubble--invalid-uci.table-talk-bubble--white,
+.table-talk-bubble--chaos.table-talk-bubble--white { align-self: flex-start; }
 .table-talk-bubble--illegal.table-talk-bubble--black,
-.table-talk-bubble--invalid-uci.table-talk-bubble--black { align-self: flex-end; }
+.table-talk-bubble--invalid-uci.table-talk-bubble--black,
+.table-talk-bubble--chaos.table-talk-bubble--black { align-self: flex-end; }
 
 .table-talk-bubble__header {
   display: flex;

@@ -190,6 +190,7 @@ async def compute_model_aggregate_stats(session: AsyncSession, model_id: str) ->
         select(Game).where(
             Game.status == "completed",
             (Game.white_model == model_id) | (Game.black_model == model_id),
+            Game.chaos_mode != True,  # noqa: E712 — exclude chaos games from stats
         )
     )
     games = results.all()
@@ -282,6 +283,7 @@ async def compute_head_to_head(session: AsyncSession, model_id: str) -> list[Hea
         select(Game).where(
             Game.status == "completed",
             (Game.white_model == model_id) | (Game.black_model == model_id),
+            Game.chaos_mode != True,  # noqa: E712 — exclude chaos games
         )
     )
     games = results.all()
@@ -331,7 +333,10 @@ async def compute_platform_overview(session: AsyncSession) -> PlatformOverview:
     """Compute platform-wide cost/token/performance stats with per-model breakdowns."""
     # Get all completed games
     results = await session.exec(
-        select(Game).where(Game.status == "completed")
+        select(Game).where(
+            Game.status == "completed",
+            Game.chaos_mode != True,  # noqa: E712 — exclude chaos games
+        )
     )
     games = results.all()
 

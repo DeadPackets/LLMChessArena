@@ -108,6 +108,9 @@ export default function GameCard({ game }: Props) {
         ) : (
           <span className="status-badge status-badge--completed">Pending</span>
         )}
+        {game.chaos_mode && (
+          <span className="status-badge status-badge--chaos">CHAOS</span>
+        )}
       </div>
     </Link>
   );

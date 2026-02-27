@@ -42,6 +42,8 @@ class GameEngine:
         self.human_move_queue = human_move_queue
         self._last_opening: dict[str, str] | None = None
         self._consecutive_illegal_moves = 0
+        self._last_move_was_chaos = False
+        self.chaos_move_callbacks: list[Callable[[dict], Awaitable[None]]] = []
 
     async def play_game(self) -> GameResult:
         """Run the main game loop until completion."""
@@ -128,8 +130,45 @@ class GameEngine:
             chess_move, narration, table_talk, elapsed_ms, usage_data = move_result
 
             # Record the SAN before pushing
-            san = self.board.san(chess_move)
+            is_chaos = self._last_move_was_chaos
+            if is_chaos:
+                san = self._chaos_san(chess_move)
+            else:
+                san = self.board.san(chess_move)
             self.board.push(chess_move)
+
+            # In chaos mode, check if a king was captured (game-ending)
+            if is_chaos:
+                if self.board.king(chess.WHITE) is None:
+                    record = MoveRecord(
+                        move_number=self.board.fullmove_number - (1 if current_color == "black" else 0),
+                        color=current_color, uci=chess_move.uci(), san=san,
+                        fen_after=self.board.fen(), narration=narration, table_talk=table_talk,
+                        response_time_ms=elapsed_ms, eval_before=eval_before,
+                        is_chaos_move=True,
+                        input_tokens=usage_data.get("input_tokens"),
+                        output_tokens=usage_data.get("output_tokens"),
+                        cost_usd=usage_data.get("cost_usd"),
+                    )
+                    self.move_history.append(record)
+                    for cb in self.move_callbacks:
+                        await cb(record)
+                    return self._build_result("black_wins", "king_captured")
+                if self.board.king(chess.BLACK) is None:
+                    record = MoveRecord(
+                        move_number=self.board.fullmove_number - (1 if current_color == "black" else 0),
+                        color=current_color, uci=chess_move.uci(), san=san,
+                        fen_after=self.board.fen(), narration=narration, table_talk=table_talk,
+                        response_time_ms=elapsed_ms, eval_before=eval_before,
+                        is_chaos_move=True,
+                        input_tokens=usage_data.get("input_tokens"),
+                        output_tokens=usage_data.get("output_tokens"),
+                        cost_usd=usage_data.get("cost_usd"),
+                    )
+                    self.move_history.append(record)
+                    for cb in self.move_callbacks:
+                        await cb(record)
+                    return self._build_result("white_wins", "king_captured")
 
             if is_human or is_stockfish:
                 side_label = "Human" if is_human else "Stockfish"
@@ -197,6 +236,7 @@ class GameEngine:
                 input_tokens=usage_data.get("input_tokens"),
                 output_tokens=usage_data.get("output_tokens"),
                 cost_usd=usage_data.get("cost_usd"),
+                is_chaos_move=is_chaos,
             )
             self.move_history.append(record)
 
@@ -401,7 +441,22 @@ class GameEngine:
                 move = chess.Move.from_uci(uci_str)
                 if move in self.board.legal_moves:
                     self._consecutive_illegal_moves = 0  # Reset on legal move
+                    self._last_move_was_chaos = False
                     logger.debug("LLM move accepted: %s (%s)", uci_str, model_name)
+                    return move, narration, table_talk, elapsed_ms, usage_data
+                elif self.config.chaos_mode and self._is_valid_chaos_move(move, color):
+                    # Chaos mode: illegal but structurally valid — force it
+                    self._consecutive_illegal_moves = 0
+                    self._last_move_was_chaos = True
+                    logger.info(
+                        "Chaos move accepted: model=%s, uci=%s (illegal but own piece on source)",
+                        model_name, uci_str,
+                    )
+                    await self._emit_chaos_move(
+                        color=color, model=model_name,
+                        attempted_move=uci_str,
+                        move_number=self.board.fullmove_number,
+                    )
                     return move, narration, table_talk, elapsed_ms, usage_data
                 else:
                     self._consecutive_illegal_moves += 1
@@ -462,6 +517,41 @@ class GameEngine:
             except Exception:
                 logger.warning("Illegal move callback failed", exc_info=True)
 
+    def _is_valid_chaos_move(self, move: chess.Move, color: str) -> bool:
+        """Check if an illegal move can be force-pushed in chaos mode.
+
+        Valid chaos move = source square has the current mover's own piece.
+        """
+        piece = self.board.piece_at(move.from_square)
+        if piece is None:
+            return False
+        expected_color = chess.WHITE if color == "white" else chess.BLACK
+        return piece.color == expected_color
+
+    def _chaos_san(self, move: chess.Move) -> str:
+        """Generate pseudo-SAN for an illegal chaos move (board.san() would raise)."""
+        piece = self.board.piece_at(move.from_square)
+        piece_char = ""
+        if piece and piece.piece_type != chess.PAWN:
+            piece_char = piece.symbol().upper()
+        return f"{piece_char}{move.uci()}!?"
+
+    async def _emit_chaos_move(
+        self, *, color: str, model: str, attempted_move: str, move_number: int,
+    ) -> None:
+        """Notify callbacks that a chaos move was detected and allowed."""
+        event = {
+            "color": color,
+            "model": model,
+            "attempted_move": attempted_move,
+            "move_number": move_number,
+        }
+        for cb in self.chaos_move_callbacks:
+            try:
+                await cb(event)
+            except Exception:
+                logger.warning("Chaos move callback failed", exc_info=True)
+
     def _build_result_from_board(self) -> GameResult:
         """Build result from the board's game-over state."""
         outcome_obj = self.board.outcome()
@@ -513,6 +603,8 @@ class GameEngine:
         """Generate PGN string with evaluations and narrations as comments."""
         game = chess.pgn.Game()
         game.headers["Event"] = "LLM Chess Arena"
+        if self.config.chaos_mode:
+            game.headers["Variant"] = "Chaos"
         game.headers["White"] = self.config.white_model
         game.headers["Black"] = self.config.black_model
         if self._last_opening:
@@ -532,6 +624,8 @@ class GameEngine:
 
             # Build comment with eval + classification + narration
             parts = []
+            if record.is_chaos_move:
+                parts.append("[CHAOS]")
             if record.eval_after:
                 eval_str = StockfishService.format_eval(
                     record.eval_after.centipawns, record.eval_after.mate_in

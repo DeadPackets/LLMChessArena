@@ -23,6 +23,7 @@ class GameConfig(BaseModel):
     black_is_human: bool = False
     white_is_stockfish: bool = False
     black_is_stockfish: bool = False
+    chaos_mode: bool = False
 
 
 class PositionEval(BaseModel):
@@ -56,6 +57,7 @@ class MoveRecord(BaseModel):
     input_tokens: int | None = None
     output_tokens: int | None = None
     cost_usd: float | None = None
+    is_chaos_move: bool = False
 
 
 class GameResult(BaseModel):

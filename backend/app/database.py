@@ -39,6 +39,7 @@ class Game(SQLModel, table=True):
     white_is_stockfish: Optional[bool] = Field(default=False)
     black_is_stockfish: Optional[bool] = Field(default=False)
     player_secret: Optional[str] = None
+    chaos_mode: Optional[bool] = Field(default=False)
 
 
 class Move(SQLModel, table=True):
@@ -65,6 +66,7 @@ class Move(SQLModel, table=True):
     output_tokens: Optional[int] = None
     cost_usd: Optional[float] = None
     timestamp: Optional[datetime] = None
+    is_chaos_move: Optional[bool] = Field(default=False)
 
 
 class LLMModel(SQLModel, table=True):
@@ -121,6 +123,8 @@ async def _migrate_add_columns(conn) -> None:
         ("games", "white_is_stockfish", "BOOLEAN DEFAULT 0"),
         ("games", "black_is_stockfish", "BOOLEAN DEFAULT 0"),
         ("games", "player_secret", "VARCHAR"),
+        ("games", "chaos_mode", "BOOLEAN DEFAULT 0"),
+        ("moves", "is_chaos_move", "BOOLEAN DEFAULT 0"),
     ]
     for table, column, col_type in migrations:
         try:

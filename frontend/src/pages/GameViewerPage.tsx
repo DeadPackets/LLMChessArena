@@ -189,6 +189,7 @@ export default function GameViewerPage() {
           <TableTalkPanel
             moves={state.moves}
             illegalMoves={state.illegalMoves}
+            chaosMoves={state.chaosMoves}
             selectedIndex={state.selectedIndex}
             whiteModel={state.whiteModel}
             blackModel={state.blackModel}

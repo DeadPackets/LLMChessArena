@@ -156,6 +156,7 @@ export default function NewGameDialog({ open, onClose }: Props) {
     temperature: "",
     reasoningEffort: "",
   });
+  const [chaosMode, setChaosMode] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -217,6 +218,7 @@ export default function NewGameDialog({ open, onClose }: Props) {
         black_is_human: blackType === "human",
         white_is_stockfish: whiteType === "stockfish",
         black_is_stockfish: blackType === "stockfish",
+        chaos_mode: chaosMode,
       });
       if (resp.player_secret) {
         localStorage.setItem(`chess_player_secret_${resp.id}`, resp.player_secret);
@@ -305,6 +307,24 @@ export default function NewGameDialog({ open, onClose }: Props) {
             max="500"
           />
         </div>
+
+        {hasLLMSide && (
+          <label className="new-game-dialog__checkbox-label">
+            <input
+              type="checkbox"
+              className="new-game-dialog__checkbox"
+              checked={chaosMode}
+              onChange={(e) => setChaosMode(e.target.checked)}
+            />
+            Chaos Mode &mdash; Illegal LLM moves are allowed
+          </label>
+        )}
+
+        {chaosMode && (
+          <div className="new-game-dialog__chaos-warning">
+            &#9888; Chaos Mode games do not count toward ELO ratings or model statistics.
+          </div>
+        )}
 
         {hasLLMSide && (
           <button

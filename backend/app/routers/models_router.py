@@ -104,6 +104,7 @@ async def model_detail(model_id: str, session: AsyncSession = Depends(get_sessio
             black_is_human=bool(g.black_is_human),
             white_is_stockfish=bool(g.white_is_stockfish),
             black_is_stockfish=bool(g.black_is_stockfish),
+            chaos_mode=bool(g.chaos_mode),
         )
         for g in recent
     ]

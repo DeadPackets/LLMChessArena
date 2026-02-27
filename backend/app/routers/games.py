@@ -57,6 +57,7 @@ async def create_game(req: CreateGameRequest, request: Request):
         black_is_human=req.black_is_human,
         white_is_stockfish=req.white_is_stockfish,
         black_is_stockfish=req.black_is_stockfish,
+        chaos_mode=req.chaos_mode,
     )
     player_secret = secrets.token_urlsafe(32)
 
@@ -105,6 +106,7 @@ async def list_games(
             black_is_human=bool(r.black_is_human),
             white_is_stockfish=bool(r.white_is_stockfish),
             black_is_stockfish=bool(r.black_is_stockfish),
+            chaos_mode=bool(r.chaos_mode),
         )
         for r in rows
     ]
@@ -146,6 +148,7 @@ async def get_game(game_id: str, session: AsyncSession = Depends(get_session)):
         black_is_human=bool(game.black_is_human),
         white_is_stockfish=bool(game.white_is_stockfish),
         black_is_stockfish=bool(game.black_is_stockfish),
+        chaos_mode=bool(game.chaos_mode),
         pgn=game.pgn,
         moves=[
             MoveDetail(
@@ -167,6 +170,7 @@ async def get_game(game_id: str, session: AsyncSession = Depends(get_session)):
                 input_tokens=m.input_tokens,
                 output_tokens=m.output_tokens,
                 cost_usd=m.cost_usd,
+                is_chaos_move=bool(m.is_chaos_move),
             )
             for m in move_rows
         ],

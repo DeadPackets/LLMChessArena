@@ -28,6 +28,7 @@ export interface MoveData {
   inputTokens: number | null;
   outputTokens: number | null;
   costUsd: number | null;
+  isChaosMove: boolean;
 }
 
 export interface GameOverData {
@@ -47,6 +48,13 @@ export interface IllegalMoveData {
   reason: string;
   attempt: number;
   maxAttempts: number;
+  moveNumber: number;
+}
+
+export interface ChaosMoveData {
+  color: "white" | "black";
+  model: string;
+  attemptedMove: string;
   moveNumber: number;
 }
 
@@ -71,6 +79,8 @@ export interface GameState {
   awaitingHumanMove: string | null; // color ("white"|"black") or null
   moves: MoveData[];
   illegalMoves: IllegalMoveData[];
+  chaosMoves: ChaosMoveData[];
+  chaosMode: boolean;
   currentFen: string;
   selectedIndex: number;
   autoFollow: boolean;
@@ -82,11 +92,12 @@ export type GameAction =
   | { type: "CATCH_UP"; payload: Record<string, unknown> }
   | { type: "MOVE_PLAYED"; payload: Record<string, unknown> }
   | { type: "STATUS_UPDATE"; payload: { message: string } }
-  | { type: "GAME_STARTED"; payload: { game_id: string; white_model: string; black_model: string; white_is_human?: boolean; black_is_human?: boolean; white_is_stockfish?: boolean; black_is_stockfish?: boolean } }
+  | { type: "GAME_STARTED"; payload: { game_id: string; white_model: string; black_model: string; white_is_human?: boolean; black_is_human?: boolean; white_is_stockfish?: boolean; black_is_stockfish?: boolean; chaos_mode?: boolean } }
   | { type: "GAME_OVER"; payload: Record<string, unknown> }
   | { type: "SET_SELECTED_INDEX"; payload: number }
   | { type: "NAVIGATE"; payload: "first" | "prev" | "next" | "last" }
   | { type: "TOGGLE_AUTO_FOLLOW" }
   | { type: "CONNECTION_STATUS"; payload: GameState["connectionStatus"] }
   | { type: "ILLEGAL_MOVE_ATTEMPT"; payload: IllegalMoveData }
-  | { type: "AWAITING_HUMAN_MOVE"; payload: { color: string } };
+  | { type: "AWAITING_HUMAN_MOVE"; payload: { color: string } }
+  | { type: "CHAOS_MOVE_DETECTED"; payload: ChaosMoveData };

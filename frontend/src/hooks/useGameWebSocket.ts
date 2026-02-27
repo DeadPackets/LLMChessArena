@@ -1,6 +1,6 @@
 import { useReducer, useCallback, useEffect } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
-import type { GameState, GameAction, MoveData, PositionEval, GameOverData, IllegalMoveData } from "../types/websocket";
+import type { GameState, GameAction, MoveData, PositionEval, GameOverData, IllegalMoveData, ChaosMoveData } from "../types/websocket";
 
 const STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -25,6 +25,8 @@ const initialState: GameState = {
   awaitingHumanMove: null,
   moves: [],
   illegalMoves: [],
+  chaosMoves: [],
+  chaosMode: false,
   currentFen: STARTING_FEN,
   selectedIndex: -1,
   autoFollow: true,
@@ -65,6 +67,7 @@ function normalizeCatchUpMove(raw: Record<string, unknown>): MoveData {
     inputTokens: (raw.input_tokens as number | null) ?? null,
     outputTokens: (raw.output_tokens as number | null) ?? null,
     costUsd: (raw.cost_usd as number | null) ?? null,
+    isChaosMove: (raw.is_chaos_move as boolean) ?? false,
   };
 }
 
@@ -95,6 +98,7 @@ function normalizeLiveMove(raw: Record<string, unknown>): MoveData {
     inputTokens: (raw.input_tokens as number | null) ?? null,
     outputTokens: (raw.output_tokens as number | null) ?? null,
     costUsd: (raw.cost_usd as number | null) ?? null,
+    isChaosMove: (raw.is_chaos_move as boolean) ?? false,
   };
 }
 
@@ -138,6 +142,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         whiteIsStockfish: (d.white_is_stockfish as boolean) ?? false,
         blackIsStockfish: (d.black_is_stockfish as boolean) ?? false,
         awaitingHumanMove: (d.awaiting_human_move as string | null) ?? null,
+        chaosMode: (d.chaos_mode as boolean) ?? false,
         statusMessage: null,
       };
     }
@@ -177,6 +182,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         blackIsHuman: action.payload.black_is_human ?? false,
         whiteIsStockfish: action.payload.white_is_stockfish ?? false,
         blackIsStockfish: action.payload.black_is_stockfish ?? false,
+        chaosMode: action.payload.chaos_mode ?? false,
         status: "active",
       };
 
@@ -271,6 +277,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         illegalMoves: [...state.illegalMoves, action.payload],
       };
 
+    case "CHAOS_MOVE_DETECTED":
+      return {
+        ...state,
+        chaosMoves: [...state.chaosMoves, action.payload],
+      };
+
     default:
       return state;
   }
@@ -314,6 +326,17 @@ export function useGameWebSocket(gameId: string) {
               moveNumber: d.move_number as number,
             };
             dispatch({ type: "ILLEGAL_MOVE_ATTEMPT", payload: illegalMove });
+            break;
+          }
+          case "chaos_move_detected": {
+            const cd = msg.data;
+            const chaosMove: ChaosMoveData = {
+              color: cd.color as "white" | "black",
+              model: cd.model as string,
+              attemptedMove: cd.attempted_move as string,
+              moveNumber: cd.move_number as number,
+            };
+            dispatch({ type: "CHAOS_MOVE_DETECTED", payload: chaosMove });
             break;
           }
           case "awaiting_human_move":

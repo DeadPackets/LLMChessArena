@@ -85,6 +85,9 @@ export default function GameInfoHeader({ state }: Props) {
             Completed
           </span>
         )}
+        {state.chaosMode && (
+          <span className="status-badge status-badge--chaos">CHAOS</span>
+        )}
         {cost > 0 && (
           <span className="game-info__cost">${cost.toFixed(4)}</span>
         )}

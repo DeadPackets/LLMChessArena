@@ -104,6 +104,7 @@ class GameManager:
                 white_is_stockfish=config.white_is_stockfish,
                 black_is_stockfish=config.black_is_stockfish,
                 player_secret=player_secret,
+                chaos_mode=config.chaos_mode,
             )
             session.add(game)
             await session.commit()
@@ -207,6 +208,7 @@ class GameManager:
                 "input_tokens": m.input_tokens,
                 "output_tokens": m.output_tokens,
                 "cost_usd": m.cost_usd,
+                "is_chaos_move": bool(m.is_chaos_move),
             })
 
         return {
@@ -229,6 +231,7 @@ class GameManager:
                 "white_is_stockfish": bool(game.white_is_stockfish),
                 "black_is_stockfish": bool(game.black_is_stockfish),
                 "awaiting_human_move": self._awaiting_human_move.get(game.id),
+                "chaos_mode": bool(game.chaos_mode),
             },
         }
 
@@ -271,8 +274,15 @@ class GameManager:
                 "data": {"color": color},
             })
 
+        async def on_chaos_move(event: dict) -> None:
+            await self._broadcast(game_id, {
+                "type": "chaos_move_detected",
+                "data": event,
+            })
+
         engine.move_callbacks.append(on_move)
         engine.illegal_move_callbacks.append(on_illegal_move)
+        engine.chaos_move_callbacks.append(on_chaos_move)
         engine.status_callback = on_status
         engine.awaiting_human_move_callback = on_awaiting_human_move
 
@@ -287,6 +297,7 @@ class GameManager:
                 "black_is_human": config.black_is_human,
                 "white_is_stockfish": config.white_is_stockfish,
                 "black_is_stockfish": config.black_is_stockfish,
+                "chaos_mode": config.chaos_mode,
             },
         })
 
@@ -307,8 +318,11 @@ class GameManager:
                 result.black_model = "Stockfish"
             elif config.black_is_human:
                 result.black_model = "Human"
-            await self._update_elo(result)
-            logger.info("Game %s: results persisted and ELO updated", game_id)
+            if config.chaos_mode:
+                logger.info("Game %s: skipping ELO update (chaos mode)", game_id)
+            else:
+                await self._update_elo(result)
+            logger.info("Game %s: results persisted%s", game_id, " (ELO skipped — chaos)" if config.chaos_mode else " and ELO updated")
             await self._broadcast(game_id, {
                 "type": "game_over",
                 "data": {
@@ -399,6 +413,7 @@ class GameManager:
                 output_tokens=record.output_tokens,
                 cost_usd=record.cost_usd,
                 timestamp=datetime.now(timezone.utc),
+                is_chaos_move=record.is_chaos_move,
             )
             session.add(move)
             await session.commit()

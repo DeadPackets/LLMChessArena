@@ -18,6 +18,7 @@ export interface GameSummary {
   black_is_human: boolean;
   white_is_stockfish: boolean;
   black_is_stockfish: boolean;
+  chaos_mode: boolean;
 }
 
 export interface MoveDetail {
@@ -147,6 +148,7 @@ export interface CreateGameRequest {
   black_is_human?: boolean;
   white_is_stockfish?: boolean;
   black_is_stockfish?: boolean;
+  chaos_mode?: boolean;
 }
 
 export interface GameCreatedResponse {
