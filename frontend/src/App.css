@@ -162,7 +162,7 @@ button {
 
 .game-viewer__main {
   display: grid;
-  grid-template-columns: auto minmax(200px, 280px) minmax(280px, 1fr);
+  grid-template-columns: auto 1fr;
   gap: 0.75rem;
   align-items: start;
 }
@@ -177,13 +177,6 @@ button {
   display: flex;
   gap: 0.4rem;
   align-items: stretch;
-}
-
-.game-viewer__moves-col {
-  display: flex;
-  flex-direction: column;
-  height: 580px; /* board(540) + captured(~30) + gap */
-  overflow: hidden;
 }
 
 .game-viewer__info-col {
@@ -391,7 +384,8 @@ button {
   overflow-y: auto;
   font-family: var(--font-mono);
   font-size: 0.82rem;
-  min-height: 0;
+  min-height: 150px;
+  max-height: 260px;
 }
 
 .move-list::-webkit-scrollbar { width: 5px; }
@@ -2499,42 +2493,25 @@ button {
    ======================================================================== */
 
 .engine-lines {
-  padding: 0.6rem 0.8rem;
+  padding: 0.3rem 0.5rem;
 }
 
 .engine-lines__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.4rem;
-}
-
-.engine-lines__title {
-  font-family: var(--font-body);
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary);
-}
-
-.engine-lines__depth {
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-  color: var(--text-muted);
+  display: none;
 }
 
 .engine-lines__list {
   display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+  flex-direction: row;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .engine-lines__row {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.2rem 0.3rem;
+  gap: 0.3rem;
+  padding: 0.1rem 0.2rem;
   border-radius: var(--radius-sm);
   transition: var(--transition);
 }
@@ -2545,11 +2522,11 @@ button {
 
 .engine-lines__eval {
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  min-width: 3.5rem;
+  min-width: 2.8rem;
   text-align: center;
-  padding: 0.15rem 0.3rem;
+  padding: 0.1rem 0.2rem;
   border-radius: var(--radius-sm);
 }
 
@@ -2570,7 +2547,7 @@ button {
 
 .engine-lines__move {
   font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   color: var(--text-secondary);
 }
 
@@ -2975,7 +2952,6 @@ button {
     max-width: 100%;
   }
 
-  .game-viewer__moves-col,
   .game-viewer__info-col {
     width: 100%;
     max-width: 100%;

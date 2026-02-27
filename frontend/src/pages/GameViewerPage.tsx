@@ -350,9 +350,16 @@ export default function GameViewerPage() {
             onPieceStyleChange={setPieceStyle}
           />
           <CapturedMaterial fen={state.currentFen} />
+
+          {selectedMove?.evalAfter?.engine_lines && selectedMove.evalAfter.engine_lines.length > 0 && (
+            <EngineLinesPanel
+              lines={selectedMove.evalAfter.engine_lines}
+              depth={selectedMove.evalAfter.depth}
+            />
+          )}
         </div>
 
-        <div className="game-viewer__moves-col">
+        <div className="game-viewer__info-col">
           <MoveList
             moves={state.moves}
             selectedIndex={state.selectedIndex}
@@ -378,22 +385,13 @@ export default function GameViewerPage() {
             onToggleMute={toggleMute}
             onShowShortcuts={toggleShortcuts}
           />
-        </div>
 
-        <div className="game-viewer__info-col">
           {state.moves.length > 0 && (
             <WinProbGraph
               moves={state.moves}
               selectedIndex={state.selectedIndex}
               onSelectMove={selectMove}
               criticalMoments={gameDetail?.analysis?.critical_moments}
-            />
-          )}
-
-          {selectedMove?.evalAfter?.engine_lines && selectedMove.evalAfter.engine_lines.length > 0 && (
-            <EngineLinesPanel
-              lines={selectedMove.evalAfter.engine_lines}
-              depth={selectedMove.evalAfter.depth}
             />
           )}
 
