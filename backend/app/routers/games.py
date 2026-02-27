@@ -59,7 +59,11 @@ async def create_game(req: CreateGameRequest, request: Request):
         black_is_human=req.black_is_human,
         white_is_stockfish=req.white_is_stockfish,
         black_is_stockfish=req.black_is_stockfish,
+        white_stockfish_elo=req.white_stockfish_elo,
+        black_stockfish_elo=req.black_stockfish_elo,
         chaos_mode=req.chaos_mode,
+        move_time_limit=req.move_time_limit,
+        draw_adjudication=req.draw_adjudication,
     )
     player_secret = secrets.token_urlsafe(32)
 
@@ -120,7 +124,11 @@ async def list_games(
             black_is_human=bool(r.black_is_human),
             white_is_stockfish=bool(r.white_is_stockfish),
             black_is_stockfish=bool(r.black_is_stockfish),
+            white_stockfish_elo=r.white_stockfish_elo,
+            black_stockfish_elo=r.black_stockfish_elo,
             chaos_mode=bool(r.chaos_mode),
+            move_time_limit=r.move_time_limit,
+            draw_adjudication=bool(r.draw_adjudication) if r.draw_adjudication is not None else True,
         )
         for r in rows
     ]
@@ -168,7 +176,11 @@ async def get_game(game_id: str, session: AsyncSession = Depends(get_session)):
         black_is_human=bool(game.black_is_human),
         white_is_stockfish=bool(game.white_is_stockfish),
         black_is_stockfish=bool(game.black_is_stockfish),
+        white_stockfish_elo=game.white_stockfish_elo,
+        black_stockfish_elo=game.black_stockfish_elo,
         chaos_mode=bool(game.chaos_mode),
+        move_time_limit=game.move_time_limit,
+        draw_adjudication=bool(game.draw_adjudication) if game.draw_adjudication is not None else True,
         pgn=game.pgn,
         moves=[
             MoveDetail(

@@ -34,12 +34,12 @@ export default function GameInfoHeader({ state }: Props) {
   const whiteLabel = state.whiteIsHuman
     ? "Human"
     : state.whiteIsStockfish
-    ? "Stockfish"
+    ? (state.whiteStockfishElo ? `Stockfish (${state.whiteStockfishElo})` : "Stockfish")
     : formatModelLabel(state.whiteModel, state.whiteReasoningEffort, state.whiteTemperature);
   const blackLabel = state.blackIsHuman
     ? "Human"
     : state.blackIsStockfish
-    ? "Stockfish"
+    ? (state.blackStockfishElo ? `Stockfish (${state.blackStockfishElo})` : "Stockfish")
     : formatModelLabel(state.blackModel, state.blackReasoningEffort, state.blackTemperature);
 
   return (
@@ -87,6 +87,12 @@ export default function GameInfoHeader({ state }: Props) {
         )}
         {state.chaosMode && (
           <span className="status-badge status-badge--chaos">CHAOS</span>
+        )}
+        {state.moveTimeLimit != null && (
+          <span className="game-info__meta-badge">{state.moveTimeLimit}s/move</span>
+        )}
+        {state.spectatorCount > 0 && (
+          <span className="game-info__meta-badge">{state.spectatorCount} watching</span>
         )}
         {cost > 0 && (
           <span className="game-info__cost">${cost.toFixed(4)}</span>

@@ -36,15 +36,15 @@
 
 ### Gameplay & Engine
 
-13. **Time controls** — No clock system. Games take as long as the LLM wants. Adding per-move or per-game time limits (with forfeit on timeout) would make games more exciting and prevent runaway API costs.
+13. **~~Time controls~~** ✅ — ~~Per-move time limit with forfeit on timeout. Configurable 5-600s in New Game dialog.~~
 
-14. **Configurable Stockfish strength** — Stockfish always plays at full depth. An ELO-limited mode (via UCI `Skill Level` 0–20) would let users benchmark LLMs against calibrated difficulty.
+14. **~~Configurable Stockfish strength~~** ✅ — ~~ELO slider (1320-3190) with presets. Separate engine instance for player Stockfish. Games with limited Stockfish skip ELO/leaderboard updates.~~
 
-15. **Draw offers / adjudication** — No way to detect or declare dead draws (e.g., opposite-color bishop endgames played for 80 moves). An auto-adjudication rule (e.g., eval within ±0.2 for 30 moves) would prevent endless games.
+15. **~~Draw adjudication~~** ✅ — ~~Auto-draw if eval within ±20cp for 30+ consecutive moves. Enabled by default, toggleable in New Game dialog.~~
 
-16. **Rematch button** — After a game ends, no way to start a new game with the same settings. User has to manually re-enter everything.
+16. **~~Rematch button~~** ✅ — ~~Pre-filled NewGameDialog with all settings from the completed game.~~
 
-17. **Game spectator count** — No indicator of how many people are watching a live game.
+17. **~~Game spectator count~~** ✅ — ~~Live WebSocket subscriber count shown in game header.~~
 
 ### Frontend UX
 

@@ -27,6 +27,11 @@ const initialState: GameState = {
   illegalMoves: [],
   chaosMoves: [],
   chaosMode: false,
+  whiteStockfishElo: null,
+  blackStockfishElo: null,
+  moveTimeLimit: null,
+  drawAdjudication: true,
+  spectatorCount: 0,
   currentFen: STARTING_FEN,
   selectedIndex: -1,
   autoFollow: true,
@@ -143,6 +148,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         blackIsStockfish: (d.black_is_stockfish as boolean) ?? false,
         awaitingHumanMove: (d.awaiting_human_move as string | null) ?? null,
         chaosMode: (d.chaos_mode as boolean) ?? false,
+        whiteStockfishElo: (d.white_stockfish_elo as number | null) ?? null,
+        blackStockfishElo: (d.black_stockfish_elo as number | null) ?? null,
+        moveTimeLimit: (d.move_time_limit as number | null) ?? null,
+        drawAdjudication: (d.draw_adjudication as boolean) ?? true,
+        spectatorCount: (d.spectator_count as number) ?? 0,
         statusMessage: null,
       };
     }
@@ -283,6 +293,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         chaosMoves: [...state.chaosMoves, action.payload],
       };
 
+    case "SPECTATOR_COUNT":
+      return { ...state, spectatorCount: action.payload.count };
+
     default:
       return state;
   }
@@ -345,6 +358,9 @@ export function useGameWebSocket(gameId: string) {
           }
           case "awaiting_human_move":
             dispatch({ type: "AWAITING_HUMAN_MOVE", payload: msg.data });
+            break;
+          case "spectator_count":
+            dispatch({ type: "SPECTATOR_COUNT", payload: { count: msg.data.count } });
             break;
         }
       } catch {

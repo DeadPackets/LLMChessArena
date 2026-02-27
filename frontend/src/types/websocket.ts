@@ -81,6 +81,11 @@ export interface GameState {
   illegalMoves: IllegalMoveData[];
   chaosMoves: ChaosMoveData[];
   chaosMode: boolean;
+  whiteStockfishElo: number | null;
+  blackStockfishElo: number | null;
+  moveTimeLimit: number | null;
+  drawAdjudication: boolean;
+  spectatorCount: number;
   currentFen: string;
   selectedIndex: number;
   autoFollow: boolean;
@@ -100,4 +105,5 @@ export type GameAction =
   | { type: "CONNECTION_STATUS"; payload: GameState["connectionStatus"] }
   | { type: "ILLEGAL_MOVE_ATTEMPT"; payload: IllegalMoveData }
   | { type: "AWAITING_HUMAN_MOVE"; payload: { color: string } }
-  | { type: "CHAOS_MOVE_DETECTED"; payload: ChaosMoveData };
+  | { type: "CHAOS_MOVE_DETECTED"; payload: ChaosMoveData }
+  | { type: "SPECTATOR_COUNT"; payload: { count: number } };

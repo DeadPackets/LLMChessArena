@@ -16,8 +16,12 @@ from app.services.chess_agent import chess_agent, ChessGameContext, build_user_p
 from app.services.move_classifier import classify_move, MoveClassification, CLASSIFICATION_SYMBOLS
 from app.services.opening_detector import OpeningDetector
 from app.services.stockfish_service import StockfishService
+from app.services.stockfish_player_service import StockfishPlayerService
 
 logger = logging.getLogger(__name__)
+
+DRAW_ADJUDICATION_CP_THRESHOLD = 20   # centipawns (±0.20)
+DRAW_ADJUDICATION_MOVE_THRESHOLD = 30  # consecutive moves
 
 
 class GameEngine:
@@ -27,6 +31,7 @@ class GameEngine:
         self,
         config: GameConfig,
         stockfish: StockfishService | None = None,
+        stockfish_player: StockfishPlayerService | None = None,
         opening_detector: OpeningDetector | None = None,
         human_move_queue: asyncio.Queue | None = None,
     ):
@@ -38,11 +43,13 @@ class GameEngine:
         self.status_callback: Callable[[str], Awaitable[None]] | None = None
         self.awaiting_human_move_callback: Callable[[str], Awaitable[None]] | None = None
         self.stockfish = stockfish
+        self.stockfish_player = stockfish_player
         self.opening_detector = opening_detector
         self.human_move_queue = human_move_queue
         self._last_opening: dict[str, str] | None = None
         self._consecutive_illegal_moves = 0
         self._last_move_was_chaos = False
+        self._consecutive_draw_eval_count = 0
         self.chaos_move_callbacks: list[Callable[[dict], Awaitable[None]]] = []
 
     async def play_game(self) -> GameResult:
@@ -86,21 +93,42 @@ class GameEngine:
                     self.board.fullmove_number, current_color, self.board.fen(),
                 )
                 await self._emit_status(f"Waiting for {current_color.title()} (Human) to move...")
-                move_result = await self._get_human_move(current_color)
+                move_coro = self._get_human_move(current_color)
             elif is_stockfish:
                 logger.info(
                     "Move %d: requesting Stockfish move (%s) | FEN: %s",
                     self.board.fullmove_number, current_color, self.board.fen(),
                 )
                 await self._emit_status(f"Stockfish ({current_color.title()}) is thinking...")
-                move_result = await self._get_stockfish_move(current_color, eval_before)
+                move_coro = self._get_stockfish_move(current_color, eval_before)
             else:
                 logger.info(
                     "Move %d: requesting move from %s (%s) | FEN: %s",
                     self.board.fullmove_number, model_name, current_color, self.board.fen(),
                 )
                 await self._emit_status(f"Waiting for {current_color.title()} ({model_name}) to move...")
-                move_result = await self._get_llm_move(model_name, current_color)
+                move_coro = self._get_llm_move(model_name, current_color)
+
+            # Apply per-move time limit if configured
+            try:
+                if self.config.move_time_limit is not None:
+                    move_result = await asyncio.wait_for(
+                        move_coro, timeout=self.config.move_time_limit,
+                    )
+                else:
+                    move_result = await move_coro
+            except asyncio.TimeoutError:
+                winner = "black" if current_color == "white" else "white"
+                side_label = "Human" if is_human else "Stockfish" if is_stockfish else model_name
+                logger.warning(
+                    "Move %d: %s (%s) timed out after %.1fs",
+                    self.board.fullmove_number, side_label, current_color,
+                    self.config.move_time_limit,
+                )
+                await self._emit_status(f"{current_color.title()} timed out!")
+                return self._build_result(
+                    outcome=f"{winner}_wins", termination="timeout",
+                )
 
             if move_result is None:
                 winner = "black" if current_color == "white" else "white"
@@ -243,6 +271,21 @@ class GameEngine:
             for cb in self.move_callbacks:
                 await cb(record)
 
+            # Draw adjudication check
+            if self.config.draw_adjudication and eval_after and not is_chaos:
+                if (abs(eval_after.centipawns) <= DRAW_ADJUDICATION_CP_THRESHOLD
+                        and eval_after.mate_in is None):
+                    self._consecutive_draw_eval_count += 1
+                else:
+                    self._consecutive_draw_eval_count = 0
+                if self._consecutive_draw_eval_count >= DRAW_ADJUDICATION_MOVE_THRESHOLD:
+                    logger.info(
+                        "Draw adjudication: eval within ±%dcp for %d consecutive moves",
+                        DRAW_ADJUDICATION_CP_THRESHOLD, self._consecutive_draw_eval_count,
+                    )
+                    await self._emit_status("Draw by adjudication — position evaluated as equal for 30 moves")
+                    return self._build_result("draw", "adjudication")
+
         # Game ended naturally
         if len(self.move_history) >= max_total_moves and not self.board.is_game_over():
             logger.info("Game ended: draw by max moves (%d)", max_total_moves)
@@ -314,14 +357,22 @@ class GameEngine:
     ) -> tuple[chess.Move, str, str, int, dict] | None:
         """Get the best move from Stockfish engine.
 
-        Reuses eval_before if available (already computed), otherwise evaluates.
+        Uses the strength-limited player engine if available, otherwise
+        reuses eval_before or evaluates at full strength.
         Returns (move, narration, table_talk, elapsed_ms, usage_data).
         Stockfish moves have no narration, table talk, or usage data.
         """
         best_move_uci: str | None = None
         elapsed_ms = 0
 
-        if eval_before and eval_before.best_move_uci:
+        if self.stockfish_player:
+            # Use strength-limited player engine
+            try:
+                best_move_uci, elapsed_ms = await self.stockfish_player.get_best_move(self.board)
+            except Exception as e:
+                logger.error("Stockfish player engine failed (%s): %s", color, e)
+                return None
+        elif eval_before and eval_before.best_move_uci:
             best_move_uci = eval_before.best_move_uci
         elif self.stockfish:
             start = time.monotonic()

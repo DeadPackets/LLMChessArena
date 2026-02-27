@@ -15,6 +15,7 @@ from app.services.elo_service import calculate_elo_change
 from app.services.game_engine import GameEngine
 from app.services.opening_detector import OpeningDetector
 from app.services.stockfish_service import StockfishService
+from app.services.stockfish_player_service import StockfishPlayerService
 
 logger = logging.getLogger(__name__)
 
@@ -68,15 +69,15 @@ class GameManager:
         game_id = uuid4().hex[:12]
         now = datetime.now(timezone.utc)
 
-        def _side_label(is_human: bool, is_stockfish: bool, model: str) -> str:
+        def _side_label(is_human: bool, is_stockfish: bool, model: str, sf_elo: int | None = None) -> str:
             if is_human:
                 return "Human"
             if is_stockfish:
-                return "Stockfish"
+                return f"Stockfish ({sf_elo})" if sf_elo else "Stockfish"
             return model
 
-        white_label = _side_label(config.white_is_human, config.white_is_stockfish, config.white_model)
-        black_label = _side_label(config.black_is_human, config.black_is_stockfish, config.black_model)
+        white_label = _side_label(config.white_is_human, config.white_is_stockfish, config.white_model, config.white_stockfish_elo)
+        black_label = _side_label(config.black_is_human, config.black_is_stockfish, config.black_model, config.black_stockfish_elo)
         logger.info(
             "Creating game %s: %s (white) vs %s (black)",
             game_id, white_label, black_label,
@@ -104,8 +105,12 @@ class GameManager:
                 black_is_human=config.black_is_human,
                 white_is_stockfish=config.white_is_stockfish,
                 black_is_stockfish=config.black_is_stockfish,
+                white_stockfish_elo=config.white_stockfish_elo,
+                black_stockfish_elo=config.black_stockfish_elo,
                 player_secret=player_secret,
                 chaos_mode=config.chaos_mode,
+                move_time_limit=config.move_time_limit,
+                draw_adjudication=config.draw_adjudication,
             )
             session.add(game)
             await session.commit()
@@ -121,6 +126,7 @@ class GameManager:
         self.event_queues.setdefault(game_id, []).append(queue)
         count = len(self.event_queues[game_id])
         logger.info("Game %s: WebSocket subscriber added (total: %d)", game_id, count)
+        asyncio.create_task(self._broadcast_spectator_count(game_id))
         return queue
 
     def unsubscribe(self, game_id: str, queue: asyncio.Queue) -> None:
@@ -128,6 +134,18 @@ class GameManager:
         if queue in queues:
             queues.remove(queue)
         logger.debug("Game %s: WebSocket subscriber removed", game_id)
+        if game_id in self.event_queues:
+            asyncio.create_task(self._broadcast_spectator_count(game_id))
+
+    def get_spectator_count(self, game_id: str) -> int:
+        return len(self.event_queues.get(game_id, []))
+
+    async def _broadcast_spectator_count(self, game_id: str) -> None:
+        count = self.get_spectator_count(game_id)
+        await self._broadcast(game_id, {
+            "type": "spectator_count",
+            "data": {"count": count},
+        })
 
     async def stop_game(self, game_id: str) -> bool:
         """Stop an active game. Does not count for ELO."""
@@ -233,6 +251,11 @@ class GameManager:
                 "black_is_stockfish": bool(game.black_is_stockfish),
                 "awaiting_human_move": self._awaiting_human_move.get(game.id),
                 "chaos_mode": bool(game.chaos_mode),
+                "white_stockfish_elo": game.white_stockfish_elo,
+                "black_stockfish_elo": game.black_stockfish_elo,
+                "move_time_limit": game.move_time_limit,
+                "draw_adjudication": bool(game.draw_adjudication) if game.draw_adjudication is not None else True,
+                "spectator_count": self.get_spectator_count(game_id),
             },
         }
 
@@ -246,9 +269,18 @@ class GameManager:
             human_queue = asyncio.Queue()
             self.human_move_queues[game_id] = human_queue
 
+        # Create strength-limited Stockfish player if needed
+        stockfish_player: StockfishPlayerService | None = None
+        if config.white_is_stockfish or config.black_is_stockfish:
+            # Use the relevant side's ELO (or None for full strength)
+            sf_elo = config.white_stockfish_elo if config.white_is_stockfish else config.black_stockfish_elo
+            if sf_elo is not None:
+                stockfish_player = StockfishPlayerService()
+                await stockfish_player.start(elo=sf_elo)
+
         engine = GameEngine(
-            config, stockfish=self.stockfish, opening_detector=self.opening_detector,
-            human_move_queue=human_queue,
+            config, stockfish=self.stockfish, stockfish_player=stockfish_player,
+            opening_detector=self.opening_detector, human_move_queue=human_queue,
         )
 
         async def on_move(record: MoveRecord) -> None:
@@ -298,7 +330,11 @@ class GameManager:
                 "black_is_human": config.black_is_human,
                 "white_is_stockfish": config.white_is_stockfish,
                 "black_is_stockfish": config.black_is_stockfish,
+                "white_stockfish_elo": config.white_stockfish_elo,
+                "black_stockfish_elo": config.black_stockfish_elo,
                 "chaos_mode": config.chaos_mode,
+                "move_time_limit": config.move_time_limit,
+                "draw_adjudication": config.draw_adjudication,
             },
         })
 
@@ -319,11 +355,14 @@ class GameManager:
                 result.black_model = "Stockfish"
             elif config.black_is_human:
                 result.black_model = "Human"
-            if config.chaos_mode:
-                logger.info("Game %s: skipping ELO update (chaos mode)", game_id)
+            has_limited_sf = config.white_stockfish_elo is not None or config.black_stockfish_elo is not None
+            skip_elo = config.chaos_mode or has_limited_sf
+            if skip_elo:
+                reason = "chaos mode" if config.chaos_mode else "strength-limited Stockfish"
+                logger.info("Game %s: skipping ELO update (%s)", game_id, reason)
             else:
                 await self._update_elo(result)
-            logger.info("Game %s: results persisted%s", game_id, " (ELO skipped — chaos)" if config.chaos_mode else " and ELO updated")
+            logger.info("Game %s: results persisted%s", game_id, f" (ELO skipped — {reason})" if skip_elo else " and ELO updated")
             await self._broadcast(game_id, {
                 "type": "game_over",
                 "data": {
@@ -354,6 +393,8 @@ class GameManager:
                 "data": {"outcome": "draw", "termination": "error", "total_moves": 0},
             })
         finally:
+            if stockfish_player:
+                await stockfish_player.stop()
             self.active_games.pop(game_id, None)
             self.human_move_queues.pop(game_id, None)
             self._awaiting_human_move.pop(game_id, None)

@@ -38,8 +38,12 @@ class Game(SQLModel, table=True):
     black_is_human: Optional[bool] = Field(default=False)
     white_is_stockfish: Optional[bool] = Field(default=False)
     black_is_stockfish: Optional[bool] = Field(default=False)
+    white_stockfish_elo: Optional[int] = None
+    black_stockfish_elo: Optional[int] = None
     player_secret: Optional[str] = None
     chaos_mode: Optional[bool] = Field(default=False)
+    move_time_limit: Optional[float] = None
+    draw_adjudication: Optional[bool] = Field(default=True)
 
 
 class Move(SQLModel, table=True):
@@ -124,6 +128,10 @@ async def _migrate_add_columns(conn) -> None:
         ("games", "black_is_stockfish", "BOOLEAN DEFAULT 0"),
         ("games", "player_secret", "VARCHAR"),
         ("games", "chaos_mode", "BOOLEAN DEFAULT 0"),
+        ("games", "white_stockfish_elo", "INTEGER"),
+        ("games", "black_stockfish_elo", "INTEGER"),
+        ("games", "move_time_limit", "FLOAT"),
+        ("games", "draw_adjudication", "BOOLEAN DEFAULT 1"),
         ("moves", "is_chaos_move", "BOOLEAN DEFAULT 0"),
     ]
     for table, column, col_type in migrations:

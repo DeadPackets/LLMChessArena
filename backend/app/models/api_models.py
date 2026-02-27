@@ -18,7 +18,11 @@ class CreateGameRequest(BaseModel):
     black_is_human: bool = False
     white_is_stockfish: bool = False
     black_is_stockfish: bool = False
+    white_stockfish_elo: int | None = None
+    black_stockfish_elo: int | None = None
     chaos_mode: bool = False
+    move_time_limit: float | None = None
+    draw_adjudication: bool = True
 
 
 # --- Responses ---
@@ -43,7 +47,11 @@ class GameSummary(BaseModel):
     black_is_human: bool = False
     white_is_stockfish: bool = False
     black_is_stockfish: bool = False
+    white_stockfish_elo: int | None = None
+    black_stockfish_elo: int | None = None
     chaos_mode: bool = False
+    move_time_limit: float | None = None
+    draw_adjudication: bool = True
 
 
 class MoveDetail(BaseModel):

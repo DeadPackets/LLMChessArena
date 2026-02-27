@@ -1,12 +1,21 @@
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createGame } from "../../api/client";
 import { useOpenRouterModels } from "../../hooks/useOpenRouterModels";
+import type { CreateGameRequest } from "../../types/api";
 import ModelSelector from "./ModelSelector";
+
+export type PlayerType = "llm" | "human" | "stockfish";
+
+export interface RematchSettings extends Partial<CreateGameRequest> {
+  whiteType?: PlayerType;
+  blackType?: PlayerType;
+}
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  initialSettings?: RematchSettings;
 }
 
 const REASONING_OPTIONS = [
@@ -17,7 +26,15 @@ const REASONING_OPTIONS = [
   { value: "high", label: "High" },
 ];
 
-type PlayerType = "llm" | "human" | "stockfish";
+const STOCKFISH_PRESETS = [
+  { label: "Maximum (no limit)", value: "" },
+  { label: "Beginner (1320)", value: "1320" },
+  { label: "Club (1500)", value: "1500" },
+  { label: "Intermediate (1800)", value: "1800" },
+  { label: "Advanced (2000)", value: "2000" },
+  { label: "Expert (2500)", value: "2500" },
+  { label: "Master (2800)", value: "2800" },
+];
 
 interface ModelSettings {
   temperature: string;
@@ -60,6 +77,50 @@ function PlayerTypeToggle({
       >
         Stockfish
       </button>
+    </div>
+  );
+}
+
+function StockfishEloSelector({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="new-game-dialog__stockfish-elo">
+      <label className="new-game-dialog__label">Stockfish Strength</label>
+      <select
+        className="new-game-dialog__input new-game-dialog__select"
+        value={STOCKFISH_PRESETS.some((p) => p.value === value) ? value : "custom"}
+        onChange={(e) => {
+          if (e.target.value === "custom") return;
+          onChange(e.target.value);
+        }}
+      >
+        {STOCKFISH_PRESETS.map((p) => (
+          <option key={p.value} value={p.value}>{p.label}</option>
+        ))}
+        {!STOCKFISH_PRESETS.some((p) => p.value === value) && value && (
+          <option value="custom">Custom ({value})</option>
+        )}
+      </select>
+      {value && (
+        <div className="new-game-dialog__range-row" style={{ marginTop: "0.4rem" }}>
+          <span className="new-game-dialog__range-label">1320</span>
+          <input
+            className="new-game-dialog__range"
+            type="range"
+            min="1320"
+            max="3190"
+            step="10"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          <span className="new-game-dialog__range-label">3190</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -139,7 +200,7 @@ function ModelSettingsPanel({
   );
 }
 
-export default function NewGameDialog({ open, onClose }: Props) {
+export default function NewGameDialog({ open, onClose, initialSettings }: Props) {
   const navigate = useNavigate();
   const { models: openRouterModels, loading: modelsLoading } = useOpenRouterModels();
   const [whiteModel, setWhiteModel] = useState("");
@@ -147,6 +208,7 @@ export default function NewGameDialog({ open, onClose }: Props) {
   const [whiteType, setWhiteType] = useState<PlayerType>("llm");
   const [blackType, setBlackType] = useState<PlayerType>("llm");
   const [maxMoves, setMaxMoves] = useState("200");
+  const [moveTimeLimit, setMoveTimeLimit] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [whiteSettings, setWhiteSettings] = useState<ModelSettings>({
     temperature: "",
@@ -156,17 +218,47 @@ export default function NewGameDialog({ open, onClose }: Props) {
     temperature: "",
     reasoningEffort: "",
   });
+  const [whiteStockfishElo, setWhiteStockfishElo] = useState("");
+  const [blackStockfishElo, setBlackStockfishElo] = useState("");
   const [chaosMode, setChaosMode] = useState(false);
+  const [drawAdjudication, setDrawAdjudication] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const submittingRef = useRef(false); // Guards against rapid double-clicks
+  const submittingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Pre-fill from initialSettings (rematch)
+  useEffect(() => {
+    if (open && initialSettings) {
+      setWhiteModel(initialSettings.white_model || "");
+      setBlackModel(initialSettings.black_model || "");
+      setWhiteType(initialSettings.whiteType || "llm");
+      setBlackType(initialSettings.blackType || "llm");
+      setMaxMoves(String(initialSettings.max_moves ?? 200));
+      setMoveTimeLimit(initialSettings.move_time_limit ? String(initialSettings.move_time_limit) : "");
+      setChaosMode(initialSettings.chaos_mode ?? false);
+      setDrawAdjudication(initialSettings.draw_adjudication ?? true);
+      setWhiteStockfishElo(initialSettings.white_stockfish_elo ? String(initialSettings.white_stockfish_elo) : "");
+      setBlackStockfishElo(initialSettings.black_stockfish_elo ? String(initialSettings.black_stockfish_elo) : "");
+      setWhiteSettings({
+        temperature: initialSettings.white_temperature != null ? String(initialSettings.white_temperature) : "",
+        reasoningEffort: initialSettings.white_reasoning_effort || "",
+      });
+      setBlackSettings({
+        temperature: initialSettings.black_temperature != null ? String(initialSettings.black_temperature) : "",
+        reasoningEffort: initialSettings.black_reasoning_effort || "",
+      });
+      if (initialSettings.white_temperature != null || initialSettings.white_reasoning_effort
+          || initialSettings.black_temperature != null || initialSettings.black_reasoning_effort) {
+        setShowAdvanced(true);
+      }
+    }
+  }, [open, initialSettings]);
 
   if (!open) return null;
 
   const whiteIsLLM = whiteType === "llm";
   const blackIsLLM = blackType === "llm";
 
-  // At least one side must be LLM — disable non-LLM options on the other side
   const whiteNonLLMDisabled = !blackIsLLM;
   const blackNonLLMDisabled = !whiteIsLLM;
 
@@ -177,7 +269,6 @@ export default function NewGameDialog({ open, onClose }: Props) {
 
   function handleWhiteTypeChange(t: PlayerType) {
     setWhiteType(t);
-    // If both sides would be non-LLM, force the other to LLM
     if (t !== "llm" && blackType !== "llm") {
       setBlackType("llm");
     }
@@ -220,7 +311,11 @@ export default function NewGameDialog({ open, onClose }: Props) {
         black_is_human: blackType === "human",
         white_is_stockfish: whiteType === "stockfish",
         black_is_stockfish: blackType === "stockfish",
+        white_stockfish_elo: whiteType === "stockfish" && whiteStockfishElo ? parseInt(whiteStockfishElo, 10) : null,
+        black_stockfish_elo: blackType === "stockfish" && blackStockfishElo ? parseInt(blackStockfishElo, 10) : null,
         chaos_mode: chaosMode,
+        move_time_limit: moveTimeLimit ? parseInt(moveTimeLimit, 10) : null,
+        draw_adjudication: drawAdjudication,
       });
       if (resp.player_secret) {
         localStorage.setItem(`chess_player_secret_${resp.id}`, resp.player_secret);
@@ -240,6 +335,7 @@ export default function NewGameDialog({ open, onClose }: Props) {
   }
 
   const hasLLMSide = whiteIsLLM || blackIsLLM;
+  const hasLimitedStockfish = (whiteType === "stockfish" && whiteStockfishElo !== "") || (blackType === "stockfish" && blackStockfishElo !== "");
 
   return (
     <div
@@ -272,6 +368,9 @@ export default function NewGameDialog({ open, onClose }: Props) {
               autoFocus
             />
           )}
+          {whiteType === "stockfish" && (
+            <StockfishEloSelector value={whiteStockfishElo} onChange={setWhiteStockfishElo} />
+          )}
         </div>
 
         <div className="new-game-dialog__field">
@@ -293,6 +392,9 @@ export default function NewGameDialog({ open, onClose }: Props) {
               placeholder="Search models... (e.g. gemini, qwen)"
             />
           )}
+          {blackType === "stockfish" && (
+            <StockfishEloSelector value={blackStockfishElo} onChange={setBlackStockfishElo} />
+          )}
         </div>
 
         <div className="new-game-dialog__field">
@@ -308,6 +410,22 @@ export default function NewGameDialog({ open, onClose }: Props) {
             placeholder="200"
             min="10"
             max="500"
+          />
+        </div>
+
+        <div className="new-game-dialog__field">
+          <label className="new-game-dialog__label" htmlFor="move-time-limit">
+            Time per Move (seconds, optional)
+          </label>
+          <input
+            id="move-time-limit"
+            className="new-game-dialog__input"
+            type="number"
+            value={moveTimeLimit}
+            onChange={(e) => setMoveTimeLimit(e.target.value)}
+            placeholder="No limit"
+            min="5"
+            max="600"
           />
         </div>
 
@@ -328,6 +446,22 @@ export default function NewGameDialog({ open, onClose }: Props) {
             &#9888; Chaos Mode games do not count toward ELO ratings or model statistics.
           </div>
         )}
+
+        {hasLimitedStockfish && (
+          <div className="new-game-dialog__chaos-warning">
+            &#9888; Games with strength-limited Stockfish do not count toward ELO ratings or model statistics.
+          </div>
+        )}
+
+        <label className="new-game-dialog__checkbox-label">
+          <input
+            type="checkbox"
+            className="new-game-dialog__checkbox"
+            checked={drawAdjudication}
+            onChange={(e) => setDrawAdjudication(e.target.checked)}
+          />
+          Draw Adjudication &mdash; Auto-draw if eval within &plusmn;0.20 for 30 moves
+        </label>
 
         {hasLLMSide && (
           <button

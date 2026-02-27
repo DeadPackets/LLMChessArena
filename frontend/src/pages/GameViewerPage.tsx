@@ -19,6 +19,8 @@ import AnalysisPanel from "../components/game/AnalysisPanel";
 import { useChessSound } from "../hooks/useChessSound";
 import type { SoundType } from "../hooks/useChessSound";
 import type { IllegalMoveData } from "../types/websocket";
+import NewGameDialog from "../components/gamelist/NewGameDialog";
+import type { RematchSettings, PlayerType } from "../components/gamelist/NewGameDialog";
 
 function IllegalMoveIndicator({ illegalMoves }: { illegalMoves: IllegalMoveData[] }) {
   const invalidUCI = illegalMoves.filter((m) => m.reason === "Invalid UCI notation").length;
@@ -112,6 +114,8 @@ export default function GameViewerPage() {
     }
   }, [state.status, gameId]);
 
+  const [rematchOpen, setRematchOpen] = useState(false);
+
   const [stopping, setStopping] = useState(false);
   const handleStopGame = useCallback(async () => {
     if (!gameId || !playerSecret || stopping) return;
@@ -184,6 +188,15 @@ export default function GameViewerPage() {
           whiteModel={state.whiteModel}
           blackModel={state.blackModel}
         />
+      )}
+
+      {isCompleted && (
+        <button
+          className="btn btn--primary rematch-btn"
+          onClick={() => setRematchOpen(true)}
+        >
+          Rematch
+        </button>
       )}
 
       <div className="game-viewer__main">
@@ -311,6 +324,31 @@ export default function GameViewerPage() {
           moves={state.moves}
         />
       )}
+
+      <NewGameDialog
+        open={rematchOpen}
+        onClose={() => setRematchOpen(false)}
+        initialSettings={{
+          white_model: state.whiteModel || "",
+          black_model: state.blackModel || "",
+          max_moves: 200,
+          white_temperature: state.whiteTemperature,
+          black_temperature: state.blackTemperature,
+          white_reasoning_effort: state.whiteReasoningEffort,
+          black_reasoning_effort: state.blackReasoningEffort,
+          white_is_human: state.whiteIsHuman,
+          black_is_human: state.blackIsHuman,
+          white_is_stockfish: state.whiteIsStockfish,
+          black_is_stockfish: state.blackIsStockfish,
+          white_stockfish_elo: state.whiteStockfishElo,
+          black_stockfish_elo: state.blackStockfishElo,
+          chaos_mode: state.chaosMode,
+          move_time_limit: state.moveTimeLimit,
+          draw_adjudication: state.drawAdjudication,
+          whiteType: (state.whiteIsHuman ? "human" : state.whiteIsStockfish ? "stockfish" : "llm") as PlayerType,
+          blackType: (state.blackIsHuman ? "human" : state.blackIsStockfish ? "stockfish" : "llm") as PlayerType,
+        }}
+      />
     </div>
   );
 }

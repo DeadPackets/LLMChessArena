@@ -23,7 +23,11 @@ class GameConfig(BaseModel):
     black_is_human: bool = False
     white_is_stockfish: bool = False
     black_is_stockfish: bool = False
+    white_stockfish_elo: int | None = None  # 1320-3190, None = max strength
+    black_stockfish_elo: int | None = None
     chaos_mode: bool = False
+    move_time_limit: float | None = None  # seconds per move, None = no limit
+    draw_adjudication: bool = True  # Auto-draw if eval within ±20cp for 30+ moves
 
 
 class PositionEval(BaseModel):

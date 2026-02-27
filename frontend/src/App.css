@@ -268,6 +268,19 @@ button {
   color: var(--text-muted);
 }
 
+.game-info__meta-badge {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+.rematch-btn {
+  margin: 0.5rem auto;
+  display: block;
+}
+
 /* ─── Status Badges ─── */
 .status-badge {
   display: inline-flex;

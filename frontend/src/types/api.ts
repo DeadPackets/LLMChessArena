@@ -18,7 +18,11 @@ export interface GameSummary {
   black_is_human: boolean;
   white_is_stockfish: boolean;
   black_is_stockfish: boolean;
+  white_stockfish_elo: number | null;
+  black_stockfish_elo: number | null;
   chaos_mode: boolean;
+  move_time_limit: number | null;
+  draw_adjudication: boolean;
 }
 
 export interface MoveDetail {
@@ -154,7 +158,11 @@ export interface CreateGameRequest {
   black_is_human?: boolean;
   white_is_stockfish?: boolean;
   black_is_stockfish?: boolean;
+  white_stockfish_elo?: number | null;
+  black_stockfish_elo?: number | null;
   chaos_mode?: boolean;
+  move_time_limit?: number | null;
+  draw_adjudication?: boolean;
 }
 
 export interface GameCreatedResponse {
