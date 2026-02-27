@@ -46,16 +46,18 @@ export default function TokensPerMoveChart({ moves }: Props) {
           <YAxis tick={{ fill: "#908e87", fontSize: 10 }} tickFormatter={(v: number) => formatTokens(v)} width={40} />
           <Tooltip
             contentStyle={{
-              background: "#14161f",
+              backgroundColor: "#14161f",
               border: "1px solid #272b3d",
               borderRadius: "6px",
               fontSize: "0.75rem",
               fontFamily: "var(--font-mono)",
               color: "#e8e4dd",
             }}
+            labelStyle={{ color: "#e8e4dd" }}
+            itemStyle={{ color: "#c8c4bb" }}
             formatter={(value: number | undefined, name: string | undefined) => [
               formatTokens(value ?? 0),
-              name === "input" ? "Input" : "Output",
+              name === "Input" ? "Input" : "Output",
             ]}
             labelFormatter={(label) => String(label)}
           />
