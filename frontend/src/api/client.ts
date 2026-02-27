@@ -76,12 +76,17 @@ export async function getStatsOverview(): Promise<PlatformOverview> {
   return request<PlatformOverview>("/stats/overview");
 }
 
-// Module-level cache for OpenRouter models (persists across dialog open/close)
+// Module-level cache for OpenRouter models with 5-minute TTL
 let _openRouterCache: OpenRouterModel[] | null = null;
+let _openRouterCacheTime = 0;
+const OPENROUTER_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export async function fetchOpenRouterModels(): Promise<OpenRouterModel[]> {
-  if (_openRouterCache !== null) return _openRouterCache;
+  if (_openRouterCache !== null && Date.now() - _openRouterCacheTime < OPENROUTER_CACHE_TTL_MS) {
+    return _openRouterCache;
+  }
   const models = await request<OpenRouterModel[]>("/openrouter/models");
   _openRouterCache = models;
+  _openRouterCacheTime = Date.now();
   return models;
 }

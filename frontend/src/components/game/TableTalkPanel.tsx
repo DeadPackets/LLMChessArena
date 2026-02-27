@@ -33,48 +33,74 @@ export default function TableTalkPanel({
 }: Props) {
   const chatRef = useRef<HTMLDivElement>(null);
 
-  // Build interleaved chat entries sorted by move number
+  // Build interleaved chat entries sorted by move number.
+  // Groups illegal/chaos moves by (moveNumber, color) to avoid interleaving
+  // issues where a single-pointer approach skips entries when colors alternate.
   const entries = useMemo<ChatEntry[]>(() => {
     const result: ChatEntry[] = [];
 
-    // Tracks which illegal/chaos moves belong before which move number
-    let illegalIdx = 0;
-    let chaosIdx = 0;
+    // Group illegal moves by "moveNumber-color" key for reliable lookup
+    const illegalByKey = new Map<string, IllegalMoveData[]>();
+    for (const im of illegalMoves) {
+      const key = `${im.moveNumber}-${im.color}`;
+      const arr = illegalByKey.get(key);
+      if (arr) arr.push(im);
+      else illegalByKey.set(key, [im]);
+    }
+
+    const chaosByKey = new Map<string, ChaosMoveData[]>();
+    for (const cm of chaosMoves) {
+      const key = `${cm.moveNumber}-${cm.color}`;
+      const arr = chaosByKey.get(key);
+      if (arr) arr.push(cm);
+      else chaosByKey.set(key, [cm]);
+    }
+
+    const usedIllegalKeys = new Set<string>();
+    const usedChaosKeys = new Set<string>();
 
     for (let i = 0; i < moves.length; i++) {
       const m = moves[i];
-      // Insert any illegal moves that happened before or at this move number
-      while (
-        illegalIdx < illegalMoves.length &&
-        illegalMoves[illegalIdx].moveNumber <= m.moveNumber &&
-        illegalMoves[illegalIdx].color === m.color
-      ) {
-        result.push({ type: "illegal", data: illegalMoves[illegalIdx] });
-        illegalIdx++;
+      const key = `${m.moveNumber}-${m.color}`;
+
+      // Insert illegal moves for this (moveNumber, color) before the valid move
+      if (!usedIllegalKeys.has(key)) {
+        usedIllegalKeys.add(key);
+        const illegals = illegalByKey.get(key);
+        if (illegals) {
+          for (const im of illegals) {
+            result.push({ type: "illegal", data: im });
+          }
+        }
       }
-      // Insert any chaos moves that happened at this move number
-      while (
-        chaosIdx < chaosMoves.length &&
-        chaosMoves[chaosIdx].moveNumber <= m.moveNumber &&
-        chaosMoves[chaosIdx].color === m.color
-      ) {
-        result.push({ type: "chaos", data: chaosMoves[chaosIdx] });
-        chaosIdx++;
+
+      // Insert chaos moves for this (moveNumber, color) before the valid move
+      if (!usedChaosKeys.has(key)) {
+        usedChaosKeys.add(key);
+        const chaoses = chaosByKey.get(key);
+        if (chaoses) {
+          for (const cm of chaoses) {
+            result.push({ type: "chaos", data: cm });
+          }
+        }
       }
+
       // Only include moves that have table talk or are chaos moves
       if (m.tableTalk || m.isChaosMove) {
         result.push({ type: "move", index: i, move: m });
       }
     }
 
-    // Remaining illegal moves after all moves
-    while (illegalIdx < illegalMoves.length) {
-      result.push({ type: "illegal", data: illegalMoves[illegalIdx] });
-      illegalIdx++;
+    // Remaining illegal/chaos moves not matched to any valid move
+    for (const [key, illegals] of illegalByKey) {
+      if (!usedIllegalKeys.has(key)) {
+        for (const im of illegals) result.push({ type: "illegal", data: im });
+      }
     }
-    while (chaosIdx < chaosMoves.length) {
-      result.push({ type: "chaos", data: chaosMoves[chaosIdx] });
-      chaosIdx++;
+    for (const [key, chaoses] of chaosByKey) {
+      if (!usedChaosKeys.has(key)) {
+        for (const cm of chaoses) result.push({ type: "chaos", data: cm });
+      }
     }
 
     return result;

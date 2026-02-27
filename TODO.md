@@ -18,15 +18,15 @@
 
 ### Medium Priority
 
-7. **`timeAgo()` in GameCard never refreshes** — "2m ago" stays static because there's no timer re-rendering the component. Games that say "just now" for hours.
+7. **~~`timeAgo()` in GameCard never refreshes~~** ✅ — ~~"2m ago" stays static because there's no timer re-rendering the component. Games that say "just now" for hours.~~
 
-8. **TableTalkPanel interleaving is fragile** — Sorting illegal/chaos moves by `moveNumber <= m.moveNumber && color === m.color` can mismatch if an illegal attempt for move 10 white gets attached to move 10 black.
+8. **~~TableTalkPanel interleaving is fragile~~** ✅ — ~~Sorting illegal/chaos moves by `moveNumber <= m.moveNumber && color === m.color` can mismatch if an illegal attempt for move 10 white gets attached to move 10 black.~~
 
-9. **EvalBar mating score can be misleading** — `mateIn > 0` is always displayed as white advantage regardless of whose turn it is. Should clarify perspective.
+9. **~~EvalBar mating score can be misleading~~** ✅ — ~~`mateIn > 0` is always displayed as white advantage regardless of whose turn it is. Should clarify perspective.~~
 
-10. **OpenRouter model cache is never invalidated** — `fetchOpenRouterModels()` caches module-level in client.ts with no TTL. Models added mid-session are invisible until page refresh.
+10. **~~OpenRouter model cache is never invalidated~~** ✅ — ~~`fetchOpenRouterModels()` caches module-level in client.ts with no TTL. Models added mid-session are invisible until page refresh.~~
 
-11. **Double game creation possible** — No debounce on "Start Game" button. Rapid clicks can fire `createGame()` twice before `submitting` state kicks in.
+11. **~~Double game creation possible~~** ✅ — ~~No debounce on "Start Game" button. Rapid clicks can fire `createGame()` twice before `submitting` state kicks in.~~
 
 12. **~~`_migrate_add_columns` swallows all exceptions~~** ✅ — ~~If a migration fails for a reason other than "column already exists," the error is silently ignored.~~
 

@@ -40,9 +40,14 @@ export default function GameListPage() {
     fetchFirstPage();
   }, [fetchFirstPage]);
 
+  // Tick counter to force timeAgo re-renders even when data hasn't changed
+  const [, setTick] = useState(0);
+
   // Poll for updates every 10s — refresh first page only
+  // Also bumps tick to refresh timeAgo displays
   useEffect(() => {
     const interval = setInterval(async () => {
+      setTick((t) => t + 1);
       try {
         const params = filterRef.current === "all" ? {} : { status: filterRef.current };
         const data = await listGames({ ...params, limit: PAGE_SIZE, offset: 0 });
@@ -54,7 +59,7 @@ export default function GameListPage() {
         setTotalCount(data.total_count);
         setHasMore(data.has_more);
       } catch {
-        // ignore
+        // ignore — tick still forces timeAgo refresh
       }
     }, 10000);
     return () => clearInterval(interval);

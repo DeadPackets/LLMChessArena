@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createGame } from "../../api/client";
 import { useOpenRouterModels } from "../../hooks/useOpenRouterModels";
@@ -158,6 +158,7 @@ export default function NewGameDialog({ open, onClose }: Props) {
   });
   const [chaosMode, setChaosMode] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false); // Guards against rapid double-clicks
   const [error, setError] = useState<string | null>(null);
 
   if (!open) return null;
@@ -191,8 +192,9 @@ export default function NewGameDialog({ open, onClose }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit || submittingRef.current) return;
 
+    submittingRef.current = true;
     setSubmitting(true);
     setError(null);
 
@@ -228,6 +230,7 @@ export default function NewGameDialog({ open, onClose }: Props) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create game");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
