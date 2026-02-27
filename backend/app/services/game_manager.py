@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlmodel import select
+from sqlalchemy import update as sa_update
 
 from app.database import Game, Move, LLMModel, get_session_factory
 from app.models.chess_models import GameConfig, GameResult, MoveRecord
@@ -368,25 +369,29 @@ class GameManager:
             "data": event,
         })
 
-        # Update counters in DB
+        # Update counters in DB using atomic increments to avoid race conditions
         color = event.get("color", "white")
         model_id = event.get("model", "")
         try:
             async with get_session_factory()() as session:
-                game = await session.get(Game, game_id)
-                if game:
-                    if color == "white":
-                        game.white_illegal_moves += 1
-                    else:
-                        game.black_illegal_moves += 1
-                    session.add(game)
-                    await session.commit()
-
-                model = await session.get(LLMModel, model_id)
-                if model:
-                    model.total_illegal_moves += 1
-                    session.add(model)
-                    await session.commit()
+                if color == "white":
+                    await session.exec(  # type: ignore[call-overload]
+                        sa_update(Game)
+                        .where(Game.id == game_id)
+                        .values(white_illegal_moves=Game.white_illegal_moves + 1)
+                    )
+                else:
+                    await session.exec(  # type: ignore[call-overload]
+                        sa_update(Game)
+                        .where(Game.id == game_id)
+                        .values(black_illegal_moves=Game.black_illegal_moves + 1)
+                    )
+                await session.exec(  # type: ignore[call-overload]
+                    sa_update(LLMModel)
+                    .where(LLMModel.id == model_id)
+                    .values(total_illegal_moves=LLMModel.total_illegal_moves + 1)
+                )
+                await session.commit()
         except Exception:
             logger.warning("Failed to update illegal move counters", exc_info=True)
 

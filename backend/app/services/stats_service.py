@@ -184,7 +184,10 @@ async def compute_game_analysis(session: AsyncSession, game_id: str) -> GameAnal
 
 
 async def compute_model_aggregate_stats(session: AsyncSession, model_id: str) -> dict:
-    """Compute aggregate stats for a model across all completed games."""
+    """Compute aggregate stats for a model across all completed games.
+
+    Uses a single JOIN query to fetch games + moves together (avoids N+1).
+    """
     # Get all completed games this model played in
     results = await session.exec(
         select(Game).where(
@@ -198,6 +201,20 @@ async def compute_model_aggregate_stats(session: AsyncSession, model_id: str) ->
     if not games:
         return {"avg_acpl": None, "avg_accuracy": None, "avg_cost_per_game": 0.0, "avg_response_ms": 0.0}
 
+    game_ids = [g.id for g in games]
+    game_color_map = {g.id: ("white" if g.white_model == model_id else "black") for g in games}
+
+    # Single query for ALL moves across ALL matching games
+    move_results = await session.exec(
+        select(Move).where(Move.game_id.in_(game_ids)).order_by(Move.game_id, Move.id)  # type: ignore[union-attr,arg-type]
+    )
+    all_moves = move_results.all()
+
+    # Group moves by game
+    moves_by_game: dict[str, list[Move]] = defaultdict(list)
+    for m in all_moves:
+        moves_by_game[m.game_id].append(m)
+
     all_cp_losses: list[float] = []
     all_move_accs: list[float] = []
     all_win_pcts: list[float] = []
@@ -210,8 +227,8 @@ async def compute_model_aggregate_stats(session: AsyncSession, model_id: str) ->
     wins_as_black = 0
 
     for game in games:
-        is_white = game.white_model == model_id
-        color = "white" if is_white else "black"
+        color = game_color_map[game.id]
+        is_white = color == "white"
 
         if is_white:
             games_as_white += 1
@@ -222,10 +239,7 @@ async def compute_model_aggregate_stats(session: AsyncSession, model_id: str) ->
             if game.outcome and "black" in game.outcome:
                 wins_as_black += 1
 
-        results = await session.exec(
-            select(Move).where(Move.game_id == game.id).order_by(Move.id)  # type: ignore[arg-type]
-        )
-        moves = results.all()
+        moves = moves_by_game.get(game.id, [])
 
         for i, move in enumerate(moves):
             if move.color != color:
@@ -330,7 +344,10 @@ async def compute_head_to_head(session: AsyncSession, model_id: str) -> list[Hea
 
 
 async def compute_platform_overview(session: AsyncSession) -> PlatformOverview:
-    """Compute platform-wide cost/token/performance stats with per-model breakdowns."""
+    """Compute platform-wide cost/token/performance stats with per-model breakdowns.
+
+    Uses a single bulk query for all moves (avoids N+1 per-game queries).
+    """
     # Get all completed games
     results = await session.exec(
         select(Game).where(
@@ -348,9 +365,11 @@ async def compute_platform_overview(session: AsyncSession) -> PlatformOverview:
 
     # Collect all model IDs that participated
     model_ids: set[str] = set()
+    game_map: dict[str, Game] = {}
     for g in games:
         model_ids.add(g.white_model)
         model_ids.add(g.black_model)
+        game_map[g.id] = g
 
     # Per-model aggregation
     breakdowns: dict[str, dict] = {
@@ -371,27 +390,31 @@ async def compute_platform_overview(session: AsyncSession) -> PlatformOverview:
         breakdowns[game.white_model]["games"] += 1
         breakdowns[game.black_model]["games"] += 1
 
-        # Query moves for this game
-        move_results = await session.exec(
-            select(Move).where(Move.game_id == game.id)
-        )
-        moves = move_results.all()
+    # Single query for ALL moves across ALL games
+    game_ids = list(game_map.keys())
+    move_results = await session.exec(
+        select(Move).where(Move.game_id.in_(game_ids))  # type: ignore[union-attr]
+    )
+    all_moves = move_results.all()
 
-        for move in moves:
-            mid = game.white_model if move.color == "white" else game.black_model
-            inp = move.input_tokens or 0
-            out = move.output_tokens or 0
-            cost = move.cost_usd or 0.0
+    for move in all_moves:
+        game = game_map.get(move.game_id)
+        if not game:
+            continue
+        mid = game.white_model if move.color == "white" else game.black_model
+        inp = move.input_tokens or 0
+        out = move.output_tokens or 0
+        cost = move.cost_usd or 0.0
 
-            breakdowns[mid]["cost"] += cost
-            breakdowns[mid]["input_tokens"] += inp
-            breakdowns[mid]["output_tokens"] += out
-            breakdowns[mid]["response_times"].append(move.response_time_ms or 0)
+        breakdowns[mid]["cost"] += cost
+        breakdowns[mid]["input_tokens"] += inp
+        breakdowns[mid]["output_tokens"] += out
+        breakdowns[mid]["response_times"].append(move.response_time_ms or 0)
 
-            total_input_tokens += inp
-            total_output_tokens += out
+        total_input_tokens += inp
+        total_output_tokens += out
 
-    # Look up display names
+    # Look up display names in bulk
     display_names: dict[str, str | None] = {}
     for mid in model_ids:
         model = await session.get(LLMModel, mid)

@@ -131,8 +131,15 @@ async def _migrate_add_columns(conn) -> None:
             await conn.execute(
                 sqlalchemy.text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
             )
-        except Exception:
-            pass  # Column already exists
+        except Exception as e:
+            err_msg = str(e).lower()
+            if "duplicate column" in err_msg or "already exists" in err_msg:
+                pass  # Column already exists — expected
+            else:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Migration failed for %s.%s: %s", table, column, e
+                )
 
 
 def get_session_factory():

@@ -71,6 +71,20 @@ export default function ChessboardPanel({
     setOptimisticFen(null);
   }, [fen]);
 
+  // Revert optimistic FEN if server re-requests a human move (move was rejected)
+  useEffect(() => {
+    if (isHumanTurn && optimisticFen) {
+      setOptimisticFen(null);
+    }
+  }, [isHumanTurn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Safety timeout: revert optimistic FEN after 5s if server hasn't confirmed
+  useEffect(() => {
+    if (!optimisticFen) return;
+    const timer = setTimeout(() => setOptimisticFen(null), 5000);
+    return () => clearTimeout(timer);
+  }, [optimisticFen]);
+
   // Clear selection when turn/position changes
   useEffect(() => {
     setSelectedSquare(null);

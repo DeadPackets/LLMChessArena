@@ -4,17 +4,17 @@
 
 ### High Priority
 
-1. **WebSocket reconnection uses stale state** — `shouldReconnect: () => state.status === "active"` captures a stale closure. If the game ends while disconnected, it won't know to stop reconnecting. Should use a ref.
+1. **~~WebSocket reconnection uses stale state~~** ✅ — ~~`shouldReconnect: () => state.status === "active"` captures a stale closure. If the game ends while disconnected, it won't know to stop reconnecting. Should use a ref.~~
 
 2. **~~Game list has no pagination~~** ✅ — ~~Hardcoded `limit=50` with no offset. Games beyond 50 are invisible. Need infinite scroll or a "load more" button.~~
 
-3. **Human move has no server acknowledgment** — Client shows an optimistic FEN immediately after submitting a move, but if the server rejects it, the board shows a phantom position until the next real move arrives.
+3. **~~Human move has no server acknowledgment~~** ✅ — ~~Client shows an optimistic FEN immediately after submitting a move, but if the server rejects it, the board shows a phantom position until the next real move arrives.~~
 
-4. **No timeout on API fetches** — `client.ts` uses raw `fetch()` with no AbortController timeout. A hung backend makes the entire UI freeze.
+4. **~~No timeout on API fetches~~** ✅ — ~~`client.ts` uses raw `fetch()` with no AbortController timeout. A hung backend makes the entire UI freeze.~~
 
-5. **Stats queries have N+1 problem** — `compute_model_aggregate_stats()` and `compute_platform_overview()` query moves per-game in a loop. A model with 100+ games triggers 100+ DB queries. Should be a single aggregation query with JOINs.
+5. **~~Stats queries have N+1 problem~~** ✅ — ~~`compute_model_aggregate_stats()` and `compute_platform_overview()` query moves per-game in a loop. A model with 100+ games triggers 100+ DB queries. Should be a single aggregation query with JOINs.~~
 
-6. **Illegal move counter increment is not atomic** — `game.white_illegal_moves += 1` in game_manager is a read-modify-write without a lock. Concurrent WebSocket events could lose increments (low probability but real).
+6. **~~Illegal move counter increment is not atomic~~** ✅ — ~~`game.white_illegal_moves += 1` in game_manager is a read-modify-write without a lock. Concurrent WebSocket events could lose increments (low probability but real).~~
 
 ### Medium Priority
 
@@ -28,7 +28,7 @@
 
 11. **Double game creation possible** — No debounce on "Start Game" button. Rapid clicks can fire `createGame()` twice before `submitting` state kicks in.
 
-12. **`_migrate_add_columns` swallows all exceptions** — If a migration fails for a reason other than "column already exists," the error is silently ignored.
+12. **~~`_migrate_add_columns` swallows all exceptions~~** ✅ — ~~If a migration fails for a reason other than "column already exists," the error is silently ignored.~~
 
 ---
 

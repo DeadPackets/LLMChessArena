@@ -1,17 +1,26 @@
 import type { GameDetail, ModelStats, EnhancedModelStats, ModelDetailStats, HeadToHeadRecord, CreateGameRequest, GameCreatedResponse, PlatformOverview, OpenRouterModel, PaginatedGamesResponse } from "../types/api";
 
 const BASE = "/api";
+const DEFAULT_TIMEOUT_MS = 15_000;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`${res.status}: ${body}`);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      headers: { "Content-Type": "application/json" },
+      ...init,
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`${res.status}: ${body}`);
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timeoutId);
   }
-  return res.json();
 }
 
 export async function listGames(params?: {

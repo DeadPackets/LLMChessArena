@@ -1,4 +1,4 @@
-import { useReducer, useCallback, useEffect } from "react";
+import { useReducer, useCallback, useEffect, useRef } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
 import type { GameState, GameAction, MoveData, PositionEval, GameOverData, IllegalMoveData, ChaosMoveData } from "../types/websocket";
 
@@ -291,6 +291,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 export function useGameWebSocket(gameId: string) {
   const [state, dispatch] = useReducer(gameReducer, initialState);
 
+  // Use a ref for status to avoid stale closures in shouldReconnect
+  const statusRef = useRef(state.status);
+  statusRef.current = state.status;
+
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const wsUrl = `${protocol}//${window.location.host}/ws/games/${gameId}`;
 
@@ -347,7 +351,7 @@ export function useGameWebSocket(gameId: string) {
         // ignore malformed messages
       }
     },
-    shouldReconnect: () => state.status === "active",
+    shouldReconnect: () => statusRef.current === "active" || statusRef.current === null,
     reconnectAttempts: 10,
     reconnectInterval: 3000,
   });
