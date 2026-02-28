@@ -35,36 +35,22 @@ function countPiecesInFen(fen: string): Record<string, number> {
   return counts;
 }
 
-/** Group consecutive same-type pieces: ["p","p","n"] → [{piece:"p",count:2},{piece:"n",count:1}] */
-function groupPieces(pieces: string[]): { piece: string; count: number }[] {
-  const groups: { piece: string; count: number }[] = [];
-  for (const p of pieces) {
-    const last = groups[groups.length - 1];
-    if (last && last.piece === p) {
-      last.count++;
-    } else {
-      groups.push({ piece: p, count: 1 });
-    }
-  }
-  return groups;
-}
-
 export default function CapturedMaterial({ fen }: Props) {
-  const { whiteCapturedGroups, blackCapturedGroups, materialDiff } = useMemo(() => {
+  const { capturedBlack, capturedWhite, materialDiff } = useMemo(() => {
     const current = countPiecesInFen(fen);
 
-    // Pieces captured BY white = black pieces missing
-    const capturedByWhite: string[] = [];
+    // Black pieces captured (by white) — shown on left, growing right
+    const capturedBlack: string[] = [];
     for (const piece of BLACK_ORDER) {
       const missing = (STARTING_PIECES[piece] || 0) - (current[piece] || 0);
-      for (let i = 0; i < missing; i++) capturedByWhite.push(piece);
+      for (let i = 0; i < missing; i++) capturedBlack.push(piece);
     }
 
-    // Pieces captured BY black = white pieces missing
-    const capturedByBlack: string[] = [];
+    // White pieces captured (by black) — shown on right, growing left
+    const capturedWhite: string[] = [];
     for (const piece of WHITE_ORDER) {
       const missing = (STARTING_PIECES[piece] || 0) - (current[piece] || 0);
-      for (let i = 0; i < missing; i++) capturedByBlack.push(piece);
+      for (let i = 0; i < missing; i++) capturedWhite.push(piece);
     }
 
     const whiteMat = WHITE_ORDER.reduce(
@@ -75,42 +61,39 @@ export default function CapturedMaterial({ fen }: Props) {
     );
 
     return {
-      whiteCapturedGroups: groupPieces(capturedByWhite),
-      blackCapturedGroups: groupPieces(capturedByBlack),
+      capturedBlack,
+      capturedWhite,
       materialDiff: whiteMat - blackMat,
     };
   }, [fen]);
 
-  const hasCaptured = whiteCapturedGroups.length > 0 || blackCapturedGroups.length > 0;
+  const hasCaptured = capturedBlack.length > 0 || capturedWhite.length > 0;
   if (!hasCaptured) return null;
 
   return (
     <div className="captured-mat">
-      {/* Black captured white pieces */}
-      <div className="captured-mat__side">
-        {blackCapturedGroups.map((g, i) => (
-          <span key={i} className="captured-mat__group captured-mat__group--white">
-            {Array.from({ length: g.count }, (_, j) => (
-              <span key={j} className="captured-mat__piece">{WHITE_UNICODE[g.piece]}</span>
-            ))}
-          </span>
-        ))}
-        {materialDiff < 0 && (
-          <span className="captured-mat__diff">+{Math.abs(materialDiff)}</span>
-        )}
-      </div>
-      {/* White captured black pieces */}
-      <div className="captured-mat__side">
-        {whiteCapturedGroups.map((g, i) => (
-          <span key={i} className="captured-mat__group captured-mat__group--black">
-            {Array.from({ length: g.count }, (_, j) => (
-              <span key={j} className="captured-mat__piece">{BLACK_UNICODE[g.piece]}</span>
-            ))}
+      {/* Left side: black pieces (captured by white), grows left→right */}
+      <div className="captured-mat__left">
+        {capturedBlack.map((p, i) => (
+          <span key={i} className="captured-mat__piece captured-mat__piece--black">
+            {BLACK_UNICODE[p]}
           </span>
         ))}
         {materialDiff > 0 && (
           <span className="captured-mat__diff">+{materialDiff}</span>
         )}
+      </div>
+
+      {/* Right side: white pieces (captured by black), grows right→left */}
+      <div className="captured-mat__right">
+        {materialDiff < 0 && (
+          <span className="captured-mat__diff">+{Math.abs(materialDiff)}</span>
+        )}
+        {capturedWhite.map((p, i) => (
+          <span key={i} className="captured-mat__piece captured-mat__piece--white">
+            {WHITE_UNICODE[p]}
+          </span>
+        ))}
       </div>
     </div>
   );
