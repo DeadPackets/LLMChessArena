@@ -125,18 +125,40 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const lastIdx = moves.length - 1;
       const lastFen = moves.length > 0 ? moves[lastIdx].fenAfter : STARTING_FEN;
       const opening = findLastOpening(moves);
+      const status = d.status as GameState["status"];
+
+      // Build gameOverData for completed games so the banner + rematch show
+      let gameOverData: GameOverData | null = null;
+      if (status === "completed" && d.outcome) {
+        let totalInput = 0, totalOutput = 0, totalCost = 0;
+        for (const m of moves) {
+          totalInput += m.inputTokens ?? 0;
+          totalOutput += m.outputTokens ?? 0;
+          totalCost += m.costUsd ?? 0;
+        }
+        gameOverData = {
+          outcome: d.outcome as string,
+          termination: (d.termination as string) ?? "",
+          totalMoves: moves.length,
+          totalCostUsd: totalCost,
+          totalInputTokens: totalInput,
+          totalOutputTokens: totalOutput,
+          pgn: "",
+        };
+      }
+
       return {
         ...state,
         gameId: d.game_id as string,
         whiteModel: d.white_model as string,
         blackModel: d.black_model as string,
-        status: d.status as GameState["status"],
+        status,
         outcome: (d.outcome as string | null) ?? null,
         termination: (d.termination as string | null) ?? null,
         moves,
         currentFen: lastFen,
         selectedIndex: lastIdx,
-        autoFollow: d.status === "active",
+        autoFollow: status === "active",
         openingEco: opening?.eco ?? null,
         openingName: opening?.name ?? null,
         whiteTemperature: (d.white_temperature as number | null) ?? null,
@@ -155,6 +177,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         drawAdjudication: (d.draw_adjudication as boolean) ?? true,
         spectatorCount: (d.spectator_count as number) ?? 0,
         statusMessage: null,
+        gameOverData,
       };
     }
 

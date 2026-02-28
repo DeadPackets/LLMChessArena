@@ -4,6 +4,7 @@ interface Props {
   data: GameOverData;
   whiteModel: string | null;
   blackModel: string | null;
+  onRematch?: () => void;
 }
 
 function formatModelName(name: string | null): string {
@@ -35,7 +36,7 @@ function formatTermination(t: string): string {
   return t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export default function GameOverBanner({ data, whiteModel, blackModel }: Props) {
+export default function GameOverBanner({ data, whiteModel, blackModel, onRematch }: Props) {
   const { title, cls } = outcomeDisplay(data.outcome, whiteModel, blackModel);
 
   return (
@@ -64,6 +65,11 @@ export default function GameOverBanner({ data, whiteModel, blackModel }: Props) 
           </div>
         )}
       </div>
+      {onRematch && (
+        <button className="btn btn--primary game-over-banner__rematch" onClick={onRematch}>
+          Rematch
+        </button>
+      )}
     </div>
   );
 }

@@ -179,6 +179,14 @@ button {
   align-items: stretch;
 }
 
+.game-viewer__controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+}
+
 .game-viewer__moves-col {
   display: flex;
   flex-direction: column;
@@ -274,9 +282,8 @@ button {
   border-radius: 4px;
 }
 
-.rematch-btn {
-  margin: 0.5rem auto;
-  display: block;
+.game-over-banner__rematch {
+  margin-top: 0.8rem;
 }
 
 /* ─── Status Badges ─── */
@@ -491,9 +498,8 @@ button {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.5rem;
+  padding: 0.2rem 0;
   justify-content: center;
-  flex-shrink: 0;
 }
 
 .game-controls__btn {

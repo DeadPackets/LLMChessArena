@@ -315,20 +315,12 @@ export default function GameViewerPage() {
           data={state.gameOverData}
           whiteModel={state.whiteModel}
           blackModel={state.blackModel}
+          onRematch={isCompleted ? () => setRematchOpen(true) : undefined}
         />
       )}
 
-      {isCompleted && (
-        <button
-          className="btn btn--primary rematch-btn"
-          onClick={() => setRematchOpen(true)}
-        >
-          Rematch
-        </button>
-      )}
-
       <div className="game-viewer__main">
-        {/* Column 1 (50%): Board + eval + theme + captured + engine lines */}
+        {/* Column 1: Board + eval bar + merged controls bar */}
         <div className="game-viewer__board-col-wrap">
           <div className="game-viewer__board-col">
             <EvalBar {...evalData} />
@@ -344,23 +336,36 @@ export default function GameViewerPage() {
               customPieces={customPieces}
             />
           </div>
-          <BoardThemeSelector
-            activeBoardColor={theme.boardColor}
-            activePieceStyle={theme.pieceStyle}
-            onBoardColorChange={setBoardColor}
-            onPieceStyleChange={setPieceStyle}
-          />
-          <CapturedMaterial fen={state.currentFen} />
-
-          {selectedMove?.evalAfter?.engine_lines && selectedMove.evalAfter.engine_lines.length > 0 && (
-            <EngineLinesPanel
-              lines={selectedMove.evalAfter.engine_lines}
-              depth={selectedMove.evalAfter.depth}
+          <div className="game-viewer__controls-bar">
+            <GameControls
+              canGoFirst={state.selectedIndex > -1}
+              canGoPrev={state.selectedIndex > -1}
+              canGoNext={state.selectedIndex < state.moves.length - 1}
+              canGoLast={state.selectedIndex < state.moves.length - 1}
+              autoFollow={state.autoFollow}
+              isLive={isLive}
+              onNavigate={navigate}
+              onToggleAutoFollow={toggleAutoFollow}
+              isPlaying={isCompleted ? replay.isPlaying : undefined}
+              playSpeed={isCompleted ? replay.playSpeed : undefined}
+              onTogglePlay={isCompleted ? replay.togglePlay : undefined}
+              onChangeSpeed={isCompleted ? replay.setPlaySpeed : undefined}
+              pgn={state.gameOverData?.pgn || gameDetail?.pgn}
+              gameId={gameId}
+              muted={muted}
+              onToggleMute={toggleMute}
+              onShowShortcuts={toggleShortcuts}
             />
-          )}
+            <BoardThemeSelector
+              activeBoardColor={theme.boardColor}
+              activePieceStyle={theme.pieceStyle}
+              onBoardColorChange={setBoardColor}
+              onPieceStyleChange={setPieceStyle}
+            />
+          </div>
         </div>
 
-        {/* Column 2 (25%): Eval graph + move list + controls */}
+        {/* Column 2: Eval graph + engine lines + captured material + move list */}
         <div className="game-viewer__moves-col">
           {state.moves.length > 0 && (
             <WinProbGraph
@@ -371,34 +376,23 @@ export default function GameViewerPage() {
             />
           )}
 
+          {selectedMove?.evalAfter?.engine_lines && selectedMove.evalAfter.engine_lines.length > 0 && (
+            <EngineLinesPanel
+              lines={selectedMove.evalAfter.engine_lines}
+              depth={selectedMove.evalAfter.depth}
+            />
+          )}
+
+          <CapturedMaterial fen={state.currentFen} />
+
           <MoveList
             moves={state.moves}
             selectedIndex={state.selectedIndex}
             onSelect={selectMove}
           />
-
-          <GameControls
-            canGoFirst={state.selectedIndex > -1}
-            canGoPrev={state.selectedIndex > -1}
-            canGoNext={state.selectedIndex < state.moves.length - 1}
-            canGoLast={state.selectedIndex < state.moves.length - 1}
-            autoFollow={state.autoFollow}
-            isLive={isLive}
-            onNavigate={navigate}
-            onToggleAutoFollow={toggleAutoFollow}
-            isPlaying={isCompleted ? replay.isPlaying : undefined}
-            playSpeed={isCompleted ? replay.playSpeed : undefined}
-            onTogglePlay={isCompleted ? replay.togglePlay : undefined}
-            onChangeSpeed={isCompleted ? replay.setPlaySpeed : undefined}
-            pgn={state.gameOverData?.pgn}
-            gameId={gameId}
-            muted={muted}
-            onToggleMute={toggleMute}
-            onShowShortcuts={toggleShortcuts}
-          />
         </div>
 
-        {/* Column 3 (25%): Commentary + table talk + status/controls */}
+        {/* Column 3: Commentary + table talk + status/controls */}
         <div className="game-viewer__info-col">
           <NarrationPanel move={selectedMove} />
 
