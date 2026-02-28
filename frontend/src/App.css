@@ -162,7 +162,7 @@ button {
 
 .game-viewer__main {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: auto 1fr 1fr;
   gap: 0.75rem;
   align-items: start;
 }
@@ -2339,10 +2339,44 @@ button {
 
 /* Board theme selector */
 .board-theme-selector {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.board-theme-selector__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.board-theme-selector__toggle:hover {
+  color: var(--text-secondary);
+  border-color: var(--border-light);
+}
+
+.board-theme-selector__dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  padding: 0.4rem 0;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  margin-top: 0.25rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  white-space: nowrap;
 }
 
 .board-theme-selector__row {
@@ -2365,7 +2399,6 @@ button {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  flex-wrap: wrap;
 }
 
 .board-theme-selector__pieces {
@@ -2376,8 +2409,8 @@ button {
 }
 
 .board-theme-selector__swatch {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   padding: 2px;
   border-radius: 50%;
   border: 2px solid transparent;
