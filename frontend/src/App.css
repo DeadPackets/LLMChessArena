@@ -162,7 +162,7 @@ button {
 
 .game-viewer__main {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: 2fr 1fr 1fr;
   gap: 0.75rem;
   align-items: start;
 }
@@ -177,6 +177,14 @@ button {
   display: flex;
   gap: 0.4rem;
   align-items: stretch;
+}
+
+.game-viewer__moves-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  height: 580px;
+  overflow: hidden;
 }
 
 .game-viewer__info-col {
@@ -384,8 +392,7 @@ button {
   overflow-y: auto;
   font-family: var(--font-mono);
   font-size: 0.82rem;
-  min-height: 150px;
-  max-height: 260px;
+  min-height: 0;
 }
 
 .move-list::-webkit-scrollbar { width: 5px; }
@@ -2950,6 +2957,15 @@ button {
   .chessboard-panel__board-container {
     width: 100% !important;
     max-width: 100%;
+  }
+
+  .game-viewer__moves-col {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    overflow: visible;
+    box-sizing: border-box;
+    padding: 0 0.25rem;
   }
 
   .game-viewer__info-col {

@@ -328,6 +328,7 @@ export default function GameViewerPage() {
       )}
 
       <div className="game-viewer__main">
+        {/* Column 1 (50%): Board + eval + theme + captured + engine lines */}
         <div className="game-viewer__board-col-wrap">
           <div className="game-viewer__board-col">
             <EvalBar {...evalData} />
@@ -359,7 +360,17 @@ export default function GameViewerPage() {
           )}
         </div>
 
-        <div className="game-viewer__info-col">
+        {/* Column 2 (25%): Eval graph + move list + controls */}
+        <div className="game-viewer__moves-col">
+          {state.moves.length > 0 && (
+            <WinProbGraph
+              moves={state.moves}
+              selectedIndex={state.selectedIndex}
+              onSelectMove={selectMove}
+              criticalMoments={gameDetail?.analysis?.critical_moments}
+            />
+          )}
+
           <MoveList
             moves={state.moves}
             selectedIndex={state.selectedIndex}
@@ -385,16 +396,10 @@ export default function GameViewerPage() {
             onToggleMute={toggleMute}
             onShowShortcuts={toggleShortcuts}
           />
+        </div>
 
-          {state.moves.length > 0 && (
-            <WinProbGraph
-              moves={state.moves}
-              selectedIndex={state.selectedIndex}
-              onSelectMove={selectMove}
-              criticalMoments={gameDetail?.analysis?.critical_moments}
-            />
-          )}
-
+        {/* Column 3 (25%): Commentary + table talk + status/controls */}
+        <div className="game-viewer__info-col">
           <NarrationPanel move={selectedMove} />
 
           <TableTalkPanel
