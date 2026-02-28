@@ -227,14 +227,6 @@ export default function GameListPage() {
           <option value="black">Black wins</option>
           <option value="draw">Draw</option>
         </select>
-        <input
-          className="game-list-page__search-input game-list-page__search-input--small"
-          type="text"
-          placeholder="ECO (e.g. B20)"
-          value={opening}
-          onChange={(e) => setOpening(e.target.value.toUpperCase())}
-          maxLength={5}
-        />
         {hasActiveFilters && (
           <button className="btn btn--ghost btn--sm" onClick={clearFilters}>
             Clear

@@ -763,11 +763,6 @@ button {
   border-color: var(--amber-dim);
 }
 
-.game-list-page__search-input--small {
-  flex: 0;
-  min-width: 0;
-  width: 7rem;
-}
 
 .game-list-page__filter-select {
   padding: 0.5rem 0.75rem;
