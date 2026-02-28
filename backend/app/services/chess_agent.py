@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 import chess
 from pydantic_ai import Agent
 
+from app.config import NARRATION_CHAR_CAP
 from app.models.chess_models import ChessMove
 
 
@@ -81,8 +82,8 @@ NOT valid: Nf3 (that's SAN), e2-e4 (no hyphens), E2E4 (lowercase only), 0-0 (use
 ## Output
 
 - **move**: Your move in UCI notation.
-- **narration**: One short sentence about your move (max 128 chars). Be specific about what you're doing tactically.
-- **table_talk**: A short, natural reaction to the current position (max 128 chars). Rules:
+- **narration**: One short sentence about your move (max %(narration_cap)d chars). Be specific about what you're doing tactically.
+- **table_talk**: A short, natural reaction to the current position (max %(narration_cap)d chars). Rules:
   - React HONESTLY to what's happening. If you're losing, acknowledge it. If you blundered, admit it.
   - If your opponent blundered, point out what went wrong. If they played well, give credit.
   - Match your tone to the situation: confident when ahead, worried when behind, impressed by good moves, frustrated by your own mistakes.
@@ -95,7 +96,7 @@ NOT valid: Nf3 (that's SAN), e2-e4 (no hyphens), E2E4 (lowercase only), 0-0 (use
 chess_agent = Agent(
     model=None,  # Set at call time per player
     output_type=ChessMove,
-    system_prompt=SYSTEM_PROMPT,
+    system_prompt=SYSTEM_PROMPT % {"narration_cap": NARRATION_CHAR_CAP},
     deps_type=ChessGameContext,
 )
 

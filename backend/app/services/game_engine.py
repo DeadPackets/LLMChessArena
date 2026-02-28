@@ -10,7 +10,7 @@ import chess.pgn
 
 from pydantic_ai.settings import ModelSettings
 
-from app.config import MAX_MOVES_PER_SIDE, MAX_CONSECUTIVE_ILLEGAL_MOVES
+from app.config import MAX_MOVES_PER_SIDE, MAX_CONSECUTIVE_ILLEGAL_MOVES, DRAW_ADJUDICATION_CP, DRAW_ADJUDICATION_MOVES
 from app.models.chess_models import ChessMove, GameConfig, GameResult, MoveRecord, PositionEval
 from app.services.chess_agent import chess_agent, ChessGameContext, build_user_prompt
 from app.services.move_classifier import classify_move, MoveClassification, CLASSIFICATION_SYMBOLS
@@ -20,8 +20,8 @@ from app.services.stockfish_player_service import StockfishPlayerService
 
 logger = logging.getLogger(__name__)
 
-DRAW_ADJUDICATION_CP_THRESHOLD = 20   # centipawns (±0.20)
-DRAW_ADJUDICATION_MOVE_THRESHOLD = 30  # consecutive moves
+DRAW_ADJUDICATION_CP_THRESHOLD = DRAW_ADJUDICATION_CP
+DRAW_ADJUDICATION_MOVE_THRESHOLD = DRAW_ADJUDICATION_MOVES
 
 
 class GameEngine:

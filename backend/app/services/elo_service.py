@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-K_FACTOR = 32
+from app.config import ELO_K_FACTOR
 
 
 def calculate_elo_change(
@@ -19,6 +19,6 @@ def calculate_elo_change(
     expected_a = 1.0 / (1.0 + 10 ** ((rating_b - rating_a) / 400))
     expected_b = 1.0 - expected_a
 
-    new_a = rating_a + K_FACTOR * (score_a - expected_a)
-    new_b = rating_b + K_FACTOR * ((1 - score_a) - expected_b)
+    new_a = rating_a + ELO_K_FACTOR * (score_a - expected_a)
+    new_b = rating_b + ELO_K_FACTOR * ((1 - score_a) - expected_b)
     return round(new_a, 1), round(new_b, 1)

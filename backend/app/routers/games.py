@@ -156,6 +156,13 @@ async def list_games(
     )
 
 
+@router.get("/queue-status")
+async def queue_status(request: Request):
+    """Return the current game queue state."""
+    manager = request.app.state.game_manager
+    return manager.queue_status()
+
+
 @router.get("/{game_id}", response_model=GameDetail)
 async def get_game(game_id: str, session: AsyncSession = Depends(get_session)):
     """Get full game details including all moves and evaluations."""

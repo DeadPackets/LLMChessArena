@@ -7,7 +7,7 @@ import time
 import chess
 import chess.engine
 
-from app.config import STOCKFISH_PATH
+from app.config import STOCKFISH_PATH, STOCKFISH_THREADS, STOCKFISH_HASH_MB
 from app.models.chess_models import EngineLine, PositionEval
 
 logger = logging.getLogger(__name__)
@@ -25,10 +25,10 @@ class StockfishService:
         logger.info("Starting Stockfish at %s", self.path)
         self._transport, self._engine = await chess.engine.popen_uci(self.path)
         await self._engine.configure({
-            "Threads": 2,
-            "Hash": 128,
+            "Threads": STOCKFISH_THREADS,
+            "Hash": STOCKFISH_HASH_MB,
         })
-        logger.info("Stockfish ready (Threads=2, Hash=128MB)")
+        logger.info("Stockfish ready (Threads=%d, Hash=%dMB)", STOCKFISH_THREADS, STOCKFISH_HASH_MB)
 
     async def stop(self) -> None:
         if self._engine:

@@ -1,14 +1,9 @@
 import { Link } from "react-router-dom";
 import type { HeadToHeadRecord } from "../../types/api";
+import { formatModelName } from "../../utils/formatModel";
 
 interface Props {
   records: HeadToHeadRecord[];
-}
-
-function formatModelName(id: string, displayName: string | null): string {
-  if (displayName) return displayName;
-  const parts = id.split("/");
-  return parts[parts.length - 1];
 }
 
 export default function HeadToHeadTable({ records }: Props) {

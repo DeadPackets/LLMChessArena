@@ -2,6 +2,7 @@ import { Routes, Route, useParams } from "react-router-dom";
 import Layout from "./components/layout/Layout";
 import GameListPage from "./pages/GameListPage";
 import GameViewerPage from "./pages/GameViewerPage";
+import GameEmbedPage from "./pages/GameEmbedPage";
 import LeaderboardPage from "./pages/LeaderboardPage";
 import ModelDetailPage from "./pages/ModelDetailPage";
 import CostDashboardPage from "./pages/CostDashboardPage";
@@ -17,6 +18,9 @@ function GameViewerPageKeyed() {
 export default function App() {
   return (
     <Routes>
+      {/* Embed route — no Layout wrapper (no header/nav) */}
+      <Route path="/embed/:gameId" element={<GameEmbedPage />} />
+
       <Route element={<Layout />}>
         <Route path="/" element={<GameListPage />} />
         <Route path="/game/:gameId" element={<GameViewerPageKeyed />} />

@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { getStatsOverview } from "../api/client";
 import type { PlatformOverview, ModelCostBreakdown } from "../types/api";
+import { formatModelName } from "../utils/formatModel";
 
 type SortKey = "cost" | "tokens" | "games" | "response";
 type SortDir = "asc" | "desc";
@@ -25,12 +26,6 @@ const CHART_COLORS = [
   "#3dc7c2",
   "#d46b8f",
 ];
-
-function formatModelName(id: string, displayName: string | null): string {
-  if (displayName) return displayName;
-  const parts = id.split("/");
-  return parts[parts.length - 1];
-}
 
 function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;

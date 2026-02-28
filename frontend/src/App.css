@@ -3287,3 +3287,154 @@ button {
     padding: 0.35rem;
   }
 }
+
+/* ── Game Embed Page ── */
+
+.game-embed {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: "Inter", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+.game-embed--loading,
+.game-embed--error {
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.game-embed__error-text {
+  font-size: 1rem;
+  color: var(--text-secondary);
+}
+
+.game-embed__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.75rem;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  min-height: 0;
+}
+
+.game-embed__players {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.game-embed__piece {
+  font-size: 1rem;
+}
+
+.game-embed__piece--white {
+  color: var(--text-primary);
+}
+
+.game-embed__piece--black {
+  color: var(--amber);
+}
+
+.game-embed__vs {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 0.75rem;
+}
+
+.game-embed__result {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--amber);
+}
+
+.game-embed__moves {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.game-embed__main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.game-embed__board {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+}
+
+.game-embed__sidebar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  max-width: 280px;
+  overflow: hidden;
+}
+
+.game-embed__sidebar .move-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.game-embed__sidebar .game-controls {
+  flex-shrink: 0;
+  padding: 0.3rem 0.5rem;
+}
+
+.game-embed__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.75rem;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.game-embed__link {
+  color: var(--amber);
+  text-decoration: none;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.game-embed__link:hover {
+  text-decoration: underline;
+}
+
+.game-embed__branding {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+/* Responsive: stack vertically on small embeds */
+@media (max-width: 600px) {
+  .game-embed__main {
+    flex-direction: column;
+  }
+
+  .game-embed__sidebar {
+    max-width: none;
+    max-height: 200px;
+  }
+}

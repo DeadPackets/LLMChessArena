@@ -3,12 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { compareModels, getLeaderboard } from "../api/client";
 import type { HeadToHeadComparison, EnhancedModelStats } from "../types/api";
 import GameCard from "../components/gamelist/GameCard";
-
-function shortName(id: string, display: string | null): string {
-  if (display) return display;
-  const parts = id.split("/");
-  return parts[parts.length - 1];
-}
+import { formatModelName } from "../utils/formatModel";
 
 export default function HeadToHeadPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -60,7 +55,7 @@ export default function HeadToHeadPage() {
         >
           <option value="">Select Model A</option>
           {models.map((m) => (
-            <option key={m.id} value={m.id}>{shortName(m.id, m.display_name)} ({Math.round(m.elo_rating)})</option>
+            <option key={m.id} value={m.id}>{formatModelName(m.id, m.display_name)} ({Math.round(m.elo_rating)})</option>
           ))}
         </select>
         <span className="h2h-page__vs">vs</span>
@@ -71,7 +66,7 @@ export default function HeadToHeadPage() {
         >
           <option value="">Select Model B</option>
           {models.map((m) => (
-            <option key={m.id} value={m.id}>{shortName(m.id, m.display_name)} ({Math.round(m.elo_rating)})</option>
+            <option key={m.id} value={m.id}>{formatModelName(m.id, m.display_name)} ({Math.round(m.elo_rating)})</option>
           ))}
         </select>
         <button
@@ -98,7 +93,7 @@ export default function HeadToHeadPage() {
           {/* Score banner */}
           <div className="h2h-page__score panel">
             <div className="h2h-page__score-side">
-              <div className="h2h-page__score-name">{shortName(comparison.model_a, comparison.model_a_display)}</div>
+              <div className="h2h-page__score-name">{formatModelName(comparison.model_a, comparison.model_a_display)}</div>
               <div className="h2h-page__score-elo">{Math.round(comparison.model_a_elo)} ELO</div>
             </div>
             <div className="h2h-page__score-center">
@@ -120,7 +115,7 @@ export default function HeadToHeadPage() {
               <div className="h2h-page__score-total">{total} game{total !== 1 ? "s" : ""}</div>
             </div>
             <div className="h2h-page__score-side">
-              <div className="h2h-page__score-name">{shortName(comparison.model_b, comparison.model_b_display)}</div>
+              <div className="h2h-page__score-name">{formatModelName(comparison.model_b, comparison.model_b_display)}</div>
               <div className="h2h-page__score-elo">{Math.round(comparison.model_b_elo)} ELO</div>
             </div>
           </div>

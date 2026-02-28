@@ -6,6 +6,8 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.middleware.rate_limiter import check_ws_rate_limit
+
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
@@ -84,6 +86,13 @@ async def game_websocket(websocket: WebSocket, game_id: str):
       3. Client can send: human_move, resign messages
       4. Connection closes after game_over or on client disconnect
     """
+    # Rate limit check before accepting
+    if not await check_ws_rate_limit(websocket):
+        await websocket.accept()
+        await websocket.send_json({"type": "error", "data": {"message": "Rate limited"}})
+        await websocket.close(code=4029)
+        return
+
     await websocket.accept()
     logger.info("WebSocket connected: game=%s, client=%s", game_id, websocket.client)
 

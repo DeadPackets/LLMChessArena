@@ -1,16 +1,11 @@
 import type { GameOverData } from "../../types/websocket";
+import { formatModelName } from "../../utils/formatModel";
 
 interface Props {
   data: GameOverData;
   whiteModel: string | null;
   blackModel: string | null;
   onRematch?: () => void;
-}
-
-function formatModelName(name: string | null): string {
-  if (!name) return "Unknown";
-  const parts = name.split("/");
-  return parts[parts.length - 1];
 }
 
 function outcomeDisplay(outcome: string, whiteModel: string | null, blackModel: string | null) {

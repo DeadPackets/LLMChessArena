@@ -1,26 +1,9 @@
 import { Link } from "react-router-dom";
 import type { GameSummary } from "../../types/api";
+import { formatModelLabel } from "../../utils/formatModel";
 
 interface Props {
   game: GameSummary;
-}
-
-function formatModelName(name: string): string {
-  const parts = name.split("/");
-  return parts[parts.length - 1];
-}
-
-function formatModelLabel(
-  name: string,
-  reasoningEffort: string | null,
-  temperature: number | null,
-): string {
-  let label = formatModelName(name);
-  const suffixes: string[] = [];
-  if (reasoningEffort) suffixes.push(`${reasoningEffort}`);
-  if (temperature !== null) suffixes.push(`temp: ${temperature.toFixed(1)}`);
-  if (suffixes.length > 0) label += ` (${suffixes.join(", ")})`;
-  return label;
 }
 
 function timeAgo(dateStr: string | null): string {

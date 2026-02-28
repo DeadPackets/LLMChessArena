@@ -3,6 +3,7 @@ import type { GameAnalysis, CriticalMoment } from "../../types/api";
 import type { MoveData } from "../../types/websocket";
 import ClassificationBadge from "../shared/ClassificationBadge";
 import TokensPerMoveChart from "./TokensPerMoveChart";
+import { formatModelName } from "../../utils/formatModel";
 
 interface Props {
   analysis: GameAnalysis;
@@ -12,12 +13,6 @@ interface Props {
   moves?: MoveData[];
   onExport?: () => void;
   exporting?: boolean;
-}
-
-function formatModelName(name: string | null): string {
-  if (!name) return "Unknown";
-  const parts = name.split("/");
-  return parts[parts.length - 1];
 }
 
 function accuracyClass(acc: number | null): string {

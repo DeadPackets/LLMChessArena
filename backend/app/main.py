@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -11,6 +12,7 @@ from pathlib import Path
 
 from app.config import STOCKFISH_PATH
 from app.database import init_db
+from app.middleware.rate_limiter import RateLimitMiddleware, periodic_cleanup
 from app.services.game_manager import GameManager
 from app.services.opening_detector import OpeningDetector
 from app.services.stockfish_service import StockfishService
@@ -57,6 +59,9 @@ async def lifespan(app: FastAPI):
     # Clean up any games orphaned by a previous restart
     await game_manager.recover_orphaned_games()
 
+    # Start rate limiter cleanup task
+    cleanup_task = asyncio.create_task(periodic_cleanup())
+
     # Store in app state for access by routers
     app.state.stockfish = stockfish
     app.state.opening_detector = opening_detector
@@ -65,18 +70,25 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
     await stockfish.stop()
     logger.info("Stockfish stopped")
 
 
 app = FastAPI(title="LLM Chess Arena", version="0.1.0", lifespan=lifespan)
 
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
 )
 
 # Include routers

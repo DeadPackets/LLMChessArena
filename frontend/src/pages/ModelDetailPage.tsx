@@ -6,14 +6,9 @@ import GameCard from "../components/gamelist/GameCard";
 import HeadToHeadTable from "../components/model/HeadToHeadTable";
 import EloHistoryChart from "../components/model/EloHistoryChart";
 import ClassificationBadge from "../components/shared/ClassificationBadge";
+import { formatModelName } from "../utils/formatModel";
 
 const CLASS_ORDER = ["best", "excellent", "good", "inaccuracy", "mistake", "blunder"];
-
-function formatModelName(id: string, displayName: string | null): string {
-  if (displayName) return displayName;
-  const parts = id.split("/");
-  return parts[parts.length - 1];
-}
 
 export default function ModelDetailPage() {
   const location = useLocation();

@@ -6,7 +6,14 @@ import time
 import chess
 import chess.engine
 
-from app.config import STOCKFISH_PATH
+from app.config import (
+    STOCKFISH_PATH,
+    STOCKFISH_PLAYER_THREADS,
+    STOCKFISH_PLAYER_HASH_MB,
+    STOCKFISH_PLAYER_MOVE_TIME,
+    STOCKFISH_MIN_ELO,
+    STOCKFISH_MAX_ELO,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +34,9 @@ class StockfishPlayerService:
         """Start the engine. If elo is provided, limit strength."""
         logger.info("Starting Stockfish player engine at %s", self.path)
         _, self._engine = await chess.engine.popen_uci(self.path)
-        config: dict = {"Threads": 1, "Hash": 64}
+        config: dict = {"Threads": STOCKFISH_PLAYER_THREADS, "Hash": STOCKFISH_PLAYER_HASH_MB}
         if elo is not None:
-            clamped = max(1320, min(3190, elo))
+            clamped = max(STOCKFISH_MIN_ELO, min(STOCKFISH_MAX_ELO, elo))
             config["UCI_LimitStrength"] = True
             config["UCI_Elo"] = clamped
             self.elo = clamped
@@ -44,7 +51,7 @@ class StockfishPlayerService:
             await self._engine.quit()
             self._engine = None
 
-    async def get_best_move(self, board: chess.Board, time_limit: float = 1.0) -> tuple[str | None, int]:
+    async def get_best_move(self, board: chess.Board, time_limit: float = STOCKFISH_PLAYER_MOVE_TIME) -> tuple[str | None, int]:
         """Get the best move from this strength-limited engine.
 
         Returns (uci_string, elapsed_ms).

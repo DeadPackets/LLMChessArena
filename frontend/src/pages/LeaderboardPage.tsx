@@ -2,12 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { getLeaderboard } from "../api/client";
 import type { EnhancedModelStats } from "../types/api";
-
-function formatModelName(id: string, displayName: string | null): string {
-  if (displayName) return displayName;
-  const parts = id.split("/");
-  return parts[parts.length - 1];
-}
+import { formatModelName } from "../utils/formatModel";
 
 export default function LeaderboardPage() {
   const [models, setModels] = useState<EnhancedModelStats[]>([]);

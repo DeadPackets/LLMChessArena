@@ -9,6 +9,7 @@ from uuid import uuid4
 from sqlmodel import select
 from sqlalchemy import update as sa_update
 
+from app.config import MAX_CONCURRENT_GAMES, DEFAULT_MODEL_ELO
 from app.database import Game, Move, LLMModel, get_session_factory
 from app.models.chess_models import GameConfig, GameResult, MoveRecord
 from app.services.elo_service import calculate_elo_change
@@ -35,6 +36,11 @@ class GameManager:
         self.human_move_queues: dict[str, asyncio.Queue] = {}
         self._awaiting_human_move: dict[str, str | None] = {}  # game_id -> color or None
         self.player_secrets: dict[str, str] = {}  # game_id -> secret token
+        # Concurrency control
+        self._semaphore = asyncio.Semaphore(MAX_CONCURRENT_GAMES)
+        self._queued_games: set[str] = set()  # game IDs waiting for a slot
+        self._running_games: set[str] = set()  # game IDs currently executing
+        logger.info("GameManager: max concurrent games = %d", MAX_CONCURRENT_GAMES)
 
     async def recover_orphaned_games(self) -> None:
         """Mark any games left as 'active' in the DB but with no running task.
@@ -259,7 +265,39 @@ class GameManager:
             },
         }
 
+    def queue_status(self) -> dict:
+        """Return current queue state."""
+        return {
+            "active": len(self._running_games),
+            "queued": len(self._queued_games),
+            "max": MAX_CONCURRENT_GAMES,
+        }
+
     async def _run_game(self, game_id: str, config: GameConfig) -> None:
+        """Execute a full game, waiting for a semaphore slot if at capacity."""
+        # Check if we need to queue
+        if self._semaphore.locked():
+            self._queued_games.add(game_id)
+            position = len(self._queued_games)
+            logger.info("Game %s: queued (position %d)", game_id, position)
+            await self._broadcast(game_id, {
+                "type": "queued",
+                "data": {"position": position, "active": len(self._running_games), "max": MAX_CONCURRENT_GAMES},
+            })
+
+        async with self._semaphore:
+            self._queued_games.discard(game_id)
+            self._running_games.add(game_id)
+            logger.info(
+                "Game %s: acquired slot (%d/%d active)",
+                game_id, len(self._running_games), MAX_CONCURRENT_GAMES,
+            )
+            try:
+                await self._run_game_inner(game_id, config)
+            finally:
+                self._running_games.discard(game_id)
+
+    async def _run_game_inner(self, game_id: str, config: GameConfig) -> None:
         """Execute a full game and persist results."""
         logger.info("Game %s: engine initializing", game_id)
 
@@ -523,7 +561,7 @@ class GameManager:
                 model = LLMModel(
                     id=model_id,
                     display_name=model_id.split("/")[-1],
-                    elo_rating=1500.0,
+                    elo_rating=DEFAULT_MODEL_ELO,
                 )
                 session.add(model)
                 await session.commit()
