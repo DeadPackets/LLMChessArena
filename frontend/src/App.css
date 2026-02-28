@@ -755,6 +755,10 @@ button {
   transition: border-color var(--transition);
 }
 
+.game-list-page__search-input::placeholder {
+  color: var(--text-muted);
+}
+
 .game-list-page__search-input:focus {
   border-color: var(--amber-dim);
 }
