@@ -21,6 +21,14 @@ const BLACK_UNICODE: Record<string, string> = {
   q: "\u265B", r: "\u265C", b: "\u265D", n: "\u265E", p: "\u265F",
 };
 
+// Map black piece keys to white unicode (for white's captures) and vice versa
+const BLACK_TO_WHITE: Record<string, string> = {
+  q: "\u2655", r: "\u2656", b: "\u2657", n: "\u2658", p: "\u2659",
+};
+const WHITE_TO_BLACK: Record<string, string> = {
+  Q: "\u265B", R: "\u265C", B: "\u265D", N: "\u265E", P: "\u265F",
+};
+
 const WHITE_ORDER = ["Q", "R", "B", "N", "P"];
 const BLACK_ORDER = ["q", "r", "b", "n", "p"];
 
@@ -72,11 +80,11 @@ export default function CapturedMaterial({ fen }: Props) {
 
   return (
     <div className="captured-mat">
-      {/* Left side: black pieces (captured by white), grows left→right */}
+      {/* Left side: captured by white (shown as white pieces), grows left→right */}
       <div className="captured-mat__left">
         {capturedBlack.map((p, i) => (
-          <span key={i} className="captured-mat__piece captured-mat__piece--black">
-            {BLACK_UNICODE[p]}
+          <span key={i} className="captured-mat__piece captured-mat__piece--white">
+            {BLACK_TO_WHITE[p]}
           </span>
         ))}
         {materialDiff > 0 && (
@@ -84,14 +92,14 @@ export default function CapturedMaterial({ fen }: Props) {
         )}
       </div>
 
-      {/* Right side: white pieces (captured by black), grows right→left */}
+      {/* Right side: captured by black (shown as black pieces), grows right→left */}
       <div className="captured-mat__right">
         {materialDiff < 0 && (
           <span className="captured-mat__diff">+{Math.abs(materialDiff)}</span>
         )}
         {capturedWhite.map((p, i) => (
-          <span key={i} className="captured-mat__piece captured-mat__piece--white">
-            {WHITE_UNICODE[p]}
+          <span key={i} className="captured-mat__piece captured-mat__piece--black">
+            {WHITE_TO_BLACK[p]}
           </span>
         ))}
       </div>
