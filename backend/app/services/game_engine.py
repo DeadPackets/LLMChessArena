@@ -455,7 +455,7 @@ class GameEngine:
                 result = await chess_agent.run(
                     user_prompt,
                     deps=ctx,
-                    model=f"openrouter:{model_name}",
+                    model=f"openrouter:{model_name}:nitro",
                     model_settings=settings,
                 )
             except Exception as e:
