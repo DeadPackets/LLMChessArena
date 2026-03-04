@@ -21,7 +21,7 @@ from app.models.api_models import (
     PaginatedGamesResponse,
 )
 from app.models.chess_models import GameConfig
-from app.services.board_image_service import generate_board_png
+from app.services.board_image_service import generate_board_png, generate_board_og_png
 from app.services.stats_service import compute_game_analysis
 
 logger = logging.getLogger(__name__)
@@ -166,11 +166,15 @@ async def queue_status(request: Request):
 
 
 @router.get("/{game_id}/board.png")
-async def get_board_image(game_id: str, session: AsyncSession = Depends(get_session)):
-    """Generate a PNG image of the current/final board position."""
+async def get_board_image(game_id: str, og: bool = False, session: AsyncSession = Depends(get_session)):
+    """Generate a PNG image of the current/final board position.
+
+    Pass ?og=1 for a 1200x630 OG-sized image with dark background.
+    """
     game = await session.get(Game, game_id)
     if not game:
-        png = generate_board_png()
+        gen = generate_board_og_png if og else generate_board_png
+        png = gen()
         return Response(content=png, media_type="image/png",
                         headers={"Cache-Control": "public, max-age=3600"})
 
@@ -182,7 +186,10 @@ async def get_board_image(game_id: str, session: AsyncSession = Depends(get_sess
     fen = last_move.fen_after if last_move else chess.STARTING_FEN
     last_uci = last_move.uci if last_move else None
 
-    png = generate_board_png(fen=fen, last_move_uci=last_uci)
+    if og:
+        png = generate_board_og_png(fen=fen, last_move_uci=last_uci)
+    else:
+        png = generate_board_png(fen=fen, last_move_uci=last_uci)
 
     if game.status == "completed":
         cache = "public, max-age=604800, immutable"

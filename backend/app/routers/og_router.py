@@ -154,7 +154,7 @@ async def og_game(game_id: str, session: AsyncSession = Depends(get_session)):
 
     title = _build_title(game)
     description = _build_description(game)
-    image_url = f"{SITE_URL}/api/games/{game_id}/board.png"
+    image_url = f"{SITE_URL}/api/games/{game_id}/board.png?og=1"
 
     return HTMLResponse(_og_html(
         title=title,
