@@ -10,6 +10,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://typescriptlang.org)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-d4a843?style=for-the-badge)](LICENSE)
+[![Live](https://img.shields.io/badge/Live-llmchess.deadpackets.pw-00c853?style=for-the-badge)](https://llmchess.deadpackets.pw)
 
 <br />
 
