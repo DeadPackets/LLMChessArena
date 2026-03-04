@@ -9,14 +9,27 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - STOCKFISH_PATH=/usr/games/stockfish
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   frontend:
     build: ./frontend
     ports:
       - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
 volumes:
   chess-data:

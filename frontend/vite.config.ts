@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    allowedHosts: ["dev.deadpackets.pw"],
+    allowedHosts: ["llmchess.deadpackets.pw", "dev.deadpackets.pw"],
     proxy: {
       "/api": {
         target: "http://localhost:8000",

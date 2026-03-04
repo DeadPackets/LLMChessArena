@@ -96,7 +96,10 @@ async def init_db(url: str = DATABASE_URL):
     """Create the async engine, session factory, and initialize all tables."""
     global engine, async_session_factory
 
-    engine = create_async_engine(url, connect_args={"check_same_thread": False})
+    engine = create_async_engine(
+        url,
+        connect_args={"check_same_thread": False, "timeout": 10},
+    )
     async_session_factory = async_sessionmaker(
         engine,
         class_=AsyncSession,
@@ -105,6 +108,10 @@ async def init_db(url: str = DATABASE_URL):
 
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+        # Enable WAL for concurrent read/write performance
+        import sqlalchemy
+        await conn.execute(sqlalchemy.text("PRAGMA journal_mode=WAL"))
+        await conn.execute(sqlalchemy.text("PRAGMA busy_timeout=5000"))
         # Lightweight migrations for new columns on existing tables
         await _migrate_add_columns(conn)
 

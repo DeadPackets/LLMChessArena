@@ -64,7 +64,10 @@ rate_limiter = RateLimiter()
 
 
 def _get_client_ip(request: Request) -> str:
-    """Extract client IP, respecting X-Forwarded-For behind a reverse proxy."""
+    """Extract client IP, preferring CF-Connecting-IP (Cloudflare) then X-Forwarded-For."""
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(",")[0].strip()
@@ -126,8 +129,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 async def check_ws_rate_limit(websocket: WebSocket) -> bool:
     """Check WebSocket connection rate limit. Returns True if allowed."""
-    forwarded = websocket.headers.get("x-forwarded-for")
-    if forwarded:
+    cf_ip = websocket.headers.get("cf-connecting-ip")
+    if cf_ip:
+        ip = cf_ip.strip()
+    elif (forwarded := websocket.headers.get("x-forwarded-for")):
         ip = forwarded.split(",")[0].strip()
     elif websocket.client:
         ip = websocket.client.host

@@ -76,49 +76,49 @@
 
 30. **~~ELO history graph~~** ✅ — ~~recharts LineChart on model detail page showing ELO progression. Replays all completed games chronologically from 1500 start. Tooltip shows opponent and outcome.~~
 
-31. **Game annotations / bookmarks** — Let users mark interesting games or positions.
+31. **~~Game annotations / bookmarks~~** WONTFIX — ~~Let users mark interesting games or positions.~~
 
 32. **~~Export analysis as PNG~~** ✅ — ~~html2canvas captures analysis panel to PNG. Export button in analysis header. Downloads as `analysis-{gameId}.png`.~~
 
 ### Platform & Infrastructure
 
-33. **User accounts / authentication** — No login system. Anyone can create games and spend API credits.
+33. **~~User accounts / authentication~~** WONTFIX — ~~No login system. Anyone can create games and spend API credits.~~
 
-34. **Rate limiting** — No throttle on game creation, API calls, or WebSocket connections.
+34. **~~Rate limiting~~** ✅ — ~~In-memory sliding-window rate limiter per IP. Tiers: game creation (5/min), API reads (60/min), game stop (10/min), WS connections (20/min). Returns 429 with Retry-After. All limits configurable via env vars.~~
 
-35. **Tournament system** — Round-robin or Swiss tournaments between a pool of models.
+35. **~~Tournament system~~** WONTFIX — ~~Round-robin or Swiss tournaments between a pool of models.~~
 
-36. **Game queueing** — Multiple simultaneous games all run in parallel with no limit.
+36. **~~Game queueing~~** ✅ — ~~asyncio.Semaphore-based queue. Games beyond the concurrent limit are queued with position tracking. WebSocket broadcasts `queued` event. `/api/games/queue-status` endpoint.~~
 
-37. **Configurable max concurrent games** — No limit on how many games can run at once.
+37. **~~Configurable max concurrent games~~** ✅ — ~~`MAX_CONCURRENT_GAMES` in config.py (default 3), overridable via env var. Enforced by semaphore in game_manager.~~
 
-38. **Webhook / notifications** — No way to get notified when a game finishes.
+38. **~~Webhook / notifications~~** WONTFIX — ~~No way to get notified when a game finishes.~~
 
-39. **Database backups** — SQLite file with no backup strategy.
+39. **~~Database backups~~** WONTFIX — ~~SQLite file with no backup strategy.~~
 
-40. **API rate limit headers** — Backend doesn't return `X-RateLimit-*` headers.
+40. **~~API rate limit headers~~** ✅ — ~~All responses include `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` headers. CORS expose_headers updated.~~
 
 ### Data & Observability
 
-41. **Game replay sharing (embed)** — An embeddable replay widget for sharing on blogs/forums.
+41. **~~Game replay sharing (embed)~~** ✅ — ~~`/embed/:gameId` iframe-friendly minimal replay viewer. Chessboard + move list + controls, no app chrome. Supports `?move=N` deep link. "View full game" link to main site.~~
 
-42. **Prometheus metrics** — No observability. Response times, game counts, error rates should be exported.
+42. **~~Prometheus metrics~~** WONTFIX — ~~No observability. Response times, game counts, error rates should be exported.~~
 
-43. **Cost alerts** — No way to set a budget cap.
+43. **~~Cost alerts~~** WONTFIX — ~~No way to set a budget cap.~~
 
-44. **Model display names** — `LLMModel.display_name` field exists but is never populated.
+44. **~~Model display names~~** ✅ — ~~Centralized `formatModelName`/`formatModelLabel` into shared `frontend/src/utils/formatModel.ts`. Replaced 9 duplicate implementations across frontend.~~
 
 ---
 
 ## Code Quality Improvements
 
-45. **No test suite** — Zero unit or integration tests.
+45. **~~No test suite~~** WONTFIX — ~~Zero unit or integration tests.~~
 
-46. **Logger levels inconsistent** — Game engine logs routine moves at INFO; should be DEBUG.
+46. **~~Logger levels inconsistent~~** ✅ — ~~Downgraded 8 routine per-move log lines in game_engine.py and 1 in game_manager.py from INFO to DEBUG. Game start/end, errors, forfeits, and resignations remain at INFO.~~
 
-47. **Hardcoded magic numbers** — K-factor, Stockfish depth, narration cap buried in code rather than config.
+47. **~~Hardcoded magic numbers~~** ✅ — ~~Moved 13 tuning knobs (ELO K-factor, Stockfish threads/hash/depth, draw adjudication thresholds, narration cap, default model ELO) to `backend/app/config.py` with `os.getenv()` overrides.~~
 
-48. **No API versioning** — All endpoints at `/api/` with no version prefix.
+48. **~~No API versioning~~** WONTFIX — ~~All endpoints at `/api/` with no version prefix.~~
 
 ---
 
@@ -126,6 +126,8 @@
 
 1. ~~Mobile responsiveness~~ ✅
 2. ~~Pagination on game list~~ ✅
-3. Tournament system
+3. ~~Tournament system~~ WONTFIX
 4. ~~Sound effects + move animations~~ ✅
-5. Rate limiting + cost caps
+5. ~~Rate limiting + game queueing~~ ✅
+
+**All items resolved.** 38 completed, 10 WONTFIX.

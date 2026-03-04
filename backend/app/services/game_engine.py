@@ -88,21 +88,21 @@ class GameEngine:
             )
 
             if is_human:
-                logger.info(
+                logger.debug(
                     "Move %d: awaiting human move (%s) | FEN: %s",
                     self.board.fullmove_number, current_color, self.board.fen(),
                 )
                 await self._emit_status(f"Waiting for {current_color.title()} (Human) to move...")
                 move_coro = self._get_human_move(current_color)
             elif is_stockfish:
-                logger.info(
+                logger.debug(
                     "Move %d: requesting Stockfish move (%s) | FEN: %s",
                     self.board.fullmove_number, current_color, self.board.fen(),
                 )
                 await self._emit_status(f"Stockfish ({current_color.title()}) is thinking...")
                 move_coro = self._get_stockfish_move(current_color, eval_before)
             else:
-                logger.info(
+                logger.debug(
                     "Move %d: requesting move from %s (%s) | FEN: %s",
                     self.board.fullmove_number, model_name, current_color, self.board.fen(),
                 )
@@ -200,13 +200,13 @@ class GameEngine:
 
             if is_human or is_stockfish:
                 side_label = "Human" if is_human else "Stockfish"
-                logger.info(
+                logger.debug(
                     "Move %d: %s (%s) played %s (%s)",
                     self.board.fullmove_number - (1 if current_color == "black" else 0),
                     current_color, side_label, san, chess_move.uci(),
                 )
             else:
-                logger.info(
+                logger.debug(
                     "Move %d: %s played %s (%s) in %dms | tokens: %s in / %s out | cost: $%s",
                     self.board.fullmove_number - (1 if current_color == "black" else 0),
                     current_color, san, chess_move.uci(), elapsed_ms,
@@ -330,7 +330,7 @@ class GameEngine:
                 move = chess.Move.from_uci(uci_str)
                 if move in self.board.legal_moves:
                     self._consecutive_illegal_moves = 0
-                    logger.info("Human move accepted: %s (%s)", uci_str, color)
+                    logger.debug("Human move accepted: %s (%s)", uci_str, color)
                     return move, "", "", 0, {}
                 else:
                     logger.warning("Human submitted illegal move: %s (%s)", uci_str, color)
@@ -446,7 +446,7 @@ class GameEngine:
                     "reasoning": {"effort": reasoning},
                 }
 
-            logger.info(
+            logger.debug(
                 "LLM call: model=%s, color=%s, attempt=%d, show_legal=%s, temp=%s, reasoning=%s",
                 model_name, color, self._consecutive_illegal_moves + 1, show_legal,
                 temp, reasoning,
@@ -473,7 +473,7 @@ class GameEngine:
                 )
                 continue
             elapsed_ms = int((time.monotonic() - start) * 1000)
-            logger.info("LLM response: model=%s, elapsed=%dms", model_name, elapsed_ms)
+            logger.debug("LLM response: model=%s, elapsed=%dms", model_name, elapsed_ms)
 
             # Extract token/cost data from pydantic-ai result
             usage = result.usage()

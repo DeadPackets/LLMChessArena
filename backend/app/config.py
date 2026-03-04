@@ -42,3 +42,11 @@ DRAW_ADJUDICATION_MOVES = int(os.getenv("DRAW_ADJUDICATION_MOVES", "30"))
 
 # LLM output limits
 NARRATION_CHAR_CAP = int(os.getenv("NARRATION_CHAR_CAP", "128"))
+
+# Logging
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+
+# CORS — comma-separated origins, locked to production domain by default
+ALLOWED_ORIGINS = os.getenv(
+    "ALLOWED_ORIGINS", "https://llmchess.deadpackets.pw"
+).split(",")

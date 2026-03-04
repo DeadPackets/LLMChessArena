@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from pathlib import Path
 
-from app.config import STOCKFISH_PATH
+from app.config import STOCKFISH_PATH, LOG_LEVEL, ALLOWED_ORIGINS, OPENROUTER_API_KEY
 from app.database import init_db
 from app.middleware.rate_limiter import RateLimitMiddleware, periodic_cleanup
 from app.services.game_manager import GameManager
@@ -19,7 +19,7 @@ from app.services.stockfish_service import StockfishService
 
 # ─── Central logging configuration ───
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     stream=sys.stdout,
@@ -36,6 +36,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: init DB, Stockfish, opening book. Shutdown: close Stockfish."""
+    if not OPENROUTER_API_KEY:
+        logger.warning("OPENROUTER_API_KEY is not set — LLM games will fail")
+
     # Database
     await init_db()
     logger.info("Database initialized")
@@ -84,10 +87,10 @@ app = FastAPI(title="LLM Chess Arena", version="0.1.0", lifespan=lifespan)
 app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
     expose_headers=["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
 )
 
@@ -103,6 +106,13 @@ app.include_router(models_router)
 app.include_router(stats_router)
 app.include_router(ws_router)
 app.include_router(openrouter_router)
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error("Unhandled exception on %s %s: %s", request.method, request.url.path, exc, exc_info=True)
+    from starlette.responses import JSONResponse as _JSONResponse
+    return _JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 @app.get("/health")

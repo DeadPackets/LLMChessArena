@@ -131,7 +131,7 @@ class GameManager:
         queue: asyncio.Queue = asyncio.Queue()
         self.event_queues.setdefault(game_id, []).append(queue)
         count = len(self.event_queues[game_id])
-        logger.info("Game %s: WebSocket subscriber added (total: %d)", game_id, count)
+        logger.debug("Game %s: WebSocket subscriber added (total: %d)", game_id, count)
         asyncio.create_task(self._broadcast_spectator_count(game_id))
         return queue
 
