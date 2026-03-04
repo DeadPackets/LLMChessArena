@@ -8,3 +8,4 @@ sqlmodel>=0.0.22
 aiosqlite>=0.20.0
 httpx>=0.28.0
 websockets>=14.0
+cairosvg>=2.7.0

@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 import secrets
 
+import chess
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlmodel import select
@@ -20,6 +21,7 @@ from app.models.api_models import (
     PaginatedGamesResponse,
 )
 from app.models.chess_models import GameConfig
+from app.services.board_image_service import generate_board_png
 from app.services.stats_service import compute_game_analysis
 
 logger = logging.getLogger(__name__)
@@ -161,6 +163,34 @@ async def queue_status(request: Request):
     """Return the current game queue state."""
     manager = request.app.state.game_manager
     return manager.queue_status()
+
+
+@router.get("/{game_id}/board.png")
+async def get_board_image(game_id: str, session: AsyncSession = Depends(get_session)):
+    """Generate a PNG image of the current/final board position."""
+    game = await session.get(Game, game_id)
+    if not game:
+        png = generate_board_png()
+        return Response(content=png, media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=3600"})
+
+    results = await session.exec(
+        select(Move).where(Move.game_id == game_id).order_by(Move.id.desc()).limit(1)  # type: ignore[arg-type]
+    )
+    last_move = results.first()
+
+    fen = last_move.fen_after if last_move else chess.STARTING_FEN
+    last_uci = last_move.uci if last_move else None
+
+    png = generate_board_png(fen=fen, last_move_uci=last_uci)
+
+    if game.status == "completed":
+        cache = "public, max-age=604800, immutable"
+    else:
+        cache = "public, max-age=30"
+
+    return Response(content=png, media_type="image/png",
+                    headers={"Cache-Control": cache})
 
 
 @router.get("/{game_id}", response_model=GameDetail)

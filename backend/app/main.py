@@ -100,12 +100,14 @@ from app.routers.models_router import router as models_router
 from app.routers.stats_router import router as stats_router
 from app.routers.ws import router as ws_router
 from app.routers.openrouter_proxy import router as openrouter_router
+from app.routers.og_router import router as og_router
 
 app.include_router(games_router)
 app.include_router(models_router)
 app.include_router(stats_router)
 app.include_router(ws_router)
 app.include_router(openrouter_router)
+app.include_router(og_router)
 
 
 @app.exception_handler(Exception)
