@@ -109,8 +109,11 @@ export default function TableTalkPanel({
 
   const selectedBubbleRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  const isMobile = () => window.innerWidth <= 900;
+
+  // Auto-scroll to bottom when new messages arrive (desktop only)
   useEffect(() => {
+    if (isMobile()) return;
     requestAnimationFrame(() => {
       if (chatRef.current) {
         chatRef.current.scrollTop = chatRef.current.scrollHeight;
@@ -118,8 +121,9 @@ export default function TableTalkPanel({
     });
   }, [entries.length]);
 
-  // Scroll to the selected bubble when user clicks a move
+  // Scroll to the selected bubble when user clicks a move (desktop only)
   useEffect(() => {
+    if (isMobile()) return;
     if (selectedBubbleRef.current && chatRef.current) {
       const container = chatRef.current;
       const el = selectedBubbleRef.current;
