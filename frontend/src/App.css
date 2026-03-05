@@ -3063,11 +3063,11 @@ button {
     flex: none;
     max-height: none;
     min-height: 300px;
-    overflow: hidden;
   }
 
   .table-talk-chat {
     max-height: 400px;
+    overflow-y: auto;
   }
 
   .table-talk-bubble {
