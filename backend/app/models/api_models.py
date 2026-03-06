@@ -1,31 +1,40 @@
 from __future__ import annotations
 
 from datetime import datetime
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+ReasoningEffort = Literal["none", "low", "medium", "high"]
 
 
 # --- Requests ---
 
+
 class CreateGameRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     white_model: str = ""
     black_model: str = ""
-    max_moves: int = 200
-    white_temperature: float | None = None
-    black_temperature: float | None = None
-    white_reasoning_effort: str | None = None
-    black_reasoning_effort: str | None = None
+    max_moves: int = Field(default=200, ge=1)
+    white_temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    black_temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    white_reasoning_effort: ReasoningEffort | None = None
+    black_reasoning_effort: ReasoningEffort | None = None
     white_is_human: bool = False
     black_is_human: bool = False
     white_is_stockfish: bool = False
     black_is_stockfish: bool = False
-    white_stockfish_elo: int | None = None
-    black_stockfish_elo: int | None = None
+    white_stockfish_elo: int | None = Field(default=None, ge=1320, le=3190)
+    black_stockfish_elo: int | None = Field(default=None, ge=1320, le=3190)
     chaos_mode: bool = False
-    move_time_limit: float | None = None
+    move_time_limit: float | None = Field(default=None, gt=0)
     draw_adjudication: bool = True
 
 
 # --- Responses ---
+
 
 class GameSummary(BaseModel):
     id: str
@@ -65,6 +74,9 @@ class MoveDetail(BaseModel):
     centipawns: int | None = None
     mate_in: int | None = None
     win_probability: float | None = None
+    centipawns_before: int | None = None
+    mate_in_before: int | None = None
+    win_probability_before: float | None = None
     best_move_uci: str | None = None
     classification: str | None = None
     response_time_ms: int = 0
@@ -88,6 +100,8 @@ class CriticalMoment(BaseModel):
 
 
 class GameAnalysis(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     white_acpl: float | None = None
     black_acpl: float | None = None
     white_accuracy: float | None = None
@@ -104,6 +118,8 @@ class GameAnalysis(BaseModel):
 
 
 class GameDetail(GameSummary):
+    model_config = ConfigDict(extra="forbid")
+
     pgn: str | None = None
     moves: list[MoveDetail] = []
     total_cost_usd: float = 0.0

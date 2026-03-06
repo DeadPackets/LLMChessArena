@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
@@ -12,13 +13,16 @@ DATABASE_URL = "sqlite+aiosqlite:///./data/llmchessarena.db"
 
 # --- Table Models ---
 
+
 class Game(SQLModel, table=True):
     __tablename__ = "games"
 
     id: str = Field(primary_key=True)
     white_model: str
     black_model: str
-    status: str = Field(default="pending")  # pending, active, completed
+    status: str = Field(
+        default="pending"
+    )  # pending, queued, active, stopped, completed
     outcome: Optional[str] = None
     termination: Optional[str] = None
     opening_eco: Optional[str] = None
@@ -61,6 +65,9 @@ class Move(SQLModel, table=True):
     centipawns: Optional[int] = None
     mate_in: Optional[int] = None
     win_probability: Optional[float] = None
+    centipawns_before: Optional[int] = None
+    mate_in_before: Optional[int] = None
+    win_probability_before: Optional[float] = None
     best_move_uci: Optional[str] = None
     classification: Optional[str] = None
     response_time_ms: int = Field(default=0)
@@ -96,6 +103,10 @@ async def init_db(url: str = DATABASE_URL):
     """Create the async engine, session factory, and initialize all tables."""
     global engine, async_session_factory
 
+    if url.startswith("sqlite"):
+        db_path = url.split("///", 1)[-1]
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+
     engine = create_async_engine(
         url,
         connect_args={"check_same_thread": False, "timeout": 10},
@@ -110,6 +121,7 @@ async def init_db(url: str = DATABASE_URL):
         await conn.run_sync(SQLModel.metadata.create_all)
         # Enable WAL for concurrent read/write performance
         import sqlalchemy
+
         await conn.execute(sqlalchemy.text("PRAGMA journal_mode=WAL"))
         await conn.execute(sqlalchemy.text("PRAGMA busy_timeout=5000"))
         # Lightweight migrations for new columns on existing tables
@@ -140,6 +152,9 @@ async def _migrate_add_columns(conn) -> None:
         ("games", "move_time_limit", "FLOAT"),
         ("games", "draw_adjudication", "BOOLEAN DEFAULT 1"),
         ("moves", "is_chaos_move", "BOOLEAN DEFAULT 0"),
+        ("moves", "centipawns_before", "INTEGER"),
+        ("moves", "mate_in_before", "INTEGER"),
+        ("moves", "win_probability_before", "FLOAT"),
     ]
     for table, column, col_type in migrations:
         try:
@@ -152,6 +167,7 @@ async def _migrate_add_columns(conn) -> None:
                 pass  # Column already exists — expected
             else:
                 import logging
+
                 logging.getLogger(__name__).warning(
                     "Migration failed for %s.%s: %s", table, column, e
                 )

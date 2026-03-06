@@ -6,12 +6,17 @@ import secrets
 import chess
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.database import Game, Move, get_session
+from app.config import (
+    MAX_MOVES_PER_SIDE,
+    MIN_MOVE_TIME_LIMIT,
+    MAX_MOVE_TIME_LIMIT,
+)
+from app.database import Game, Move, get_session, get_session_factory
 from app.models.api_models import (
     CreateGameRequest,
     GameCreatedResponse,
@@ -44,11 +49,46 @@ async def create_game(req: CreateGameRequest, request: Request):
         raise HTTPException(400, "White model is required for LLM side")
     if black_is_llm and not req.black_model.strip():
         raise HTTPException(400, "Black model is required for LLM side")
+    if req.max_moves > MAX_MOVES_PER_SIDE:
+        raise HTTPException(
+            400,
+            f"max_moves cannot exceed {MAX_MOVES_PER_SIDE} per side",
+        )
+    if req.move_time_limit is not None and not (
+        MIN_MOVE_TIME_LIMIT <= req.move_time_limit <= MAX_MOVE_TIME_LIMIT
+    ):
+        raise HTTPException(
+            400,
+            f"move_time_limit must be between {MIN_MOVE_TIME_LIMIT:g} and {MAX_MOVE_TIME_LIMIT:g} seconds",
+        )
 
-    white_label = "Human" if req.white_is_human else "Stockfish" if req.white_is_stockfish else req.white_model
-    black_label = "Human" if req.black_is_human else "Stockfish" if req.black_is_stockfish else req.black_model
-    logger.info("API: create game — %s vs %s (max %d moves)", white_label, black_label, req.max_moves)
+    white_label = (
+        "Human"
+        if req.white_is_human
+        else "Stockfish"
+        if req.white_is_stockfish
+        else req.white_model
+    )
+    black_label = (
+        "Human"
+        if req.black_is_human
+        else "Stockfish"
+        if req.black_is_stockfish
+        else req.black_model
+    )
+    logger.info(
+        "API: create game — %s vs %s (max %d moves)",
+        white_label,
+        black_label,
+        req.max_moves,
+    )
     manager = request.app.state.game_manager
+    queue_state = manager.queue_status()
+    if (
+        not manager.can_accept_new_game()
+        and queue_state["active"] >= queue_state["max"]
+    ):
+        raise HTTPException(429, "Game queue is full. Please try again later.")
     config = GameConfig(
         white_model=req.white_model,
         black_model=req.black_model,
@@ -69,9 +109,18 @@ async def create_game(req: CreateGameRequest, request: Request):
     )
     player_secret = secrets.token_urlsafe(32)
 
-    game_id = await manager.start_game(config, player_secret=player_secret)
-    logger.info("API: game created — id=%s", game_id)
-    return GameCreatedResponse(id=game_id, status="active", player_secret=player_secret)
+    try:
+        game_id, game_status = await manager.start_game(
+            config, player_secret=player_secret
+        )
+    except ValueError as exc:
+        raise HTTPException(429, str(exc)) from exc
+    logger.info("API: game created — id=%s status=%s", game_id, game_status)
+    return GameCreatedResponse(
+        id=game_id,
+        status=game_status,
+        player_secret=player_secret,
+    )
 
 
 @router.get("", response_model=PaginatedGamesResponse)
@@ -146,7 +195,9 @@ async def list_games(
             black_stockfish_elo=r.black_stockfish_elo,
             chaos_mode=bool(r.chaos_mode),
             move_time_limit=r.move_time_limit,
-            draw_adjudication=bool(r.draw_adjudication) if r.draw_adjudication is not None else True,
+            draw_adjudication=bool(r.draw_adjudication)
+            if r.draw_adjudication is not None
+            else True,
         )
         for r in rows
     ]
@@ -166,7 +217,9 @@ async def queue_status(request: Request):
 
 
 @router.get("/{game_id}/board.png")
-async def get_board_image(game_id: str, og: bool = False, session: AsyncSession = Depends(get_session)):
+async def get_board_image(
+    game_id: str, og: bool = False, session: AsyncSession = Depends(get_session)
+):
     """Generate a PNG image of the current/final board position.
 
     Pass ?og=1 for a 1200x630 OG-sized image with dark background.
@@ -175,8 +228,11 @@ async def get_board_image(game_id: str, og: bool = False, session: AsyncSession 
     if not game:
         gen = generate_board_og_png if og else generate_board_png
         png = gen()
-        return Response(content=png, media_type="image/png",
-                        headers={"Cache-Control": "public, max-age=3600"})
+        return Response(
+            content=png,
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
 
     results = await session.exec(
         select(Move).where(Move.game_id == game_id).order_by(Move.id.desc()).limit(1)  # type: ignore[arg-type]
@@ -196,8 +252,9 @@ async def get_board_image(game_id: str, og: bool = False, session: AsyncSession 
     else:
         cache = "public, max-age=30"
 
-    return Response(content=png, media_type="image/png",
-                    headers={"Cache-Control": cache})
+    return Response(
+        content=png, media_type="image/png", headers={"Cache-Control": cache}
+    )
 
 
 @router.get("/{game_id}", response_model=GameDetail)
@@ -240,7 +297,9 @@ async def get_game(game_id: str, session: AsyncSession = Depends(get_session)):
         black_stockfish_elo=game.black_stockfish_elo,
         chaos_mode=bool(game.chaos_mode),
         move_time_limit=game.move_time_limit,
-        draw_adjudication=bool(game.draw_adjudication) if game.draw_adjudication is not None else True,
+        draw_adjudication=bool(game.draw_adjudication)
+        if game.draw_adjudication is not None
+        else True,
         pgn=game.pgn,
         moves=[
             MoveDetail(
@@ -254,6 +313,9 @@ async def get_game(game_id: str, session: AsyncSession = Depends(get_session)):
                 centipawns=m.centipawns,
                 mate_in=m.mate_in,
                 win_probability=m.win_probability,
+                centipawns_before=m.centipawns_before,
+                mate_in_before=m.mate_in_before,
+                win_probability_before=m.win_probability_before,
                 best_move_uci=m.best_move_uci,
                 classification=m.classification,
                 response_time_ms=m.response_time_ms or 0,
@@ -284,6 +346,8 @@ async def get_pgn(game_id: str, session: AsyncSession = Depends(get_session)):
 
 
 class StopGameRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     player_secret: str
 
 
@@ -292,10 +356,16 @@ async def stop_game(game_id: str, body: StopGameRequest, request: Request):
     """Force-stop an active game. Requires the creator's player secret."""
     logger.info("API: stop game — id=%s", game_id)
     manager = request.app.state.game_manager
-    if not manager.validate_player_secret(game_id, body.player_secret):
+    if not await manager.validate_player_secret(game_id, body.player_secret):
         raise HTTPException(403, "Unauthorized")
+    async with get_session_factory()() as session:
+        game = await session.get(Game, game_id)
+    if not game:
+        raise HTTPException(404, "Game not found")
+    if game.status in {"completed", "stopped"}:
+        raise HTTPException(409, f"Game already {game.status}")
     stopped = await manager.stop_game(game_id)
     if not stopped:
-        raise HTTPException(404, "Game not found or already completed")
+        raise HTTPException(409, "Game is not currently running")
     logger.info("API: game stopped — id=%s", game_id)
     return {"status": "stopped"}

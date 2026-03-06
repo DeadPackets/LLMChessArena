@@ -10,10 +10,25 @@ import chess.pgn
 
 from pydantic_ai.settings import ModelSettings
 
-from app.config import MAX_MOVES_PER_SIDE, MAX_CONSECUTIVE_ILLEGAL_MOVES, DRAW_ADJUDICATION_CP, DRAW_ADJUDICATION_MOVES
-from app.models.chess_models import ChessMove, GameConfig, GameResult, MoveRecord, PositionEval
+from app.config import (
+    MAX_MOVES_PER_SIDE,
+    MAX_CONSECUTIVE_ILLEGAL_MOVES,
+    DRAW_ADJUDICATION_CP,
+    DRAW_ADJUDICATION_MOVES,
+)
+from app.models.chess_models import (
+    ChessMove,
+    GameConfig,
+    GameResult,
+    MoveRecord,
+    PositionEval,
+)
 from app.services.chess_agent import chess_agent, ChessGameContext, build_user_prompt
-from app.services.move_classifier import classify_move, MoveClassification, CLASSIFICATION_SYMBOLS
+from app.services.move_classifier import (
+    classify_move,
+    MoveClassification,
+    CLASSIFICATION_SYMBOLS,
+)
 from app.services.opening_detector import OpeningDetector
 from app.services.stockfish_service import StockfishService
 from app.services.stockfish_player_service import StockfishPlayerService
@@ -41,7 +56,9 @@ class GameEngine:
         self.move_callbacks: list[Callable[[MoveRecord], Awaitable[None]]] = []
         self.illegal_move_callbacks: list[Callable[[dict], Awaitable[None]]] = []
         self.status_callback: Callable[[str], Awaitable[None]] | None = None
-        self.awaiting_human_move_callback: Callable[[str], Awaitable[None]] | None = None
+        self.awaiting_human_move_callback: Callable[[str], Awaitable[None]] | None = (
+            None
+        )
         self.stockfish = stockfish
         self.stockfish_player = stockfish_player
         self.opening_detector = opening_detector
@@ -57,10 +74,14 @@ class GameEngine:
         max_total_moves = self.config.max_moves * 2
         logger.info(
             "Game started: %s (white) vs %s (black), max %d moves per side",
-            self.config.white_model, self.config.black_model, self.config.max_moves,
+            self.config.white_model,
+            self.config.black_model,
+            self.config.max_moves,
         )
 
-        while not self.board.is_game_over() and len(self.move_history) < max_total_moves:
+        while (
+            not self.board.is_game_over() and len(self.move_history) < max_total_moves
+        ):
             current_color = "white" if self.board.turn == chess.WHITE else "black"
             model_name = (
                 self.config.white_model
@@ -71,75 +92,106 @@ class GameEngine:
             # Evaluate position BEFORE the move (for classification)
             eval_before: PositionEval | None = None
             if self.stockfish:
-                await self._emit_status(f"Evaluating position (move {self.board.fullmove_number})...")
+                await self._emit_status(
+                    f"Evaluating position (move {self.board.fullmove_number})..."
+                )
                 try:
                     eval_before = await self.stockfish.evaluate(self.board)
                 except Exception as e:
-                    logger.warning("Stockfish eval_before failed (move %d): %s", self.board.fullmove_number, e)
+                    logger.warning(
+                        "Stockfish eval_before failed (move %d): %s",
+                        self.board.fullmove_number,
+                        e,
+                    )
 
             # Determine side type
-            is_human = (
-                (current_color == "white" and self.config.white_is_human) or
-                (current_color == "black" and self.config.black_is_human)
+            is_human = (current_color == "white" and self.config.white_is_human) or (
+                current_color == "black" and self.config.black_is_human
             )
             is_stockfish = (
-                (current_color == "white" and self.config.white_is_stockfish) or
-                (current_color == "black" and self.config.black_is_stockfish)
-            )
+                current_color == "white" and self.config.white_is_stockfish
+            ) or (current_color == "black" and self.config.black_is_stockfish)
 
             if is_human:
                 logger.debug(
                     "Move %d: awaiting human move (%s) | FEN: %s",
-                    self.board.fullmove_number, current_color, self.board.fen(),
+                    self.board.fullmove_number,
+                    current_color,
+                    self.board.fen(),
                 )
-                await self._emit_status(f"Waiting for {current_color.title()} (Human) to move...")
+                await self._emit_status(
+                    f"Waiting for {current_color.title()} (Human) to move..."
+                )
                 move_coro = self._get_human_move(current_color)
             elif is_stockfish:
                 logger.debug(
                     "Move %d: requesting Stockfish move (%s) | FEN: %s",
-                    self.board.fullmove_number, current_color, self.board.fen(),
+                    self.board.fullmove_number,
+                    current_color,
+                    self.board.fen(),
                 )
-                await self._emit_status(f"Stockfish ({current_color.title()}) is thinking...")
+                await self._emit_status(
+                    f"Stockfish ({current_color.title()}) is thinking..."
+                )
                 move_coro = self._get_stockfish_move(current_color, eval_before)
             else:
                 logger.debug(
                     "Move %d: requesting move from %s (%s) | FEN: %s",
-                    self.board.fullmove_number, model_name, current_color, self.board.fen(),
+                    self.board.fullmove_number,
+                    model_name,
+                    current_color,
+                    self.board.fen(),
                 )
-                await self._emit_status(f"Waiting for {current_color.title()} ({model_name}) to move...")
+                await self._emit_status(
+                    f"Waiting for {current_color.title()} ({model_name}) to move..."
+                )
                 move_coro = self._get_llm_move(model_name, current_color)
 
             # Apply per-move time limit if configured
             try:
                 if self.config.move_time_limit is not None:
                     move_result = await asyncio.wait_for(
-                        move_coro, timeout=self.config.move_time_limit,
+                        move_coro,
+                        timeout=self.config.move_time_limit,
                     )
                 else:
                     move_result = await move_coro
             except asyncio.TimeoutError:
                 winner = "black" if current_color == "white" else "white"
-                side_label = "Human" if is_human else "Stockfish" if is_stockfish else model_name
+                side_label = (
+                    "Human" if is_human else "Stockfish" if is_stockfish else model_name
+                )
                 logger.warning(
                     "Move %d: %s (%s) timed out after %.1fs",
-                    self.board.fullmove_number, side_label, current_color,
+                    self.board.fullmove_number,
+                    side_label,
+                    current_color,
                     self.config.move_time_limit,
                 )
                 await self._emit_status(f"{current_color.title()} timed out!")
                 return self._build_result(
-                    outcome=f"{winner}_wins", termination="timeout",
+                    outcome=f"{winner}_wins",
+                    termination="timeout",
                 )
 
             if move_result is None:
                 winner = "black" if current_color == "white" else "white"
                 if is_human:
-                    logger.info("Move %d: %s (Human) resigned", self.board.fullmove_number, current_color)
+                    logger.info(
+                        "Move %d: %s (Human) resigned",
+                        self.board.fullmove_number,
+                        current_color,
+                    )
                     return self._build_result(
                         outcome=f"{winner}_wins",
                         termination="resignation",
                     )
                 elif is_stockfish:
-                    logger.error("Move %d: Stockfish failed to produce a move (%s)", self.board.fullmove_number, current_color)
+                    logger.error(
+                        "Move %d: Stockfish failed to produce a move (%s)",
+                        self.board.fullmove_number,
+                        current_color,
+                    )
                     return self._build_result(
                         outcome="draw",
                         termination="error",
@@ -147,7 +199,9 @@ class GameEngine:
                 else:
                     logger.warning(
                         "Move %d: %s (%s) forfeited after %d consecutive illegal moves",
-                        self.board.fullmove_number, model_name, current_color,
+                        self.board.fullmove_number,
+                        model_name,
+                        current_color,
                         self._consecutive_illegal_moves,
                     )
                     return self._build_result(
@@ -169,10 +223,17 @@ class GameEngine:
             if is_chaos:
                 if self.board.king(chess.WHITE) is None:
                     record = MoveRecord(
-                        move_number=self.board.fullmove_number - (1 if current_color == "black" else 0),
-                        color=current_color, uci=chess_move.uci(), san=san,
-                        fen_after=self.board.fen(), narration=narration, table_talk=table_talk,
-                        response_time_ms=elapsed_ms, eval_before=eval_before,
+                        move_number=self.board.fullmove_number
+                        - (1 if current_color == "black" else 0),
+                        color=current_color,
+                        uci=chess_move.uci(),
+                        san=san,
+                        fen_after=self.board.fen(),
+                        narration=narration,
+                        table_talk=table_talk,
+                        response_time_ms=elapsed_ms,
+                        eval_before=eval_before,
+                        eval_after=eval_before,
                         is_chaos_move=True,
                         input_tokens=usage_data.get("input_tokens"),
                         output_tokens=usage_data.get("output_tokens"),
@@ -184,10 +245,17 @@ class GameEngine:
                     return self._build_result("black_wins", "king_captured")
                 if self.board.king(chess.BLACK) is None:
                     record = MoveRecord(
-                        move_number=self.board.fullmove_number - (1 if current_color == "black" else 0),
-                        color=current_color, uci=chess_move.uci(), san=san,
-                        fen_after=self.board.fen(), narration=narration, table_talk=table_talk,
-                        response_time_ms=elapsed_ms, eval_before=eval_before,
+                        move_number=self.board.fullmove_number
+                        - (1 if current_color == "black" else 0),
+                        color=current_color,
+                        uci=chess_move.uci(),
+                        san=san,
+                        fen_after=self.board.fen(),
+                        narration=narration,
+                        table_talk=table_talk,
+                        response_time_ms=elapsed_ms,
+                        eval_before=eval_before,
+                        eval_after=eval_before,
                         is_chaos_move=True,
                         input_tokens=usage_data.get("input_tokens"),
                         output_tokens=usage_data.get("output_tokens"),
@@ -203,14 +271,21 @@ class GameEngine:
                 logger.debug(
                     "Move %d: %s (%s) played %s (%s)",
                     self.board.fullmove_number - (1 if current_color == "black" else 0),
-                    current_color, side_label, san, chess_move.uci(),
+                    current_color,
+                    side_label,
+                    san,
+                    chess_move.uci(),
                 )
             else:
                 logger.debug(
                     "Move %d: %s played %s (%s) in %dms | tokens: %s in / %s out | cost: $%s",
                     self.board.fullmove_number - (1 if current_color == "black" else 0),
-                    current_color, san, chess_move.uci(), elapsed_ms,
-                    usage_data.get("input_tokens", "?"), usage_data.get("output_tokens", "?"),
+                    current_color,
+                    san,
+                    chess_move.uci(),
+                    elapsed_ms,
+                    usage_data.get("input_tokens", "?"),
+                    usage_data.get("output_tokens", "?"),
                     f"{usage_data.get('cost_usd', 0) or 0:.4f}",
                 )
 
@@ -226,7 +301,9 @@ class GameEngine:
             # Classify the move
             classification: str | None = None
             if eval_before and eval_after:
-                cls = classify_move(eval_before, eval_after, chess_move.uci(), current_color)
+                cls = classify_move(
+                    eval_before, eval_after, chess_move.uci(), current_color
+                )
                 classification = cls.value
 
             # Detect opening
@@ -273,17 +350,25 @@ class GameEngine:
 
             # Draw adjudication check
             if self.config.draw_adjudication and eval_after and not is_chaos:
-                if (abs(eval_after.centipawns) <= DRAW_ADJUDICATION_CP_THRESHOLD
-                        and eval_after.mate_in is None):
+                if (
+                    abs(eval_after.centipawns) <= DRAW_ADJUDICATION_CP_THRESHOLD
+                    and eval_after.mate_in is None
+                ):
                     self._consecutive_draw_eval_count += 1
                 else:
                     self._consecutive_draw_eval_count = 0
-                if self._consecutive_draw_eval_count >= DRAW_ADJUDICATION_MOVE_THRESHOLD:
+                if (
+                    self._consecutive_draw_eval_count
+                    >= DRAW_ADJUDICATION_MOVE_THRESHOLD
+                ):
                     logger.info(
                         "Draw adjudication: eval within ±%dcp for %d consecutive moves",
-                        DRAW_ADJUDICATION_CP_THRESHOLD, self._consecutive_draw_eval_count,
+                        DRAW_ADJUDICATION_CP_THRESHOLD,
+                        self._consecutive_draw_eval_count,
                     )
-                    await self._emit_status("Draw by adjudication — position evaluated as equal for 30 moves")
+                    await self._emit_status(
+                        "Draw by adjudication — position evaluated as equal for 30 moves"
+                    )
                     return self._build_result("draw", "adjudication")
 
         # Game ended naturally
@@ -294,7 +379,9 @@ class GameEngine:
         result = self._build_result_from_board()
         logger.info(
             "Game ended: %s by %s after %d moves",
-            result.outcome, result.termination, result.total_moves,
+            result.outcome,
+            result.termination,
+            result.total_moves,
         )
         return result
 
@@ -303,7 +390,8 @@ class GameEngine:
             await self.status_callback(message)
 
     async def _get_human_move(
-        self, color: str,
+        self,
+        color: str,
     ) -> tuple[chess.Move, str, str, int, dict] | None:
         """Wait for a human player to submit a move via the WebSocket queue.
 
@@ -333,10 +421,14 @@ class GameEngine:
                     logger.debug("Human move accepted: %s (%s)", uci_str, color)
                     return move, "", "", 0, {}
                 else:
-                    logger.warning("Human submitted illegal move: %s (%s)", uci_str, color)
+                    logger.warning(
+                        "Human submitted illegal move: %s (%s)", uci_str, color
+                    )
                     await self._emit_illegal_move(
-                        color=color, model="Human",
-                        attempted_move=uci_str, reason="Illegal move",
+                        color=color,
+                        model="Human",
+                        attempted_move=uci_str,
+                        reason="Illegal move",
                         attempt=1,
                     )
                     # Re-signal that we're still waiting
@@ -345,15 +437,19 @@ class GameEngine:
             except (ValueError, chess.InvalidMoveError):
                 logger.warning("Human submitted invalid UCI: '%s' (%s)", uci_str, color)
                 await self._emit_illegal_move(
-                    color=color, model="Human",
-                    attempted_move=uci_str, reason="Invalid UCI notation",
+                    color=color,
+                    model="Human",
+                    attempted_move=uci_str,
+                    reason="Invalid UCI notation",
                     attempt=1,
                 )
                 if self.awaiting_human_move_callback:
                     await self.awaiting_human_move_callback(color)
 
     async def _get_stockfish_move(
-        self, color: str, eval_before: PositionEval | None,
+        self,
+        color: str,
+        eval_before: PositionEval | None,
     ) -> tuple[chess.Move, str, str, int, dict] | None:
         """Get the best move from Stockfish engine.
 
@@ -368,7 +464,9 @@ class GameEngine:
         if self.stockfish_player:
             # Use strength-limited player engine
             try:
-                best_move_uci, elapsed_ms = await self.stockfish_player.get_best_move(self.board)
+                best_move_uci, elapsed_ms = await self.stockfish_player.get_best_move(
+                    self.board
+                )
             except Exception as e:
                 logger.error("Stockfish player engine failed (%s): %s", color, e)
                 return None
@@ -394,12 +492,16 @@ class GameEngine:
         try:
             move = chess.Move.from_uci(best_move_uci)
             if move not in self.board.legal_moves:
-                logger.error("Stockfish returned illegal move: %s (%s)", best_move_uci, color)
+                logger.error(
+                    "Stockfish returned illegal move: %s (%s)", best_move_uci, color
+                )
                 return None
             self._consecutive_illegal_moves = 0
             return move, "", "", elapsed_ms, {}
         except (ValueError, chess.InvalidMoveError):
-            logger.error("Stockfish returned invalid UCI: %s (%s)", best_move_uci, color)
+            logger.error(
+                "Stockfish returned invalid UCI: %s (%s)", best_move_uci, color
+            )
             return None
 
     async def _get_llm_move(
@@ -424,18 +526,23 @@ class GameEngine:
             # After 3 consecutive illegal moves, inject legal moves as a lifeline
             show_legal = self._consecutive_illegal_moves >= 3
             user_prompt = build_user_prompt(
-                self.board, color, history_dicts, error_context,
+                self.board,
+                color,
+                history_dicts,
+                error_context,
                 include_legal_moves=show_legal,
             )
 
             start = time.monotonic()
             # Build per-color model settings from config
             temp = (
-                self.config.white_temperature if color == "white"
+                self.config.white_temperature
+                if color == "white"
                 else self.config.black_temperature
             )
             reasoning = (
-                self.config.white_reasoning_effort if color == "white"
+                self.config.white_reasoning_effort
+                if color == "white"
                 else self.config.black_reasoning_effort
             )
             settings: ModelSettings = {}
@@ -448,8 +555,12 @@ class GameEngine:
 
             logger.debug(
                 "LLM call: model=%s, color=%s, attempt=%d, show_legal=%s, temp=%s, reasoning=%s",
-                model_name, color, self._consecutive_illegal_moves + 1, show_legal,
-                temp, reasoning,
+                model_name,
+                color,
+                self._consecutive_illegal_moves + 1,
+                show_legal,
+                temp,
+                reasoning,
             )
             try:
                 result = await chess_agent.run(
@@ -464,11 +575,16 @@ class GameEngine:
                 error_context = f"API error: {e}"
                 logger.error(
                     "LLM call failed: model=%s, error=%s, elapsed=%dms, consecutive_failures=%d",
-                    model_name, e, elapsed_ms, self._consecutive_illegal_moves,
+                    model_name,
+                    e,
+                    elapsed_ms,
+                    self._consecutive_illegal_moves,
                 )
                 await self._emit_illegal_move(
-                    color=color, model=model_name,
-                    attempted_move="(API error)", reason=str(e),
+                    color=color,
+                    model=model_name,
+                    attempted_move="(API error)",
+                    reason=str(e),
                     attempt=self._consecutive_illegal_moves,
                 )
                 continue
@@ -501,10 +617,12 @@ class GameEngine:
                     self._last_move_was_chaos = True
                     logger.info(
                         "Chaos move accepted: model=%s, uci=%s (illegal but own piece on source)",
-                        model_name, uci_str,
+                        model_name,
+                        uci_str,
                     )
                     await self._emit_chaos_move(
-                        color=color, model=model_name,
+                        color=color,
+                        model=model_name,
                         attempted_move=uci_str,
                         move_number=self.board.fullmove_number,
                     )
@@ -513,7 +631,10 @@ class GameEngine:
                     self._consecutive_illegal_moves += 1
                     logger.warning(
                         "Illegal move: model=%s, attempted=%s, consecutive=%d/%d",
-                        model_name, uci_str, self._consecutive_illegal_moves, MAX_CONSECUTIVE_ILLEGAL_MOVES,
+                        model_name,
+                        uci_str,
+                        self._consecutive_illegal_moves,
+                        MAX_CONSECUTIVE_ILLEGAL_MOVES,
                     )
                     error_context = (
                         f"ILLEGAL MOVE: '{uci_str}' is valid UCI notation but is not a "
@@ -521,15 +642,20 @@ class GameEngine:
                         f"Re-read the board and pick a different move."
                     )
                     await self._emit_illegal_move(
-                        color=color, model=model_name,
-                        attempted_move=uci_str, reason="Illegal move",
+                        color=color,
+                        model=model_name,
+                        attempted_move=uci_str,
+                        reason="Illegal move",
                         attempt=self._consecutive_illegal_moves,
                     )
             except (ValueError, chess.InvalidMoveError):
                 self._consecutive_illegal_moves += 1
                 logger.warning(
                     "Invalid UCI: model=%s, attempted='%s', consecutive=%d/%d",
-                    model_name, uci_str, self._consecutive_illegal_moves, MAX_CONSECUTIVE_ILLEGAL_MOVES,
+                    model_name,
+                    uci_str,
+                    self._consecutive_illegal_moves,
+                    MAX_CONSECUTIVE_ILLEGAL_MOVES,
                 )
                 error_context = (
                     f"INVALID UCI: '{uci_str}' is not valid UCI notation. "
@@ -538,14 +664,18 @@ class GameEngine:
                     f"Do NOT use SAN notation like 'Nf3' or 'O-O'."
                 )
                 await self._emit_illegal_move(
-                    color=color, model=model_name,
-                    attempted_move=uci_str, reason="Invalid UCI notation",
+                    color=color,
+                    model=model_name,
+                    attempted_move=uci_str,
+                    reason="Invalid UCI notation",
                     attempt=self._consecutive_illegal_moves,
                 )
 
         logger.error(
             "Forfeit: model=%s (%s) reached %d consecutive illegal moves",
-            model_name, color, MAX_CONSECUTIVE_ILLEGAL_MOVES,
+            model_name,
+            color,
+            MAX_CONSECUTIVE_ILLEGAL_MOVES,
         )
         return None  # Forfeit after MAX_CONSECUTIVE_ILLEGAL_MOVES consecutive illegal moves
 
@@ -588,7 +718,12 @@ class GameEngine:
         return f"{piece_char}{move.uci()}!?"
 
     async def _emit_chaos_move(
-        self, *, color: str, model: str, attempted_move: str, move_number: int,
+        self,
+        *,
+        color: str,
+        model: str,
+        attempted_move: str,
+        move_number: int,
     ) -> None:
         """Notify callbacks that a chaos move was detected and allowed."""
         event = {

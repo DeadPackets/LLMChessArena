@@ -8,6 +8,8 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 # Game defaults
 MAX_MOVES_PER_SIDE = int(os.getenv("MAX_MOVES_PER_SIDE", "200"))
 MAX_CONSECUTIVE_ILLEGAL_MOVES = int(os.getenv("MAX_CONSECUTIVE_ILLEGAL_MOVES", "10"))
+MIN_MOVE_TIME_LIMIT = float(os.getenv("MIN_MOVE_TIME_LIMIT", "5"))
+MAX_MOVE_TIME_LIMIT = float(os.getenv("MAX_MOVE_TIME_LIMIT", "600"))
 
 # ELO
 ELO_K_FACTOR = int(os.getenv("ELO_K_FACTOR", "32"))
@@ -21,6 +23,8 @@ RATE_LIMIT_WS_CONNECT = int(os.getenv("RATE_LIMIT_WS_CONNECT", "20"))
 
 # Concurrency
 MAX_CONCURRENT_GAMES = int(os.getenv("MAX_CONCURRENT_GAMES", "3"))
+MAX_QUEUED_GAMES = int(os.getenv("MAX_QUEUED_GAMES", "25"))
+MAX_WS_EVENT_QUEUE_SIZE = int(os.getenv("MAX_WS_EVENT_QUEUE_SIZE", "64"))
 
 # Stockfish (evaluation engine)
 STOCKFISH_PATH = os.getenv("STOCKFISH_PATH", "/usr/games/stockfish")
@@ -47,6 +51,6 @@ NARRATION_CHAR_CAP = int(os.getenv("NARRATION_CHAR_CAP", "128"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
 # CORS — comma-separated origins, locked to production domain by default
-ALLOWED_ORIGINS = os.getenv(
-    "ALLOWED_ORIGINS", "https://llmchess.deadpackets.pw"
-).split(",")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://llmchess.deadpackets.pw").split(
+    ","
+)

@@ -35,7 +35,9 @@ def _per_move_accuracy(win_pct_diff: float) -> float:
     """Lichess per-move accuracy from win-percentage loss (0–100 scale)."""
     if win_pct_diff <= 0:
         return 100.0
-    raw = _ACC_MULTIPLIER * math.exp(_ACC_DECAY * win_pct_diff) + _ACC_OFFSET + _ACC_BONUS
+    raw = (
+        _ACC_MULTIPLIER * math.exp(_ACC_DECAY * win_pct_diff) + _ACC_OFFSET + _ACC_BONUS
+    )
     return max(0.0, min(100.0, raw))
 
 
@@ -84,6 +86,18 @@ def _aggregate_accuracy(
     return (weighted_mean + harmonic_mean) / 2.0
 
 
+def _move_eval_before(move: Move) -> tuple[int | None, float | None]:
+    cp_before = move.centipawns_before
+    wp_before = move.win_probability_before
+
+    if cp_before is None and move.centipawns is not None:
+        cp_before = 0
+    if wp_before is None and move.win_probability is not None:
+        wp_before = 0.5
+
+    return cp_before, wp_before
+
+
 async def compute_game_analysis(session: AsyncSession, game_id: str) -> GameAnalysis:
     """Compute full analysis stats for a completed game."""
     results = await session.exec(
@@ -112,60 +126,107 @@ async def compute_game_analysis(session: AsyncSession, game_id: str) -> GameAnal
     for i, move in enumerate(moves):
         has_cp = move.centipawns is not None
         has_wp = move.win_probability is not None
-        wp_before = moves[i - 1].win_probability if i > 0 and moves[i - 1].win_probability is not None else 0.5
+        cp_before: int = 0
+        cp_after: int = move.centipawns if move.centipawns is not None else 0
+        _, wp_before = _move_eval_before(move)
+        if wp_before is None:
+            wp_before = (
+                moves[i - 1].win_probability
+                if i > 0 and moves[i - 1].win_probability is not None
+                else 0.5
+            )
         wp_after = move.win_probability if has_wp else wp_before
 
         if has_cp:
-            cp_before = moves[i - 1].centipawns if i > 0 and moves[i - 1].centipawns is not None else 0
-            cp_after = move.centipawns
+            raw_cp_before, _ = _move_eval_before(move)
+            if raw_cp_before is None:
+                cp_before = (
+                    moves[i - 1].centipawns
+                    if i > 0 and moves[i - 1].centipawns is not None
+                    else 0
+                )
+            else:
+                cp_before = raw_cp_before
 
         if move.color == "white":
             if has_cp:
-                white_cp_losses.append(min(max(0, cp_before - cp_after), MAX_LOSS_PER_MOVE))
+                white_cp_losses.append(
+                    min(max(0, cp_before - cp_after), MAX_LOSS_PER_MOVE)
+                )
             if has_wp:
                 win_diff = (wp_before - wp_after) * 100  # scale to 0-100
                 white_win_pcts.append(wp_before * 100)
                 white_move_accs.append(_per_move_accuracy(win_diff))
             if move.classification:
-                white_cls[move.classification] = white_cls.get(move.classification, 0) + 1
+                white_cls[move.classification] = (
+                    white_cls.get(move.classification, 0) + 1
+                )
             white_times.append(move.response_time_ms or 0)
             white_tokens += (move.input_tokens or 0) + (move.output_tokens or 0)
             white_cost += move.cost_usd or 0.0
         else:
             if has_cp:
-                black_cp_losses.append(min(max(0, cp_after - cp_before), MAX_LOSS_PER_MOVE))
+                black_cp_losses.append(
+                    min(max(0, cp_after - cp_before), MAX_LOSS_PER_MOVE)
+                )
             if has_wp:
-                win_diff = ((1.0 - wp_before) - (1.0 - wp_after)) * 100  # from black's perspective
+                win_diff = (
+                    (1.0 - wp_before) - (1.0 - wp_after)
+                ) * 100  # from black's perspective
                 black_win_pcts.append((1.0 - wp_before) * 100)
                 black_move_accs.append(_per_move_accuracy(win_diff))
             if move.classification:
-                black_cls[move.classification] = black_cls.get(move.classification, 0) + 1
+                black_cls[move.classification] = (
+                    black_cls.get(move.classification, 0) + 1
+                )
             black_times.append(move.response_time_ms or 0)
             black_tokens += (move.input_tokens or 0) + (move.output_tokens or 0)
             black_cost += move.cost_usd or 0.0
 
-    white_acpl = sum(white_cp_losses) / len(white_cp_losses) if white_cp_losses else None
-    black_acpl = sum(black_cp_losses) / len(black_cp_losses) if black_cp_losses else None
-    white_accuracy = _aggregate_accuracy(white_win_pcts, white_move_accs) if white_move_accs else None
-    black_accuracy = _aggregate_accuracy(black_win_pcts, black_move_accs) if black_move_accs else None
+    white_acpl = (
+        sum(white_cp_losses) / len(white_cp_losses) if white_cp_losses else None
+    )
+    black_acpl = (
+        sum(black_cp_losses) / len(black_cp_losses) if black_cp_losses else None
+    )
+    white_accuracy = (
+        _aggregate_accuracy(white_win_pcts, white_move_accs)
+        if white_move_accs
+        else None
+    )
+    black_accuracy = (
+        _aggregate_accuracy(black_win_pcts, black_move_accs)
+        if black_move_accs
+        else None
+    )
 
     # Critical moments: win probability swings >= 0.15
     critical: list[CriticalMoment] = []
     for i, move in enumerate(moves):
-        wp_before = moves[i - 1].win_probability if i > 0 and moves[i - 1].win_probability is not None else 0.5
-        wp_after = move.win_probability if move.win_probability is not None else wp_before
+        _, wp_before = _move_eval_before(move)
+        if wp_before is None:
+            wp_before = (
+                moves[i - 1].win_probability
+                if i > 0 and moves[i - 1].win_probability is not None
+                else 0.5
+            )
+        wp_after = (
+            move.win_probability if move.win_probability is not None else wp_before
+        )
         swing = abs(wp_after - wp_before)
         if swing >= 0.15:
-            critical.append(CriticalMoment(
-                move_index=i,
-                move_number=move.move_number,
-                color=move.color,
-                san=move.san,
-                win_prob_before=round(wp_before, 4),
-                win_prob_after=round(wp_after, 4),
-                swing=round(swing, 4),
-                classification=move.classification,
-            ))
+            critical.append(
+                CriticalMoment(
+                    move_index=i,
+                    move_number=move.move_number,
+                    color=move.color,
+                    san=move.san,
+                    win_prob_before=round(wp_before, 4),
+                    win_prob_after=round(wp_after, 4),
+                    swing=round(swing, 4),
+                    classification=move.classification,
+                )
+            )
     critical.sort(key=lambda x: x.swing, reverse=True)
 
     return GameAnalysis(
@@ -176,8 +237,12 @@ async def compute_game_analysis(session: AsyncSession, game_id: str) -> GameAnal
         white_classifications=white_cls,
         black_classifications=black_cls,
         critical_moments=critical[:10],
-        white_avg_response_ms=round(sum(white_times) / len(white_times), 0) if white_times else 0,
-        black_avg_response_ms=round(sum(black_times) / len(black_times), 0) if black_times else 0,
+        white_avg_response_ms=round(sum(white_times) / len(white_times), 0)
+        if white_times
+        else 0,
+        black_avg_response_ms=round(sum(black_times) / len(black_times), 0)
+        if black_times
+        else 0,
         white_total_tokens=white_tokens,
         black_total_tokens=black_tokens,
         white_total_cost=round(white_cost, 6),
@@ -201,10 +266,17 @@ async def compute_model_aggregate_stats(session: AsyncSession, model_id: str) ->
     games = results.all()
 
     if not games:
-        return {"avg_acpl": None, "avg_accuracy": None, "avg_cost_per_game": 0.0, "avg_response_ms": 0.0}
+        return {
+            "avg_acpl": None,
+            "avg_accuracy": None,
+            "avg_cost_per_game": 0.0,
+            "avg_response_ms": 0.0,
+        }
 
     game_ids = [g.id for g in games]
-    game_color_map = {g.id: ("white" if g.white_model == model_id else "black") for g in games}
+    game_color_map = {
+        g.id: ("white" if g.white_model == model_id else "black") for g in games
+    }
 
     # Single query for ALL moves across ALL matching games
     move_results = await session.exec(
@@ -247,36 +319,66 @@ async def compute_model_aggregate_stats(session: AsyncSession, model_id: str) ->
             if move.color != color:
                 continue
 
-            wp_before = moves[i - 1].win_probability if i > 0 and moves[i - 1].win_probability is not None else 0.5
-            wp_after = move.win_probability if move.win_probability is not None else wp_before
+            cp_before: int = 0
+            cp_after: int = move.centipawns if move.centipawns is not None else 0
+            _, wp_before = _move_eval_before(move)
+            if wp_before is None:
+                wp_before = (
+                    moves[i - 1].win_probability
+                    if i > 0 and moves[i - 1].win_probability is not None
+                    else 0.5
+                )
+            wp_after = (
+                move.win_probability if move.win_probability is not None else wp_before
+            )
 
             # Centipawn loss (for ACPL)
             if move.centipawns is not None:
-                cp_before = moves[i - 1].centipawns if i > 0 and moves[i - 1].centipawns is not None else 0
-                cp_after = move.centipawns
-                if color == "white":
-                    all_cp_losses.append(min(max(0, cp_before - cp_after), MAX_LOSS_PER_MOVE))
+                raw_cp_before, _ = _move_eval_before(move)
+                if raw_cp_before is None:
+                    prev_cp = (
+                        moves[i - 1].centipawns
+                        if i > 0 and moves[i - 1].centipawns is not None
+                        else 0
+                    )
+                    cp_before = prev_cp if prev_cp is not None else 0
                 else:
-                    all_cp_losses.append(min(max(0, cp_after - cp_before), MAX_LOSS_PER_MOVE))
+                    cp_before = raw_cp_before
+                if color == "white":
+                    all_cp_losses.append(
+                        min(max(0, cp_before - cp_after), MAX_LOSS_PER_MOVE)
+                    )
+                else:
+                    all_cp_losses.append(
+                        min(max(0, cp_after - cp_before), MAX_LOSS_PER_MOVE)
+                    )
 
             # Per-move accuracy (from win probability)
             if move.win_probability is not None:
+                wp_before_val = wp_before if wp_before is not None else 0.5
+                wp_after_val = wp_after if wp_after is not None else wp_before_val
                 if color == "white":
-                    win_diff = (wp_before - wp_after) * 100
-                    all_win_pcts.append(wp_before * 100)
+                    win_diff = (wp_before_val - wp_after_val) * 100
+                    all_win_pcts.append(wp_before_val * 100)
                 else:
-                    win_diff = ((1.0 - wp_before) - (1.0 - wp_after)) * 100
-                    all_win_pcts.append((1.0 - wp_before) * 100)
+                    win_diff = ((1.0 - wp_before_val) - (1.0 - wp_after_val)) * 100
+                    all_win_pcts.append((1.0 - wp_before_val) * 100)
                 all_move_accs.append(_per_move_accuracy(win_diff))
 
             all_times.append(move.response_time_ms or 0)
             total_cost += move.cost_usd or 0.0
 
             if move.classification:
-                total_classifications[move.classification] = total_classifications.get(move.classification, 0) + 1
+                total_classifications[move.classification] = (
+                    total_classifications.get(move.classification, 0) + 1
+                )
 
     avg_acpl = sum(all_cp_losses) / len(all_cp_losses) if all_cp_losses else None
-    avg_accuracy = round(_aggregate_accuracy(all_win_pcts, all_move_accs), 1) if all_move_accs else None
+    avg_accuracy = (
+        round(_aggregate_accuracy(all_win_pcts, all_move_accs), 1)
+        if all_move_accs
+        else None
+    )
     avg_cost_per_game = total_cost / len(games) if games else 0.0
     avg_response_ms = sum(all_times) / len(all_times) if all_times else 0.0
 
@@ -293,7 +395,9 @@ async def compute_model_aggregate_stats(session: AsyncSession, model_id: str) ->
     }
 
 
-async def compute_head_to_head(session: AsyncSession, model_id: str) -> list[HeadToHeadRecord]:
+async def compute_head_to_head(
+    session: AsyncSession, model_id: str
+) -> list[HeadToHeadRecord]:
     """Compute head-to-head records for a model against all opponents."""
     results = await session.exec(
         select(Game).where(
@@ -304,7 +408,9 @@ async def compute_head_to_head(session: AsyncSession, model_id: str) -> list[Hea
     )
     games = results.all()
 
-    records: dict[str, dict] = defaultdict(lambda: {"wins": 0, "losses": 0, "draws": 0, "total": 0})
+    records: dict[str, dict] = defaultdict(
+        lambda: {"wins": 0, "losses": 0, "draws": 0, "total": 0}
+    )
 
     for game in games:
         if game.white_model == model_id:
@@ -341,7 +447,9 @@ async def compute_head_to_head(session: AsyncSession, model_id: str) -> list[Hea
             draws=data["draws"],
             total_games=data["total"],
         )
-        for opp, data in sorted(records.items(), key=lambda x: x[1]["total"], reverse=True)
+        for opp, data in sorted(
+            records.items(), key=lambda x: x[1]["total"], reverse=True
+        )
     ]
 
 
@@ -468,9 +576,15 @@ async def compute_opening_stats(session: AsyncSession) -> list[OpeningStats]:
     )
     games = results.all()
 
-    openings: dict[str, dict] = defaultdict(lambda: {
-        "name": "", "total": 0, "white_wins": 0, "black_wins": 0, "draws": 0,
-    })
+    openings: dict[str, dict] = defaultdict(
+        lambda: {
+            "name": "",
+            "total": 0,
+            "white_wins": 0,
+            "black_wins": 0,
+            "draws": 0,
+        }
+    )
 
     for g in games:
         eco = g.opening_eco
@@ -502,20 +616,25 @@ async def compute_opening_stats(session: AsyncSession) -> list[OpeningStats]:
     )
 
 
-async def compute_elo_history(session: AsyncSession, model_id: str) -> list[EloHistoryPoint]:
+async def compute_elo_history(
+    session: AsyncSession, model_id: str
+) -> list[EloHistoryPoint]:
     """Compute ELO history for a model by replaying all completed games chronologically."""
     results = await session.exec(
-        select(Game).where(
+        select(Game)
+        .where(
             Game.status == "completed",
             (Game.white_model == model_id) | (Game.black_model == model_id),
             Game.chaos_mode != True,  # noqa: E712
-        ).order_by(Game.completed_at.asc())  # type: ignore[union-attr]
+        )
+        .order_by(Game.completed_at.asc())  # type: ignore[union-attr]
     )
     games = results.all()
 
     # Filter out games with limited Stockfish (those skip ELO)
     eligible = [
-        g for g in games
+        g
+        for g in games
         if g.white_stockfish_elo is None and g.black_stockfish_elo is None
     ]
 
@@ -536,15 +655,24 @@ async def compute_elo_history(session: AsyncSession, model_id: str) -> list[EloH
         opponent = g.black_model if is_white else g.white_model
 
         if is_white:
-            score = 1.0 if g.outcome and "white" in g.outcome else (0.0 if g.outcome and "black" in g.outcome else 0.5)
+            score = (
+                1.0
+                if g.outcome and "white" in g.outcome
+                else (0.0 if g.outcome and "black" in g.outcome else 0.5)
+            )
         else:
-            score = 1.0 if g.outcome and "black" in g.outcome else (0.0 if g.outcome and "white" in g.outcome else 0.5)
+            score = (
+                1.0
+                if g.outcome and "black" in g.outcome
+                else (0.0 if g.outcome and "white" in g.outcome else 0.5)
+            )
 
         # Get opponent's approximate rating (use 1500 as default)
         opp_model = await session.get(LLMModel, opponent)
         opp_elo = opp_model.elo_rating if opp_model else 1500.0
 
         from app.services.elo_service import calculate_elo_change
+
         if is_white:
             new_elo, _ = calculate_elo_change(elo, opp_elo, score)
         else:
@@ -554,13 +682,15 @@ async def compute_elo_history(session: AsyncSession, model_id: str) -> list[EloH
         elo = new_elo
 
         outcome_label = "win" if score == 1.0 else ("loss" if score == 0.0 else "draw")
-        history.append(EloHistoryPoint(
-            game_id=g.id,
-            elo_after=round(elo, 1),
-            elo_change=change,
-            opponent=opponent,
-            outcome=outcome_label,
-            played_at=g.completed_at,
-        ))
+        history.append(
+            EloHistoryPoint(
+                game_id=g.id,
+                elo_after=round(elo, 1),
+                elo_change=change,
+                opponent=opponent,
+                outcome=outcome_label,
+                played_at=g.completed_at,
+            )
+        )
 
     return history

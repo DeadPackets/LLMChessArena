@@ -20,7 +20,9 @@ def _json_default(obj):
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
-async def _send_events(websocket: WebSocket, queue: asyncio.Queue, game_id: str) -> None:
+async def _send_events(
+    websocket: WebSocket, queue: asyncio.Queue, game_id: str
+) -> None:
     """Forward events from the game manager queue to the WebSocket client."""
     while True:
         event = await queue.get()
@@ -48,32 +50,44 @@ async def _receive_messages(websocket: WebSocket, game_id: str) -> None:
         msg_type = msg.get("type")
         if msg_type == "human_move":
             player_secret = msg.get("player_secret")
-            if not manager.validate_player_secret(game_id, player_secret):
+            if not await manager.validate_player_secret(game_id, player_secret):
                 logger.warning("WebSocket unauthorized human_move: game=%s", game_id)
-                await websocket.send_text(json.dumps({
-                    "type": "error",
-                    "data": {"message": "Unauthorized"},
-                }))
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "type": "error",
+                            "data": {"message": "Unauthorized"},
+                        }
+                    )
+                )
                 continue
             uci = msg.get("uci", "").strip()
             if uci:
-                logger.info("WebSocket human move received: game=%s, uci=%s", game_id, uci)
+                logger.info(
+                    "WebSocket human move received: game=%s, uci=%s", game_id, uci
+                )
                 await manager.submit_human_move(game_id, uci)
             else:
                 logger.warning("WebSocket human_move missing uci: game=%s", game_id)
         elif msg_type == "resign":
             player_secret = msg.get("player_secret")
-            if not manager.validate_player_secret(game_id, player_secret):
+            if not await manager.validate_player_secret(game_id, player_secret):
                 logger.warning("WebSocket unauthorized resign: game=%s", game_id)
-                await websocket.send_text(json.dumps({
-                    "type": "error",
-                    "data": {"message": "Unauthorized"},
-                }))
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "type": "error",
+                            "data": {"message": "Unauthorized"},
+                        }
+                    )
+                )
                 continue
             logger.info("WebSocket resignation received: game=%s", game_id)
             await manager.submit_human_move(game_id, "resign")
         else:
-            logger.debug("WebSocket unknown message type: game=%s, type=%s", game_id, msg_type)
+            logger.debug(
+                "WebSocket unknown message type: game=%s, type=%s", game_id, msg_type
+            )
 
 
 @router.websocket("/ws/games/{game_id}")
@@ -89,7 +103,9 @@ async def game_websocket(websocket: WebSocket, game_id: str):
     # Rate limit check before accepting
     if not await check_ws_rate_limit(websocket):
         await websocket.accept()
-        await websocket.send_json({"type": "error", "data": {"message": "Rate limited"}})
+        await websocket.send_json(
+            {"type": "error", "data": {"message": "Rate limited"}}
+        )
         await websocket.close(code=4029)
         return
 
@@ -102,13 +118,20 @@ async def game_websocket(websocket: WebSocket, game_id: str):
     catch_up = await manager.get_catch_up_state(game_id)
     if catch_up is None:
         logger.warning("WebSocket game not found: %s", game_id)
-        await websocket.send_json({"type": "error", "data": {"message": "Game not found"}})
+        await websocket.send_json(
+            {"type": "error", "data": {"message": "Game not found"}}
+        )
         await websocket.close(code=4004)
         return
 
     move_count = len(catch_up["data"].get("moves", []))
     status = catch_up["data"]["status"]
-    logger.info("WebSocket catch-up sent: game=%s, %d moves, status=%s", game_id, move_count, status)
+    logger.info(
+        "WebSocket catch-up sent: game=%s, %d moves, status=%s",
+        game_id,
+        move_count,
+        status,
+    )
     await websocket.send_text(json.dumps(catch_up, default=_json_default))
 
     # If game is already completed, close after sending catch-up

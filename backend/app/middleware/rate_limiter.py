@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import time
 from collections import defaultdict, deque
@@ -30,7 +31,9 @@ class RateLimiter:
     def __init__(self) -> None:
         self.windows: dict[str, deque[float]] = defaultdict(deque)
 
-    def check(self, key: str, limit: int, window_seconds: int = WINDOW_SECONDS) -> tuple[bool, int, float]:
+    def check(
+        self, key: str, limit: int, window_seconds: int = WINDOW_SECONDS
+    ) -> tuple[bool, int, float]:
         """Check if a request is allowed.
 
         Returns (allowed, remaining, reset_timestamp).
@@ -62,15 +65,46 @@ class RateLimiter:
 # Singleton instance shared across middleware and WS guard
 rate_limiter = RateLimiter()
 
+_TRUSTED_PROXY_NETWORKS = (
+    ipaddress.ip_network("127.0.0.1/32"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+)
+
+
+def _is_trusted_proxy(host: str | None) -> bool:
+    if not host:
+        return False
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return any(ip in network for network in _TRUSTED_PROXY_NETWORKS)
+
+
+def _forwarded_client_ip(headers, peer_host: str | None) -> str | None:
+    if not _is_trusted_proxy(peer_host):
+        return None
+
+    real_ip = headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+
+    forwarded = headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[-1].strip()
+
+    return None
+
 
 def _get_client_ip(request: Request) -> str:
-    """Extract client IP, preferring CF-Connecting-IP (Cloudflare) then X-Forwarded-For."""
-    cf_ip = request.headers.get("cf-connecting-ip")
-    if cf_ip:
-        return cf_ip.strip()
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """Extract the client IP, trusting proxy headers only from known peers."""
+    peer_host = request.client.host if request.client else None
+    forwarded_ip = _forwarded_client_ip(request.headers, peer_host)
+    if forwarded_ip:
+        return forwarded_ip
     if request.client:
         return request.client.host
     return "unknown"
@@ -107,7 +141,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             retry_after = max(1, int(reset_at - time.time()))
             logger.warning(
                 "Rate limited: ip=%s tier=%s limit=%d retry_after=%ds",
-                ip, tier, limit, retry_after,
+                ip,
+                tier,
+                limit,
+                retry_after,
             )
             return JSONResponse(
                 status_code=429,
@@ -129,15 +166,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 async def check_ws_rate_limit(websocket: WebSocket) -> bool:
     """Check WebSocket connection rate limit. Returns True if allowed."""
-    cf_ip = websocket.headers.get("cf-connecting-ip")
-    if cf_ip:
-        ip = cf_ip.strip()
-    elif (forwarded := websocket.headers.get("x-forwarded-for")):
-        ip = forwarded.split(",")[0].strip()
-    elif websocket.client:
-        ip = websocket.client.host
-    else:
-        ip = "unknown"
+    peer_host = websocket.client.host if websocket.client else None
+    ip = _forwarded_client_ip(websocket.headers, peer_host) or peer_host or "unknown"
 
     key = f"ws_connect:{ip}"
     allowed, _, _ = rate_limiter.check(key, RATE_LIMIT_WS_CONNECT)
