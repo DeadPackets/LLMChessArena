@@ -11,6 +11,7 @@ function totalCost(state: GameState): number {
 
 export default function GameInfoHeader({ state }: Props) {
   const isLive = state.status === "active";
+  const isQueued = state.status === "queued";
   const cost = state.gameOverData?.totalCostUsd ?? totalCost(state);
 
   const whiteLabel = state.whiteIsHuman
@@ -54,6 +55,9 @@ export default function GameInfoHeader({ state }: Props) {
             <span className="status-badge__dot status-badge__dot--live" />
             Live
           </span>
+        )}
+        {isQueued && (
+          <span className="status-badge status-badge--completed">Queued</span>
         )}
         {state.status === "stopped" && (
           <span className="status-badge status-badge--stopped">

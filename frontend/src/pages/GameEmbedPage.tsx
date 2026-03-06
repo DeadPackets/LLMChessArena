@@ -173,11 +173,11 @@ export default function GameEmbedPage() {
     );
   }
 
-  if (game.status === "active") {
+  if (game.status === "active" || game.status === "queued") {
     return (
       <div className="game-embed game-embed--error">
         <div className="game-embed__error-text">
-          This game is still in progress.
+          This game is not ready for embedding yet.
         </div>
         <a
           href={`/game/${gameId}`}

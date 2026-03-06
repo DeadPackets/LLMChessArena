@@ -203,6 +203,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       };
     }
 
+    case "QUEUED":
+      return {
+        ...state,
+        status: "queued",
+        statusMessage: `Queued (${action.payload.position}/${action.payload.max})`,
+      };
+
     case "STATUS_UPDATE":
       return { ...state, statusMessage: action.payload.message };
 
@@ -346,6 +353,9 @@ export function useGameWebSocket(gameId: string) {
           case "move_played":
             dispatch({ type: "MOVE_PLAYED", payload: msg.data });
             break;
+          case "queued":
+            dispatch({ type: "QUEUED", payload: msg.data });
+            break;
           case "status":
             dispatch({ type: "STATUS_UPDATE", payload: msg.data });
             break;
@@ -391,7 +401,7 @@ export function useGameWebSocket(gameId: string) {
         // ignore malformed messages
       }
     },
-    shouldReconnect: () => statusRef.current === "active" || statusRef.current === null,
+    shouldReconnect: () => statusRef.current === "active" || statusRef.current === "queued" || statusRef.current === null,
     reconnectAttempts: 10,
     reconnectInterval: 3000,
   });
@@ -449,7 +459,7 @@ export function useGameWebSocket(gameId: string) {
   const playerSecret = typeof window !== "undefined"
     ? localStorage.getItem(`chess_player_secret_${gameId}`)
     : null;
-  const isPlayer = !!playerSecret;
+  const isPlayer = !!playerSecret && state.status !== "completed" && state.status !== "stopped";
 
   const submitMove = useCallback((uci: string) => {
     sendJsonMessage({ type: "human_move", uci, player_secret: playerSecret });

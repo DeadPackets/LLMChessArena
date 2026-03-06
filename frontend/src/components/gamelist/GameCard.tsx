@@ -29,6 +29,7 @@ function getWinner(game: GameSummary): "white" | "black" | null {
 export default function GameCard({ game }: Props) {
   const winner = getWinner(game);
   const isLive = game.status === "active";
+  const isQueued = game.status === "queued";
   const timestamp = game.completed_at ?? game.started_at;
 
   const whiteLabel = game.white_is_human
@@ -81,6 +82,8 @@ export default function GameCard({ game }: Props) {
             <span className="status-badge__dot status-badge__dot--live" />
             Live
           </span>
+        ) : isQueued ? (
+          <span className="status-badge status-badge--completed">Queued</span>
         ) : game.status === "stopped" ? (
           <span className="status-badge status-badge--stopped">
             <span className="status-badge__dot status-badge__dot--stopped" />

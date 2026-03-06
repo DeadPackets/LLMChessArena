@@ -297,7 +297,7 @@ export default function GameViewerPage() {
   }
 
   const isCompleted = state.status === "completed";
-  const isLive = state.status === "active";
+  const isLive = state.status === "active" || state.status === "queued";
 
   // Human player logic — only the game creator (with secret) gets player controls
   const humanColor = isPlayer

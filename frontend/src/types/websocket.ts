@@ -71,7 +71,7 @@ export interface GameState {
   gameId: string | null;
   whiteModel: string | null;
   blackModel: string | null;
-  status: "active" | "completed" | "stopped" | "pending" | null;
+  status: "active" | "queued" | "completed" | "stopped" | "pending" | null;
   outcome: string | null;
   termination: string | null;
   openingEco: string | null;
@@ -104,6 +104,7 @@ export interface GameState {
 export type GameAction =
   | { type: "CATCH_UP"; payload: Record<string, unknown> }
   | { type: "MOVE_PLAYED"; payload: Record<string, unknown> }
+  | { type: "QUEUED"; payload: { position: number; active: number; max: number } }
   | { type: "STATUS_UPDATE"; payload: { message: string } }
   | { type: "GAME_STARTED"; payload: { game_id: string; white_model: string; black_model: string; white_is_human?: boolean; black_is_human?: boolean; white_is_stockfish?: boolean; black_is_stockfish?: boolean; chaos_mode?: boolean } }
   | { type: "GAME_OVER"; payload: Record<string, unknown> }

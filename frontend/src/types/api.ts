@@ -2,7 +2,7 @@ export interface GameSummary {
   id: string;
   white_model: string;
   black_model: string;
-  status: "active" | "completed" | "stopped" | "pending";
+  status: "active" | "queued" | "completed" | "stopped" | "pending";
   outcome: string | null;
   termination: string | null;
   opening_eco: string | null;
@@ -36,6 +36,9 @@ export interface MoveDetail {
   centipawns: number | null;
   mate_in: number | null;
   win_probability: number | null;
+  centipawns_before: number | null;
+  mate_in_before: number | null;
+  win_probability_before: number | null;
   best_move_uci: string | null;
   classification: string | null;
   response_time_ms: number;
@@ -203,7 +206,7 @@ export interface CreateGameRequest {
 
 export interface GameCreatedResponse {
   id: string;
-  status: string;
+  status: "active" | "queued";
   player_secret: string | null;
 }
 

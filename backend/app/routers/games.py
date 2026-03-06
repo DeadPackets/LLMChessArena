@@ -356,14 +356,14 @@ async def stop_game(game_id: str, body: StopGameRequest, request: Request):
     """Force-stop an active game. Requires the creator's player secret."""
     logger.info("API: stop game — id=%s", game_id)
     manager = request.app.state.game_manager
-    if not await manager.validate_player_secret(game_id, body.player_secret):
-        raise HTTPException(403, "Unauthorized")
     async with get_session_factory()() as session:
         game = await session.get(Game, game_id)
     if not game:
         raise HTTPException(404, "Game not found")
     if game.status in {"completed", "stopped"}:
         raise HTTPException(409, f"Game already {game.status}")
+    if not await manager.validate_player_secret(game_id, body.player_secret):
+        raise HTTPException(403, "Unauthorized")
     stopped = await manager.stop_game(game_id)
     if not stopped:
         raise HTTPException(409, "Game is not currently running")
