@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { getModelDetail } from "../api/client";
 import type { ModelDetailStats } from "../types/api";
 import GameCard from "../components/gamelist/GameCard";
 import HeadToHeadTable from "../components/model/HeadToHeadTable";
-import EloHistoryChart from "../components/model/EloHistoryChart";
 import ClassificationBadge from "../components/shared/ClassificationBadge";
 import { formatModelName } from "../utils/formatModel";
+
+const EloHistoryChart = lazy(() => import("../components/model/EloHistoryChart"));
 
 const CLASS_ORDER = ["best", "excellent", "good", "inaccuracy", "mistake", "blunder"];
 
@@ -134,7 +135,9 @@ export default function ModelDetailPage() {
       </div>
 
       {/* ELO History */}
-      <EloHistoryChart modelId={model.id} currentElo={model.elo_rating} />
+      <Suspense fallback={null}>
+        <EloHistoryChart modelId={model.id} currentElo={model.elo_rating} />
+      </Suspense>
 
       {/* Head to head */}
       {model.head_to_head.length > 0 && (

@@ -18,7 +18,7 @@
 
   --text-primary: #e8e4dd;
   --text-secondary: #a5a39c;
-  --text-muted: #7a7870;
+  --text-muted: #8a887f;
 
   --border: #1c1f2e;
   --border-light: #272b3d;
@@ -1612,6 +1612,7 @@ button {
 
 .empty-state__text {
   font-size: 0.9rem;
+  color: var(--text-muted);
 }
 
 .spinner-page {

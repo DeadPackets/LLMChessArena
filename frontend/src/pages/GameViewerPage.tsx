@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import html2canvas from "html2canvas";
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useGameWebSocket } from "../hooks/useGameWebSocket";
 import { useReplayControls } from "../hooks/useReplayControls";
@@ -12,11 +11,8 @@ import GameControls from "../components/game/GameControls";
 import NarrationPanel from "../components/game/NarrationPanel";
 import GameInfoHeader from "../components/game/GameInfoHeader";
 import GameOverBanner from "../components/game/GameOverBanner";
-import WinProbGraph from "../components/game/WinProbGraph";
-import ResponseTimeGraph from "../components/game/ResponseTimeGraph";
 import TableTalkPanel from "../components/game/TableTalkPanel";
 import CapturedMaterial from "../components/game/CapturedMaterial";
-import AnalysisPanel from "../components/game/AnalysisPanel";
 import BoardThemeSelector from "../components/game/BoardThemeSelector";
 import EngineLinesPanel from "../components/game/EngineLinesPanel";
 import KeyboardShortcutsModal from "../components/game/KeyboardShortcutsModal";
@@ -24,8 +20,12 @@ import { useChessSound } from "../hooks/useChessSound";
 import { useBoardTheme } from "../hooks/useBoardTheme";
 import type { SoundType } from "../hooks/useChessSound";
 import type { IllegalMoveData } from "../types/websocket";
-import NewGameDialog from "../components/gamelist/NewGameDialog";
-import type { RematchSettings, PlayerType } from "../components/gamelist/NewGameDialog";
+import type { PlayerType } from "../components/gamelist/NewGameDialog";
+
+const WinProbGraph = lazy(() => import("../components/game/WinProbGraph"));
+const ResponseTimeGraph = lazy(() => import("../components/game/ResponseTimeGraph"));
+const AnalysisPanel = lazy(() => import("../components/game/AnalysisPanel"));
+const NewGameDialog = lazy(() => import("../components/gamelist/NewGameDialog"));
 
 function IllegalMoveIndicator({ illegalMoves }: { illegalMoves: IllegalMoveData[] }) {
   const invalidUCI = illegalMoves.filter((m) => m.reason === "Invalid UCI notation").length;
@@ -218,6 +218,7 @@ export default function GameViewerPage() {
     if (!analysisRef.current || exporting) return;
     setExporting(true);
     try {
+      const { default: html2canvas } = await import("html2canvas");
       const canvas = await html2canvas(analysisRef.current, {
         backgroundColor: "#0e1017",
         scale: 2,
@@ -368,12 +369,14 @@ export default function GameViewerPage() {
         {/* Column 2: Eval graph + engine lines + captured material + move list */}
         <div className="game-viewer__moves-col">
           {state.moves.length > 0 && (
-            <WinProbGraph
-              moves={state.moves}
-              selectedIndex={state.selectedIndex}
-              onSelectMove={selectMove}
-              criticalMoments={gameDetail?.analysis?.critical_moments}
-            />
+            <Suspense fallback={null}>
+              <WinProbGraph
+                moves={state.moves}
+                selectedIndex={state.selectedIndex}
+                onSelectMove={selectMove}
+                criticalMoments={gameDetail?.analysis?.critical_moments}
+              />
+            </Suspense>
           )}
 
           {selectedMove?.evalAfter?.engine_lines && selectedMove.evalAfter.engine_lines.length > 0 && (
@@ -451,52 +454,60 @@ export default function GameViewerPage() {
       </div>
 
       {isCompleted && state.moves.length > 0 && (
-        <ResponseTimeGraph
-          moves={state.moves}
-          selectedIndex={state.selectedIndex}
-          onSelectMove={selectMove}
-        />
+        <Suspense fallback={null}>
+          <ResponseTimeGraph
+            moves={state.moves}
+            selectedIndex={state.selectedIndex}
+            onSelectMove={selectMove}
+          />
+        </Suspense>
       )}
 
       {gameDetail?.analysis && (
-        <AnalysisPanel
-          ref={analysisRef}
-          analysis={gameDetail.analysis}
-          whiteModel={state.whiteModel}
-          blackModel={state.blackModel}
-          onSelectMove={selectMove}
-          moves={state.moves}
-          onExport={handleExportPNG}
-          exporting={exporting}
-        />
+        <Suspense fallback={null}>
+          <AnalysisPanel
+            ref={analysisRef}
+            analysis={gameDetail.analysis}
+            whiteModel={state.whiteModel}
+            blackModel={state.blackModel}
+            onSelectMove={selectMove}
+            moves={state.moves}
+            onExport={handleExportPNG}
+            exporting={exporting}
+          />
+        </Suspense>
       )}
 
       <KeyboardShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
-      <NewGameDialog
-        open={rematchOpen}
-        onClose={() => setRematchOpen(false)}
-        initialSettings={{
-          white_model: state.whiteModel || "",
-          black_model: state.blackModel || "",
-          max_moves: 200,
-          white_temperature: state.whiteTemperature,
-          black_temperature: state.blackTemperature,
-          white_reasoning_effort: state.whiteReasoningEffort,
-          black_reasoning_effort: state.blackReasoningEffort,
-          white_is_human: state.whiteIsHuman,
-          black_is_human: state.blackIsHuman,
-          white_is_stockfish: state.whiteIsStockfish,
-          black_is_stockfish: state.blackIsStockfish,
-          white_stockfish_elo: state.whiteStockfishElo,
-          black_stockfish_elo: state.blackStockfishElo,
-          chaos_mode: state.chaosMode,
-          move_time_limit: state.moveTimeLimit,
-          draw_adjudication: state.drawAdjudication,
-          whiteType: (state.whiteIsHuman ? "human" : state.whiteIsStockfish ? "stockfish" : "llm") as PlayerType,
-          blackType: (state.blackIsHuman ? "human" : state.blackIsStockfish ? "stockfish" : "llm") as PlayerType,
-        }}
-      />
+      {rematchOpen && (
+        <Suspense fallback={null}>
+          <NewGameDialog
+            open={rematchOpen}
+            onClose={() => setRematchOpen(false)}
+            initialSettings={{
+              white_model: state.whiteModel || "",
+              black_model: state.blackModel || "",
+              max_moves: 200,
+              white_temperature: state.whiteTemperature,
+              black_temperature: state.blackTemperature,
+              white_reasoning_effort: state.whiteReasoningEffort,
+              black_reasoning_effort: state.blackReasoningEffort,
+              white_is_human: state.whiteIsHuman,
+              black_is_human: state.blackIsHuman,
+              white_is_stockfish: state.whiteIsStockfish,
+              black_is_stockfish: state.blackIsStockfish,
+              white_stockfish_elo: state.whiteStockfishElo,
+              black_stockfish_elo: state.blackStockfishElo,
+              chaos_mode: state.chaosMode,
+              move_time_limit: state.moveTimeLimit,
+              draw_adjudication: state.drawAdjudication,
+              whiteType: (state.whiteIsHuman ? "human" : state.whiteIsStockfish ? "stockfish" : "llm") as PlayerType,
+              blackType: (state.blackIsHuman ? "human" : state.blackIsStockfish ? "stockfish" : "llm") as PlayerType,
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

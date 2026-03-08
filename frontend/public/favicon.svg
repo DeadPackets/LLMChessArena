@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+<title>LLM Chess Arena</title>
+<rect width="64" height="64" rx="12" fill="#0e1017"/>
+<path d="M23 52h18v-4h-2l-2.3-22.1c2.2-1.4 3.3-3.7 3.3-6.2 0-4.6-3.7-8.2-8-8.2s-8 3.6-8 8.2c0 2.5 1.1 4.8 3.3 6.2L25 48h-2v4zm7.8-32.5c0-1.4.9-2.4 2.2-2.4s2.2 1 2.2 2.4c0 1.5-.9 2.6-2.2 2.6s-2.2-1.1-2.2-2.6z" fill="#d4a843"/>
+</svg>

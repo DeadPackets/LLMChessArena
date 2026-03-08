@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { listGames } from "../api/client";
 import type { GameSummary } from "../types/api";
 import GameCard from "../components/gamelist/GameCard";
-import NewGameDialog from "../components/gamelist/NewGameDialog";
+
+const NewGameDialog = lazy(() => import("../components/gamelist/NewGameDialog"));
 
 const PAGE_SIZE = 20;
 
@@ -220,6 +221,7 @@ export default function GameListPage() {
         <select
           className="game-list-page__filter-select"
           value={outcome}
+          aria-label="Filter games by outcome"
           onChange={(e) => setOutcome(e.target.value as Outcome)}
         >
           <option value="">Any outcome</option>
@@ -274,7 +276,11 @@ export default function GameListPage() {
         </>
       )}
 
-      <NewGameDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+      {dialogOpen && (
+        <Suspense fallback={null}>
+          <NewGameDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

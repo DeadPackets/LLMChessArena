@@ -202,7 +202,7 @@ function ModelSettingsPanel({
 
 export default function NewGameDialog({ open, onClose, initialSettings }: Props) {
   const navigate = useNavigate();
-  const { models: openRouterModels, loading: modelsLoading } = useOpenRouterModels();
+  const { models: openRouterModels, loading: modelsLoading } = useOpenRouterModels(open);
   const [whiteModel, setWhiteModel] = useState("");
   const [blackModel, setBlackModel] = useState("");
   const [whiteType, setWhiteType] = useState<PlayerType>("llm");
