@@ -157,7 +157,7 @@ def build_user_prompt(
 ) -> str:
     """Build the user prompt with board state and recent history."""
     # Last 10 moves in SAN
-    recent = move_history[-10:] if move_history else []
+    recent = move_history
     if recent:
         history_lines = []
         for m in recent:
