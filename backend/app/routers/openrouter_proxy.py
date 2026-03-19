@@ -38,7 +38,7 @@ async def _fetch_models() -> list[dict]:
         params = m.get("supported_parameters") or []
         if "text" not in inp or "text" not in out:
             continue
-        if "reasoning" not in params:
+        if "tools" not in params or "reasoning" not in params:
             continue
         pricing = m.get("pricing") or {}
         filtered.append({
