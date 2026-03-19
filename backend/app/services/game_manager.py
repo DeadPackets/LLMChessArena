@@ -713,9 +713,13 @@ class GameManager:
                 session.add(model)
                 await session.commit()
 
+    _background_tasks: set[asyncio.Task] = set()
+
     def _fire_and_forget(self, coro) -> None:
         """Create a task with exception logging so errors aren't silently lost."""
         task = asyncio.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
         task.add_done_callback(self._task_exception_handler)
 
     @staticmethod

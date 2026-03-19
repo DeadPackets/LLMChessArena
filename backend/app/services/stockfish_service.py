@@ -46,14 +46,14 @@ class StockfishService:
 
     async def evaluate(self, board: chess.Board, depth: int = 18, multipv: int = 3) -> PositionEval:
         """Evaluate a position and return structured evaluation data with top N lines."""
-        start = time.monotonic()
         async with self._lock:
+            start = time.monotonic()
             infos = await self.engine.analyse(
-            board,
-            chess.engine.Limit(depth=depth),
+                board,
+                chess.engine.Limit(depth=depth),
                 multipv=multipv,
             )
-        elapsed_ms = int((time.monotonic() - start) * 1000)
+            elapsed_ms = int((time.monotonic() - start) * 1000)
 
         # multipv returns a list of InfoDicts; single PV returns a single dict
         if not isinstance(infos, list):

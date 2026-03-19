@@ -1,5 +1,3 @@
-import type { Classification } from "../../types/api";
-
 const SYMBOLS: Record<string, string> = {
   brilliant: "!!",
   great: "!",
@@ -18,12 +16,11 @@ interface Props {
 export default function ClassificationBadge({ classification }: Props) {
   if (!classification || classification === "good") return null;
 
-  const cls = classification as Classification;
-  const symbol = SYMBOLS[cls] ?? "";
+  const symbol = SYMBOLS[classification] ?? "";
 
   return (
     <span
-      className={`classification-badge classification-badge--${cls}`}
+      className={`classification-badge classification-badge--${classification}`}
       title={classification}
       aria-label={`Move classified as ${classification}`}
     >
