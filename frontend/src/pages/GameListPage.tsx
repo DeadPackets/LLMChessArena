@@ -9,7 +9,7 @@ const NewGameDialog = lazy(() => import("../components/gamelist/NewGameDialog"))
 const PAGE_SIZE = 20;
 
 type Filter = "all" | "active" | "completed";
-type Outcome = "" | "white" | "black" | "draw";
+type Outcome = "" | "white_wins" | "black_wins" | "draw";
 
 export default function GameListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -225,8 +225,8 @@ export default function GameListPage() {
           onChange={(e) => setOutcome(e.target.value as Outcome)}
         >
           <option value="">Any outcome</option>
-          <option value="white">White wins</option>
-          <option value="black">Black wins</option>
+          <option value="white_wins">White wins</option>
+          <option value="black_wins">Black wins</option>
           <option value="draw">Draw</option>
         </select>
         {hasActiveFilters && (

@@ -7,7 +7,7 @@ interface Props {
 
 function formatEval(cp: number, mateIn: number | null): string {
   if (mateIn != null) {
-    return mateIn > 0 ? `#${mateIn}` : `#${mateIn}`;
+    return mateIn > 0 ? `#${mateIn}` : `-#${Math.abs(mateIn)}`;
   }
   const abs = Math.abs(cp) / 100;
   const formatted = abs >= 10 ? abs.toFixed(0) : abs.toFixed(1);

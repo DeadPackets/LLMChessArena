@@ -212,7 +212,7 @@ def render_move(data: dict) -> Panel:
     )
 
 
-def render_game_over(data: dict, white_model: str, black_model: str) -> Panel:
+def render_game_over(data: dict, white_model: str, black_model: str) -> list[Panel]:
     """Render the game over summary."""
     outcome = data.get("outcome", "unknown")
     termination = data.get("termination", "unknown")

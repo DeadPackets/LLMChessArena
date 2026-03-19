@@ -1,6 +1,6 @@
 import type { Classification } from "../../types/api";
 
-const SYMBOLS: Record<Classification, string> = {
+const SYMBOLS: Record<string, string> = {
   brilliant: "!!",
   great: "!",
   best: "\u2605",

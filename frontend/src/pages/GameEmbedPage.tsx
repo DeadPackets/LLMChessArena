@@ -35,7 +35,7 @@ function toMoveData(m: MoveDetail): MoveData {
     inputTokens: m.input_tokens,
     outputTokens: m.output_tokens,
     costUsd: m.cost_usd,
-    isChaosMove: false,
+    isChaosMove: m.is_chaos_move ?? false,
   };
 }
 
@@ -110,8 +110,8 @@ export default function GameEmbedPage() {
   const navigate = useCallback(
     (dir: "first" | "prev" | "next" | "last") => {
       setSelectedIndex((cur) => {
-        if (dir === "first") return 0;
-        if (dir === "prev") return Math.max(0, cur - 1);
+        if (dir === "first") return -1;
+        if (dir === "prev") return Math.max(-1, cur - 1);
         if (dir === "next") return Math.min(moves.length - 1, cur + 1);
         if (dir === "last") return moves.length - 1;
         return cur;
@@ -230,8 +230,8 @@ export default function GameEmbedPage() {
             onSelect={selectMove}
           />
           <GameControls
-            canGoFirst={selectedIndex > 0}
-            canGoPrev={selectedIndex > 0}
+            canGoFirst={selectedIndex > -1}
+            canGoPrev={selectedIndex > -1}
             canGoNext={selectedIndex < moves.length - 1}
             canGoLast={selectedIndex < moves.length - 1}
             autoFollow={false}

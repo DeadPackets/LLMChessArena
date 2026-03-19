@@ -47,6 +47,7 @@ export interface MoveDetail {
   input_tokens: number | null;
   output_tokens: number | null;
   cost_usd: number | null;
+  is_chaos_move: boolean;
 }
 
 export interface CriticalMoment {
@@ -219,8 +220,6 @@ export interface OpenRouterModel {
 }
 
 export type Classification =
-  | "brilliant"
-  | "great"
   | "best"
   | "excellent"
   | "good"

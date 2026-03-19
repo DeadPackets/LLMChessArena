@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import time
@@ -20,6 +21,7 @@ class StockfishService:
         self.path = path
         self._transport: chess.engine.UciProtocol | None = None
         self._engine: chess.engine.UciProtocol | None = None
+        self._lock = asyncio.Lock()
 
     async def start(self) -> None:
         logger.info("Starting Stockfish at %s", self.path)
@@ -45,11 +47,12 @@ class StockfishService:
     async def evaluate(self, board: chess.Board, depth: int = 18, multipv: int = 3) -> PositionEval:
         """Evaluate a position and return structured evaluation data with top N lines."""
         start = time.monotonic()
-        infos = await self.engine.analyse(
+        async with self._lock:
+            infos = await self.engine.analyse(
             board,
             chess.engine.Limit(depth=depth),
-            multipv=multipv,
-        )
+                multipv=multipv,
+            )
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
         # multipv returns a list of InfoDicts; single PV returns a single dict

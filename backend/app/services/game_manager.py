@@ -171,7 +171,7 @@ class GameManager:
         self.event_queues.setdefault(game_id, []).append(queue)
         count = len(self.event_queues[game_id])
         logger.debug("Game %s: WebSocket subscriber added (total: %d)", game_id, count)
-        asyncio.create_task(self._broadcast_spectator_count(game_id))
+        self._fire_and_forget(self._broadcast_spectator_count(game_id))
         return queue
 
     def unsubscribe(self, game_id: str, queue: asyncio.Queue) -> None:
@@ -180,7 +180,7 @@ class GameManager:
             queues.remove(queue)
         logger.debug("Game %s: WebSocket subscriber removed", game_id)
         if game_id in self.event_queues:
-            asyncio.create_task(self._broadcast_spectator_count(game_id))
+            self._fire_and_forget(self._broadcast_spectator_count(game_id))
 
     def get_spectator_count(self, game_id: str) -> int:
         return len(self.event_queues.get(game_id, []))
@@ -382,23 +382,23 @@ class GameManager:
             human_queue = asyncio.Queue()
             self.human_move_queues[game_id] = human_queue
 
-        # Create strength-limited Stockfish player if needed
-        stockfish_player: StockfishPlayerService | None = None
-        if config.white_is_stockfish or config.black_is_stockfish:
-            # Use the relevant side's ELO (or None for full strength)
-            sf_elo = (
-                config.white_stockfish_elo
-                if config.white_is_stockfish
-                else config.black_stockfish_elo
-            )
-            if sf_elo is not None:
-                stockfish_player = StockfishPlayerService()
-                await stockfish_player.start(elo=sf_elo)
+        # Create strength-limited Stockfish player(s) if needed
+        stockfish_player_white: StockfishPlayerService | None = None
+        stockfish_player_black: StockfishPlayerService | None = None
+        if config.white_is_stockfish and config.white_stockfish_elo is not None:
+            stockfish_player_white = StockfishPlayerService()
+            await stockfish_player_white.start(elo=config.white_stockfish_elo)
+        if config.black_is_stockfish and config.black_stockfish_elo is not None:
+            stockfish_player_black = StockfishPlayerService()
+            await stockfish_player_black.start(elo=config.black_stockfish_elo)
+        stockfish_player = stockfish_player_white or stockfish_player_black
 
         engine = GameEngine(
             config,
             stockfish=self.stockfish,
             stockfish_player=stockfish_player,
+            stockfish_player_white=stockfish_player_white,
+            stockfish_player_black=stockfish_player_black,
             opening_detector=self.opening_detector,
             human_move_queue=human_queue,
         )
@@ -559,8 +559,10 @@ class GameManager:
                 },
             )
         finally:
-            if stockfish_player:
-                await stockfish_player.stop()
+            if stockfish_player_white:
+                await stockfish_player_white.stop()
+            if stockfish_player_black and stockfish_player_black is not stockfish_player_white:
+                await stockfish_player_black.stop()
             self.active_games.pop(game_id, None)
             self.human_move_queues.pop(game_id, None)
             self._awaiting_human_move.pop(game_id, None)
@@ -710,6 +712,16 @@ class GameManager:
                 )
                 session.add(model)
                 await session.commit()
+
+    def _fire_and_forget(self, coro) -> None:
+        """Create a task with exception logging so errors aren't silently lost."""
+        task = asyncio.create_task(coro)
+        task.add_done_callback(self._task_exception_handler)
+
+    @staticmethod
+    def _task_exception_handler(task: asyncio.Task) -> None:
+        if not task.cancelled() and task.exception():
+            logger.error("Background task failed: %s", task.exception())
 
     async def _broadcast(self, game_id: str, event: dict) -> None:
         queues = self.event_queues.get(game_id, [])

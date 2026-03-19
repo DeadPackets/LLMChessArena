@@ -135,8 +135,6 @@ async def _migrate_add_columns(conn) -> None:
     import sqlalchemy
 
     migrations = [
-        ("games", "temperature", "FLOAT"),
-        ("games", "reasoning_effort", "VARCHAR"),
         ("games", "white_temperature", "FLOAT"),
         ("games", "black_temperature", "FLOAT"),
         ("games", "white_reasoning_effort", "VARCHAR"),

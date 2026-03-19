@@ -47,6 +47,8 @@ class GameEngine:
         config: GameConfig,
         stockfish: StockfishService | None = None,
         stockfish_player: StockfishPlayerService | None = None,
+        stockfish_player_white: StockfishPlayerService | None = None,
+        stockfish_player_black: StockfishPlayerService | None = None,
         opening_detector: OpeningDetector | None = None,
         human_move_queue: asyncio.Queue | None = None,
     ):
@@ -61,6 +63,8 @@ class GameEngine:
         )
         self.stockfish = stockfish
         self.stockfish_player = stockfish_player
+        self.stockfish_player_white = stockfish_player_white
+        self.stockfish_player_black = stockfish_player_black
         self.opening_detector = opening_detector
         self.human_move_queue = human_move_queue
         self._last_opening: dict[str, str] | None = None
@@ -213,6 +217,7 @@ class GameEngine:
 
             # Record the SAN before pushing
             is_chaos = self._last_move_was_chaos
+            self._last_move_was_chaos = False  # Reset after consuming
             if is_chaos:
                 san = self._chaos_san(chess_move)
             else:
@@ -461,12 +466,12 @@ class GameEngine:
         best_move_uci: str | None = None
         elapsed_ms = 0
 
-        if self.stockfish_player:
+        # Pick the correct per-side player, falling back to shared
+        side_player = (self.stockfish_player_white if color == "white" else self.stockfish_player_black) or self.stockfish_player
+        if side_player:
             # Use strength-limited player engine
             try:
-                best_move_uci, elapsed_ms = await self.stockfish_player.get_best_move(
-                    self.board
-                )
+                best_move_uci, elapsed_ms = await side_player.get_best_move(self.board)
             except Exception as e:
                 logger.error("Stockfish player engine failed (%s): %s", color, e)
                 return None
@@ -828,11 +833,11 @@ class GameEngine:
 
             # Set eval annotation
             if record.eval_after:
-                score = chess.engine.PovScore(
-                    chess.engine.Cp(record.eval_after.centipawns),
-                    chess.WHITE,
-                )
-                node.set_eval(score)
+                if record.eval_after.mate_in is not None:
+                    raw_score = chess.engine.Mate(record.eval_after.mate_in)
+                else:
+                    raw_score = chess.engine.Cp(record.eval_after.centipawns)
+                node.set_eval(chess.engine.PovScore(raw_score, chess.WHITE))
 
             board.push(move)
 

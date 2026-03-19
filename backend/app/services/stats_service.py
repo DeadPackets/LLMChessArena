@@ -641,56 +641,64 @@ async def compute_elo_history(
     if not eligible:
         return []
 
-    # Get all model ratings to replay ELO progression
-    # We replay from 1500 start
-    elo = 1500.0
+    # Replay ELO progression from 1500 start, tracking all models' ELOs
+    from app.services.elo_service import calculate_elo_change
+
+    # Collect all unique model IDs involved so we can track their running ELOs
+    all_models: set[str] = set()
+    for g in eligible:
+        all_models.add(g.white_model)
+        all_models.add(g.black_model)
+
+    # Initialize all models at default ELO
+    running_elos: dict[str, float] = {m: 1500.0 for m in all_models}
+
+    # Also replay ALL completed games (not just this model's) in chronological
+    # order to build accurate opponent ELOs at the time of each game.
+    all_games_result = await session.exec(
+        select(Game)
+        .where(Game.status == "completed")
+        .where(Game.outcome.isnot(None))  # type: ignore[arg-type]
+        .order_by(Game.completed_at.asc())  # type: ignore[union-attr]
+    )
+    all_games = all_games_result.all()
+
+    # Build set of eligible game IDs for this model
+    eligible_ids = {g.id for g in eligible}
     history: list[EloHistoryPoint] = []
 
-    # We need opponents' ratings too. Simplification: track from the model table
-    # Instead of exact replay, compute from stored rating changes
-    # Actually: we can compute the running ELO by knowing all game outcomes
-    # For simplicity, look at the EloHistory table if it exists, else build from games
-    for g in eligible:
-        is_white = g.white_model == model_id
-        opponent = g.black_model if is_white else g.white_model
+    for g in all_games:
+        w_id = g.white_model
+        b_id = g.black_model
+        w_elo = running_elos.get(w_id, 1500.0)
+        b_elo = running_elos.get(b_id, 1500.0)
 
-        if is_white:
-            score = (
-                1.0
-                if g.outcome and "white" in g.outcome
-                else (0.0 if g.outcome and "black" in g.outcome else 0.5)
-            )
+        if g.outcome and "white" in g.outcome:
+            score_w = 1.0
+        elif g.outcome and "black" in g.outcome:
+            score_w = 0.0
         else:
-            score = (
-                1.0
-                if g.outcome and "black" in g.outcome
-                else (0.0 if g.outcome and "white" in g.outcome else 0.5)
-            )
+            score_w = 0.5
 
-        # Get opponent's approximate rating (use 1500 as default)
-        opp_model = await session.get(LLMModel, opponent)
-        opp_elo = opp_model.elo_rating if opp_model else 1500.0
+        new_w, new_b = calculate_elo_change(w_elo, b_elo, score_w)
+        running_elos[w_id] = new_w
+        running_elos[b_id] = new_b
 
-        from app.services.elo_service import calculate_elo_change
-
-        if is_white:
-            new_elo, _ = calculate_elo_change(elo, opp_elo, score)
-        else:
-            _, new_elo = calculate_elo_change(opp_elo, elo, 1.0 - score)
-
-        change = round(new_elo - elo, 1)
-        elo = new_elo
-
-        outcome_label = "win" if score == 1.0 else ("loss" if score == 0.0 else "draw")
-        history.append(
-            EloHistoryPoint(
+        # Record history point only for the target model
+        if g.id in eligible_ids:
+            is_white = w_id == model_id
+            elo_now = new_w if is_white else new_b
+            elo_prev = w_elo if is_white else b_elo
+            score = score_w if is_white else (1.0 - score_w)
+            opponent = b_id if is_white else w_id
+            outcome_label = "win" if score == 1.0 else ("loss" if score == 0.0 else "draw")
+            history.append(EloHistoryPoint(
                 game_id=g.id,
-                elo_after=round(elo, 1),
-                elo_change=change,
+                elo_after=round(elo_now, 1),
+                elo_change=round(elo_now - elo_prev, 1),
                 opponent=opponent,
                 outcome=outcome_label,
                 played_at=g.completed_at,
-            )
-        )
+            ))
 
     return history

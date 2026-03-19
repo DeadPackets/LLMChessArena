@@ -6,8 +6,6 @@ from app.models.chess_models import PositionEval
 
 
 class MoveClassification(str, Enum):
-    BRILLIANT = "brilliant"
-    GREAT = "great"
     BEST = "best"
     EXCELLENT = "excellent"
     GOOD = "good"
@@ -18,8 +16,6 @@ class MoveClassification(str, Enum):
 
 # Symbols for display
 CLASSIFICATION_SYMBOLS = {
-    MoveClassification.BRILLIANT: "!!",
-    MoveClassification.GREAT: "!",
     MoveClassification.BEST: "★",
     MoveClassification.EXCELLENT: "✓",
     MoveClassification.GOOD: "",
