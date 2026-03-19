@@ -943,6 +943,20 @@ button {
   font-size: 0.7rem;
 }
 
+.game-card__eval {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+
+.game-card__eval--white { color: var(--best); }
+.game-card__eval--black { color: var(--blunder); }
+.game-card__eval--even { color: var(--text-muted); }
+
 /* ─── New Game Dialog ─── */
 .dialog-overlay {
   position: fixed;

@@ -8,6 +8,9 @@ export interface GameSummary {
   opening_eco: string | null;
   opening_name: string | null;
   total_moves: number;
+  live_move_count: number | null;
+  current_eval_cp: number | null;
+  current_mate_in: number | null;
   started_at: string | null;
   completed_at: string | null;
   white_temperature: number | null;

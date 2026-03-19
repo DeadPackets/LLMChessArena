@@ -46,6 +46,9 @@ class GameSummary(BaseModel):
     opening_eco: str | None = None
     opening_name: str | None = None
     total_moves: int = 0
+    live_move_count: int | None = None
+    current_eval_cp: int | None = None
+    current_mate_in: int | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
     white_temperature: float | None = None

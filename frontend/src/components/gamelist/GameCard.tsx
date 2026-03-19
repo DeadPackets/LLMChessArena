@@ -20,6 +20,18 @@ function timeAgo(dateStr: string | null): string {
   return `${diffDays}d ago`;
 }
 
+function formatCompactEval(cp: number | null, mateIn: number | null): string | null {
+  if (mateIn != null) {
+    return mateIn > 0 ? `#${mateIn}` : `-#${Math.abs(mateIn)}`;
+  }
+  if (cp != null) {
+    const abs = Math.abs(cp) / 100;
+    const formatted = abs >= 10 ? abs.toFixed(0) : abs.toFixed(1);
+    return cp >= 0 ? `+${formatted}` : `-${formatted}`;
+  }
+  return null;
+}
+
 function getWinner(game: GameSummary): "white" | "black" | null {
   if (game.outcome?.includes("white")) return "white";
   if (game.outcome?.includes("black")) return "black";
@@ -66,9 +78,21 @@ export default function GameCard({ game }: Props) {
         {game.opening_name && (
           <span className="game-card__opening">{game.opening_name}</span>
         )}
+        {isLive && (() => {
+          const evalStr = formatCompactEval(game.current_eval_cp, game.current_mate_in);
+          if (!evalStr) return null;
+          const cp = game.current_eval_cp ?? 0;
+          const cls = game.current_mate_in != null
+            ? (game.current_mate_in > 0 ? "game-card__eval--white" : "game-card__eval--black")
+            : cp > 50 ? "game-card__eval--white" : cp < -50 ? "game-card__eval--black" : "game-card__eval--even";
+          return <span className={`game-card__eval ${cls}`}>{evalStr}</span>;
+        })()}
         <span className="game-card__time">
-          {game.total_moves > 0 && `${game.total_moves} moves`}
-          {game.total_moves > 0 && timestamp && " \u00b7 "}
+          {isLive
+            ? (game.live_move_count != null && game.live_move_count > 0 && `${game.live_move_count} moves`)
+            : (game.total_moves > 0 && `${game.total_moves} moves`)
+          }
+          {((isLive ? game.live_move_count : game.total_moves) ?? 0) > 0 && timestamp && " \u00b7 "}
           {timestamp && timeAgo(timestamp)}
         </span>
       </div>

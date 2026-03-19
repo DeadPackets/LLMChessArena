@@ -202,6 +202,31 @@ async def list_games(
         for r in rows
     ]
 
+    # Enrich active games with live move count + latest eval
+    active_ids = [g.id for g in games if g.status == "active"]
+    if active_ids:
+        sub = (
+            select(
+                Move.game_id,
+                func.count().label("move_count"),
+                func.max(Move.id).label("max_id"),
+            )
+            .where(Move.game_id.in_(active_ids))
+            .group_by(Move.game_id)
+            .subquery()
+        )
+        enrich_results = await session.exec(
+            select(sub.c.game_id, sub.c.move_count, Move.centipawns, Move.mate_in)  # type: ignore[arg-type]
+            .outerjoin(Move, Move.id == sub.c.max_id)
+        )
+        enrich = {r.game_id: r for r in enrich_results.all()}
+        for g in games:
+            if g.id in enrich:
+                r = enrich[g.id]
+                g.live_move_count = r.move_count
+                g.current_eval_cp = r.centipawns
+                g.current_mate_in = r.mate_in
+
     return PaginatedGamesResponse(
         games=games,
         total_count=total_count,
