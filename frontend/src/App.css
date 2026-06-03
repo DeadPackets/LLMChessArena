@@ -67,10 +67,36 @@ body {
   background-size: 20px 20px;
   min-height: 100vh;
   line-height: 1.5;
+  /* Equal-width figures so live evals, ELO, costs and timers don't jitter */
+  font-variant-numeric: tabular-nums;
+  /* Fewer orphans/ragged edges in body copy */
+  text-wrap: pretty;
 }
+
+/* Balanced, non-orphaned headings */
+h1, h2, h3, h4, h5, h6 { text-wrap: balance; }
 
 a { color: var(--amber); text-decoration: none; transition: color var(--transition); }
 a:hover { color: var(--amber-bright); }
+
+/* ─── Keyboard focus rings (visible on keyboard nav, not mouse clicks) ─── */
+:focus-visible {
+  outline: 2px solid var(--amber-bright);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+/* Mouse/pointer focus stays clean — only :focus-visible shows the ring */
+:focus:not(:focus-visible) { outline: none; }
+
+/* ─── Respect reduced-motion preference (pulse-glow, spinners, slide-ins) ─── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 button {
   font-family: var(--font-body);
@@ -111,6 +137,57 @@ button {
   font-size: 1.3rem;
 }
 
+/* ─── Live activity counter (next to the logo) ─── */
+.app-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.app-header__live-stats {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.app-header__live-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--text-muted);
+}
+
+a.app-header__live-stat:hover {
+  color: var(--text-secondary);
+}
+
+.app-header__live-sep {
+  color: var(--border-light);
+}
+
+.app-header__live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  display: inline-block;
+}
+
+.app-header__live-dot--on {
+  background: var(--amber);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@media (max-width: 640px) {
+  .app-header__live-stats {
+    display: none;
+  }
+}
+
 .app-header__nav {
   display: flex;
   gap: 0.25rem;
@@ -122,7 +199,7 @@ button {
   font-size: 0.87rem;
   font-weight: 500;
   color: var(--text-secondary);
-  transition: all var(--transition);
+  transition: color var(--transition), background-color var(--transition), border-color var(--transition), box-shadow var(--transition), transform var(--transition), opacity var(--transition);
 }
 
 .app-header__link:hover,
@@ -141,7 +218,7 @@ button {
   align-items: center;
   padding: 0.4rem;
   border-radius: var(--radius);
-  transition: all var(--transition);
+  transition: color var(--transition), background-color var(--transition), border-color var(--transition), box-shadow var(--transition), transform var(--transition), opacity var(--transition);
   margin-left: 0.5rem;
 }
 
@@ -526,7 +603,7 @@ button {
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: 0.85rem;
-  transition: all var(--transition);
+  transition: color var(--transition), background-color var(--transition), border-color var(--transition), box-shadow var(--transition), transform var(--transition), opacity var(--transition);
   border: 1px solid transparent;
 }
 
@@ -537,6 +614,7 @@ button {
 
 .game-controls__btn:active {
   background: var(--bg-active);
+  transform: scale(0.96);
 }
 
 .game-controls__btn--disabled {
@@ -555,7 +633,7 @@ button {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-left: 0.75rem;
-  transition: all var(--transition);
+  transition: color var(--transition), background-color var(--transition), border-color var(--transition), box-shadow var(--transition), transform var(--transition), opacity var(--transition);
 }
 
 .game-controls__live-btn--active {
@@ -720,7 +798,7 @@ button {
   font-weight: 500;
   color: var(--text-secondary);
   border: 1px solid var(--border);
-  transition: all var(--transition);
+  transition: color var(--transition), background-color var(--transition), border-color var(--transition), box-shadow var(--transition), transform var(--transition), opacity var(--transition);
 }
 
 .filter-btn:hover { border-color: var(--border-light); color: var(--text-primary); }
@@ -885,7 +963,7 @@ button {
   align-items: center;
   gap: 1rem;
   padding: 0.85rem 1rem;
-  transition: all var(--transition);
+  transition: color var(--transition), background-color var(--transition), border-color var(--transition), box-shadow var(--transition), transform var(--transition), opacity var(--transition);
   cursor: pointer;
   text-decoration: none;
   color: inherit;
@@ -1168,7 +1246,7 @@ button {
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: all var(--transition);
+  transition: color var(--transition), background-color var(--transition), border-color var(--transition), box-shadow var(--transition), transform var(--transition), opacity var(--transition);
   line-height: 1;
 }
 
@@ -1338,12 +1416,14 @@ button {
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: all var(--transition);
+  transition: color var(--transition), background-color var(--transition), border-color var(--transition), box-shadow var(--transition), transform var(--transition), opacity var(--transition);
 }
 
 .player-type-toggle__btn:hover:not(:disabled) {
   background: var(--bg-hover);
 }
+
+.player-type-toggle__btn:active:not(:disabled) { transform: scale(0.96); }
 
 .player-type-toggle__btn--active {
   background: var(--amber);
@@ -1504,8 +1584,11 @@ button {
   border-radius: var(--radius);
   font-weight: 500;
   font-size: 0.85rem;
-  transition: all var(--transition);
+  transition: color var(--transition), background-color var(--transition), border-color var(--transition), box-shadow var(--transition), transform var(--transition), opacity var(--transition);
 }
+
+/* Tactile press feedback — transform doesn't reflow surrounding layout */
+.btn:active:not(:disabled) { transform: scale(0.96); }
 
 .btn--primary {
   background: var(--amber);
@@ -1829,13 +1912,15 @@ button {
   border-radius: var(--radius-sm);
   color: var(--amber);
   font-size: 1rem;
-  transition: all var(--transition);
+  transition: color var(--transition), background-color var(--transition), border-color var(--transition), box-shadow var(--transition), transform var(--transition), opacity var(--transition);
   border: 1px solid var(--amber-dim);
 }
 
 .game-controls__play-btn:hover {
   background: var(--amber-glow);
 }
+
+.game-controls__play-btn:active { transform: scale(0.96); }
 
 .game-controls__speed {
   font-family: var(--font-mono);
@@ -1864,7 +1949,7 @@ button {
   color: var(--text-secondary);
   border: 1px solid var(--border);
   margin-left: auto;
-  transition: all var(--transition);
+  transition: color var(--transition), background-color var(--transition), border-color var(--transition), box-shadow var(--transition), transform var(--transition), opacity var(--transition);
 }
 
 .game-controls__pgn-btn:hover {
