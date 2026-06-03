@@ -254,6 +254,7 @@ export default function GameListPage() {
           className="game-list-page__search-input"
           type="text"
           placeholder="Search by model or opening..."
+          aria-label="Search games"
           value={searchInput}
           onChange={(e) => handleSearchInput(e.target.value)}
         />
