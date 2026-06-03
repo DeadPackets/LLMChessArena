@@ -216,3 +216,6 @@ e2e-tests/
 *.png
 !docs/screenshots/*.png
 .claude/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
