@@ -12,13 +12,13 @@
 
   --amber: #d4a843;
   --amber-bright: #f0c050;
-  --amber-dim: #8b7332;
+  --amber-dim: #a98c3f;
   --amber-glow: rgba(212, 168, 67, 0.1);
   --amber-glow-strong: rgba(212, 168, 67, 0.2);
 
   --text-primary: #e8e4dd;
   --text-secondary: #a5a39c;
-  --text-muted: #8a887f;
+  --text-muted: #9d9b91;
 
   --border: #1c1f2e;
   --border-light: #272b3d;
@@ -37,7 +37,7 @@
   --good: #6e6e6e;
   --inaccuracy: #e6b422;
   --mistake: #e08832;
-  --blunder: #ca3431;
+  --blunder: #dd4441;
 
   --font-display: "Cormorant Garamond", Georgia, serif;
   --font-body: "Outfit", system-ui, sans-serif;
