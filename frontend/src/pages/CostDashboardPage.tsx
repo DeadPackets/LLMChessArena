@@ -1,4 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useAsync } from "../hooks/useAsync";
+import AsyncBoundary from "../components/shared/AsyncBoundary";
 import {
   BarChart,
   Bar,
@@ -47,18 +49,14 @@ const ChartTooltipLabelStyle = { color: "#e8e4dd" };
 const ChartTooltipItemStyle = { color: "#c8c4bb" };
 
 export default function CostDashboardPage() {
-  const [data, setData] = useState<PlatformOverview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("cost");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-
-  useEffect(() => {
-    getStatsOverview()
-      .then(setData)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, []);
+  const state = useAsync<PlatformOverview>(
+    getStatsOverview,
+    [],
+    (d) => d.total_completed === 0 && d.model_breakdowns.length === 0,
+  );
+  const data = state.data;
 
   const sortedBreakdowns = useMemo(() => {
     if (!data) return [];
@@ -85,19 +83,21 @@ export default function CostDashboardPage() {
     }
   };
 
-  if (loading) {
+  if (state.status !== "ready" || !data) {
     return (
-      <div className="spinner-page">
-        <div className="spinner-lg" />
-      </div>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <div className="empty-state panel">
-        <div className="empty-state__icon">&#9888;</div>
-        <div className="empty-state__text">{error || "No data available"}</div>
+      <div className="cost-dashboard">
+        <h1 className="cost-dashboard__title">Cost & Performance</h1>
+        <AsyncBoundary
+          state={state}
+          empty={
+            <div className="empty-state panel">
+              <div className="empty-state__icon">&#9816;</div>
+              <div className="empty-state__text">No completed games yet — costs appear once games finish.</div>
+            </div>
+          }
+        >
+          {() => null}
+        </AsyncBoundary>
       </div>
     );
   }

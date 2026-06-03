@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect } from "react";
+import { lazy, Suspense, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { getModelDetail } from "../api/client";
 import type { ModelDetailStats } from "../types/api";
@@ -6,6 +6,8 @@ import GameCard from "../components/gamelist/GameCard";
 import HeadToHeadTable from "../components/model/HeadToHeadTable";
 import ClassificationBadge from "../components/shared/ClassificationBadge";
 import { formatModelName } from "../utils/formatModel";
+import { useAsync } from "../hooks/useAsync";
+import AsyncBoundary from "../components/shared/AsyncBoundary";
 
 const EloHistoryChart = lazy(() => import("../components/model/EloHistoryChart"));
 
@@ -16,42 +18,25 @@ export default function ModelDetailPage() {
   // Extract model ID from path: /model/openai/gpt-4o → "openai/gpt-4o"
   const modelId = location.pathname.replace(/^\/model\//, "");
 
-  const [model, setModel] = useState<ModelDetailStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    getModelDetail(modelId)
-      .then(setModel)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, [modelId]);
-
-  if (loading) {
-    return (
-      <div className="spinner-page">
-        <div className="spinner-lg" />
-      </div>
-    );
-  }
-
-  if (error || !model) {
-    return (
-      <div className="empty-state panel">
-        <div className="empty-state__icon">&#9888;</div>
-        <div className="empty-state__text">{error || "Model not found"}</div>
-      </div>
-    );
-  }
-
-  const classEntries = CLASS_ORDER.filter((c) => model.classifications[c]).map((c) => ({
-    cls: c,
-    count: model.classifications[c],
-  }));
+  const fetcher = useCallback(() => getModelDetail(modelId), [modelId]);
+  const state = useAsync<ModelDetailStats>(fetcher, [modelId]);
 
   return (
+    <AsyncBoundary
+      state={state}
+      empty={
+        <div className="empty-state panel">
+          <div className="empty-state__icon">&#9888;</div>
+          <div className="empty-state__text">Model not found.</div>
+        </div>
+      }
+    >
+      {(model) => {
+        const classEntries = CLASS_ORDER.filter((c) => model.classifications[c]).map((c) => ({
+          cls: c,
+          count: model.classifications[c],
+        }));
+        return (
     <div className="model-detail-page">
       <div className="model-detail-page__header">
         <div>
@@ -158,6 +143,9 @@ export default function ModelDetailPage() {
           </div>
         </div>
       )}
-    </div>
+          </div>
+        );
+      }}
+    </AsyncBoundary>
   );
 }
