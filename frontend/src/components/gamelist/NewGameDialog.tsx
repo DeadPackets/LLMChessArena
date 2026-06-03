@@ -4,6 +4,7 @@ import { createGame } from "../../api/client";
 import { useOpenRouterModels } from "../../hooks/useOpenRouterModels";
 import type { CreateGameRequest } from "../../types/api";
 import ModelSelector from "./ModelSelector";
+import { useModal } from "../../hooks/useModal";
 
 export type PlayerType = "llm" | "human" | "stockfish";
 
@@ -117,6 +118,8 @@ function StockfishEloSelector({
             step="10"
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            aria-label="Stockfish ELO strength"
+            aria-valuetext={`${value} ELO`}
           />
           <span className="new-game-dialog__range-label">3190</span>
         </div>
@@ -164,6 +167,12 @@ function ModelSettingsPanel({
             value={settings.temperature !== "" ? settings.temperature : "1"}
             onChange={(e) =>
               onChange({ ...settings, temperature: e.target.value })
+            }
+            aria-label={`${label} temperature`}
+            aria-valuetext={
+              settings.temperature !== ""
+                ? parseFloat(settings.temperature).toFixed(1)
+                : "default (1.0)"
             }
           />
           <span className="new-game-dialog__range-label">2</span>
@@ -225,6 +234,7 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const { ref: dialogRef, titleId } = useModal(open, onClose);
 
   // Pre-fill from initialSettings (rematch)
   useEffect(() => {
@@ -338,15 +348,17 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
   const hasLimitedStockfish = (whiteType === "stockfish" && whiteStockfishElo !== "") || (blackType === "stockfish" && blackStockfishElo !== "");
 
   return (
-    <div
-      className="dialog-overlay"
-      onClick={handleOverlayClick}
-      role="dialog"
-      aria-modal="true"
-      aria-label="New Game"
-    >
-      <form className="new-game-dialog panel--elevated" onSubmit={handleSubmit}>
-        <div className="new-game-dialog__title">New Game</div>
+    <div className="dialog-overlay" onClick={handleOverlayClick}>
+      <form
+        ref={dialogRef as React.RefObject<HTMLFormElement>}
+        className="new-game-dialog panel--elevated"
+        onSubmit={handleSubmit}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+      >
+        <h2 id={titleId} className="new-game-dialog__title">New Game</h2>
 
         <div className="new-game-dialog__field">
           <label className="new-game-dialog__label" htmlFor="white-model">
