@@ -955,6 +955,16 @@ a.app-header__live-stat:hover {
   font-size: 0.7rem;
 }
 
+.game-over-banner__secondary {
+  display: flex;
+  justify-content: center;
+  margin-top: -0.4rem;
+}
+
+.game-over-banner__customize {
+  font-size: 0.78rem;
+}
+
 /* ─── Status Message ─── */
 .status-message {
   display: flex;

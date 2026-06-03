@@ -1,8 +1,8 @@
 import { lazy, Suspense, useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { useGameWebSocket } from "../hooks/useGameWebSocket";
 import { useReplayControls } from "../hooks/useReplayControls";
-import { getGame, stopGame } from "../api/client";
+import { getGame, stopGame, createGame } from "../api/client";
 import type { GameDetail } from "../types/api";
 import ChessboardPanel from "../components/game/ChessboardPanel";
 import EvalBar from "../components/game/EvalBar";
@@ -118,6 +118,7 @@ function detectSoundType(san: string): SoundType {
 
 export default function GameViewerPage() {
   const { gameId } = useParams<{ gameId: string }>();
+  const navigateRoute = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer, playerSecret, reconnectExhausted, reconnect } = useGameWebSocket(gameId!);
   const announce = useAnnounce();
@@ -280,6 +281,39 @@ export default function GameViewerPage() {
   }, [state.status, gameId]);
 
   const [rematchOpen, setRematchOpen] = useState(false);
+  const [rematchPending, setRematchPending] = useState(false);
+  const handleRematch = useCallback(async () => {
+    if (rematchPending) return;
+    if (!state.whiteModel || !state.blackModel) return;
+    setRematchPending(true);
+    try {
+      // Swap white <-> black: previous black plays white next, and vice versa.
+      const resp = await createGame({
+        white_model: state.blackModel,
+        black_model: state.whiteModel,
+        max_moves: 200,
+        white_temperature: state.blackTemperature,
+        black_temperature: state.whiteTemperature,
+        white_reasoning_effort: state.blackReasoningEffort,
+        black_reasoning_effort: state.whiteReasoningEffort,
+        white_is_human: state.blackIsHuman,
+        black_is_human: state.whiteIsHuman,
+        white_is_stockfish: state.blackIsStockfish,
+        black_is_stockfish: state.whiteIsStockfish,
+        white_stockfish_elo: state.blackStockfishElo,
+        black_stockfish_elo: state.whiteStockfishElo,
+        chaos_mode: state.chaosMode,
+        move_time_limit: state.moveTimeLimit,
+        draw_adjudication: state.drawAdjudication,
+      });
+      if (resp.player_secret) {
+        localStorage.setItem(`chess_player_secret_${resp.id}`, resp.player_secret);
+      }
+      navigateRoute(`/game/${resp.id}`);
+    } catch {
+      setRematchPending(false);
+    }
+  }, [rematchPending, state, navigateRoute]);
 
   const [stopping, setStopping] = useState(false);
   const handleStopGame = useCallback(async () => {
@@ -371,8 +405,20 @@ export default function GameViewerPage() {
           data={state.gameOverData}
           whiteModel={state.whiteModel}
           blackModel={state.blackModel}
-          onRematch={isCompleted ? () => setRematchOpen(true) : undefined}
+          onRematch={isCompleted ? handleRematch : undefined}
+          rematchPending={rematchPending}
         />
+      )}
+
+      {state.gameOverData && isCompleted && (
+        <div className="game-over-banner__secondary">
+          <button
+            className="btn btn--ghost game-over-banner__customize"
+            onClick={() => setRematchOpen(true)}
+          >
+            Customize rematch…
+          </button>
+        </div>
       )}
 
       <div className="game-viewer__main">
