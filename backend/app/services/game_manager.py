@@ -81,8 +81,8 @@ class GameManager:
                         game.black_model,
                         game.total_moves or 0,
                     )
-                    game.status = "completed"
-                    game.outcome = "draw"
+                    game.status = "stopped"
+                    game.outcome = "*"
                     game.termination = "server_restart"
                     game.completed_at = now
                     session.add(game)
