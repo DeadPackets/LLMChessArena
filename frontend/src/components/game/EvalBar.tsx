@@ -27,12 +27,42 @@ export default function EvalBar({ winProbability, centipawns, mateIn }: Props) {
     }
   }
 
+  // Parity: no advantage label on either side -> show a subtle "=" at center.
+  const isEven = topLabel === "" && bottomLabel === "";
+
   const topTitle = topLabel ? `Black advantage: ${topLabel}` : undefined;
   const bottomTitle = bottomLabel ? `White advantage: ${bottomLabel}` : undefined;
 
+  // Spoken description of the evaluation.
+  let valueText: string;
+  if (mateIn != null) {
+    valueText =
+      mateIn > 0
+        ? `White has mate in ${mateIn}`
+        : `Black has mate in ${Math.abs(mateIn)}`;
+  } else if (isEven) {
+    valueText = "Even";
+  } else {
+    const side = bottomLabel ? "White" : "Black";
+    const sidePct = bottomLabel ? whitePct : 100 - whitePct;
+    const pawns = bottomLabel || topLabel; // already "+x.y"
+    valueText = `${side} ${sidePct.toFixed(0)}% win probability, ${pawns}`;
+  }
+
   return (
-    <div className="eval-bar" role="meter" aria-label="Position evaluation" aria-valuenow={whitePct} aria-valuemin={0} aria-valuemax={100}>
+    <div
+      className="eval-bar"
+      role="meter"
+      aria-label="Position evaluation"
+      aria-valuenow={whitePct}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuetext={valueText}
+    >
       {topLabel && <span className="eval-bar__label eval-bar__label--top" title={topTitle}>{topLabel}</span>}
+      {isEven && (
+        <span className="eval-bar__label eval-bar__label--even" aria-hidden="true">=</span>
+      )}
       <div className="eval-bar__fill" style={{ height: `${whitePct}%` }} />
       {bottomLabel && <span className="eval-bar__label eval-bar__label--bottom" title={bottomTitle}>{bottomLabel}</span>}
     </div>

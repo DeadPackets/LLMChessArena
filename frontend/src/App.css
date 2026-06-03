@@ -498,6 +498,13 @@ a.app-header__live-stat:hover {
   color: #333;
 }
 
+.eval-bar__label--even {
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
 /* ─── Move List ─── */
 .move-list {
   flex: 1 1 0;
