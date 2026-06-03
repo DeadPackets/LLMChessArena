@@ -229,3 +229,12 @@ export type Classification =
   | "inaccuracy"
   | "mistake"
   | "blunder";
+
+export interface QueueStatus {
+  active: number;
+  queued: number;
+  max: number;
+  max_queued: number;
+  total_spectators: number;
+  total_games: number;
+}

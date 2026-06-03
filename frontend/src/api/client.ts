@@ -1,4 +1,4 @@
-import type { GameDetail, ModelStats, EnhancedModelStats, ModelDetailStats, HeadToHeadRecord, HeadToHeadComparison, OpeningStats, EloHistoryPoint, CreateGameRequest, GameCreatedResponse, PlatformOverview, OpenRouterModel, PaginatedGamesResponse } from "../types/api";
+import type { GameDetail, ModelStats, EnhancedModelStats, ModelDetailStats, HeadToHeadRecord, HeadToHeadComparison, OpeningStats, EloHistoryPoint, CreateGameRequest, GameCreatedResponse, PlatformOverview, OpenRouterModel, PaginatedGamesResponse, QueueStatus } from "../types/api";
 
 const BASE = "/api";
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -80,6 +80,10 @@ export async function getModelHeadToHead(modelId: string): Promise<HeadToHeadRec
 
 export async function getStatsOverview(): Promise<PlatformOverview> {
   return request<PlatformOverview>("/stats/overview");
+}
+
+export async function getQueueStatus(): Promise<QueueStatus> {
+  return request<QueueStatus>("/games/queue-status");
 }
 
 export async function getOpeningStats(): Promise<OpeningStats[]> {
