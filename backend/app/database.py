@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -156,21 +157,34 @@ async def _migrate_add_columns(conn) -> None:
         ("moves", "win_probability_before", "FLOAT"),
         ("games", "rated", "BOOLEAN DEFAULT 0"),
     ]
+    logger = logging.getLogger(__name__)
+
+    # Cache existing columns per table via PRAGMA table_info (row index 1 = name).
+    existing_columns: dict[str, set[str]] = {}
+
+    async def columns_for(table: str) -> set[str]:
+        if table not in existing_columns:
+            result = await conn.execute(
+                sqlalchemy.text(f"PRAGMA table_info({table})")
+            )
+            existing_columns[table] = {row[1] for row in result.fetchall()}
+        return existing_columns[table]
+
     for table, column, col_type in migrations:
+        cols = await columns_for(table)
+        if column in cols:
+            continue  # Already present — nothing to do.
         try:
             await conn.execute(
                 sqlalchemy.text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
             )
-        except Exception as e:
-            err_msg = str(e).lower()
-            if "duplicate column" in err_msg or "already exists" in err_msg:
-                pass  # Column already exists — expected
-            else:
-                import logging
-
-                logging.getLogger(__name__).warning(
-                    "Migration failed for %s.%s: %s", table, column, e
-                )
+            cols.add(column)
+            logger.info("Migration: added %s.%s (%s)", table, column, col_type)
+        except Exception:
+            # A non-duplicate failure means the schema is half-migrated; fail
+            # loudly at startup rather than limping along.
+            logger.exception("Migration failed for %s.%s — aborting", table, column)
+            raise
 
 
 def get_session_factory():
