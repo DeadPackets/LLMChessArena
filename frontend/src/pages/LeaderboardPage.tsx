@@ -5,6 +5,8 @@ import type { EnhancedModelStats } from "../types/api";
 import { formatModelName } from "../utils/formatModel";
 import { useAsync } from "../hooks/useAsync";
 import AsyncBoundary from "../components/shared/AsyncBoundary";
+import InfoDot from "../components/shared/InfoDot";
+import { HELP } from "../components/shared/helpText";
 
 export default function LeaderboardPage() {
   const [showHuman, setShowHuman] = useState(true);
@@ -32,8 +34,11 @@ export default function LeaderboardPage() {
           <div className="empty-state panel">
             <div className="empty-state__icon">&#9813;</div>
             <div className="empty-state__text">
-              No models ranked yet. <Link to="/" className="leaderboard__model-link">Start a game</Link> to populate the board.
+              No models ranked yet. Play some games first!
             </div>
+            <Link to="/" className="btn btn--primary" style={{ marginTop: "0.75rem" }}>
+              Start a game
+            </Link>
           </div>
         }
       >
@@ -54,17 +59,20 @@ export default function LeaderboardPage() {
 
           return (
             <div className="panel">
+              <div className="leaderboard-mobile-caption">
+                Tap a model for accuracy, ACPL, cost &amp; response time.
+              </div>
               <div className="leaderboard-table-wrap">
                 <table className="leaderboard-table leaderboard-table--enhanced">
                   <thead>
                     <tr>
                       <th>#</th>
                       <th>Model</th>
-                      <th>ELO</th>
+                      <th>ELO<InfoDot label={HELP.elo} /></th>
                       <th>W / D / L</th>
                       <th>Win %</th>
-                      <th>Accuracy</th>
-                      <th>ACPL</th>
+                      <th>Accuracy<InfoDot label={HELP.accuracy} /></th>
+                      <th>ACPL<InfoDot label={HELP.acpl} /></th>
                       <th>Avg Cost</th>
                       <th>Avg Time</th>
                     </tr>

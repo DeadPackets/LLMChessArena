@@ -1842,6 +1842,14 @@ a.app-header__live-stat:hover {
   font-weight: 600;
 }
 
+.leaderboard-mobile-caption {
+  display: none;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-light, #272b3d);
+}
+
 /* ─── Empty / Loading States ─── */
 .empty-state {
   text-align: center;
@@ -3492,6 +3500,10 @@ button.table-talk-bubble {
   /* Hide ELO bars on mobile to save space */
   .leaderboard__elo-bar {
     display: none;
+  }
+
+  .leaderboard-mobile-caption {
+    display: block;
   }
 
   /* ── Game Controls ── */
