@@ -21,6 +21,7 @@ import { useBoardTheme } from "../hooks/useBoardTheme";
 import type { SoundType } from "../hooks/useChessSound";
 import type { IllegalMoveData } from "../types/websocket";
 import type { PlayerType } from "../components/gamelist/NewGameDialog";
+import { useAnnounce } from "../components/shared/LiveAnnouncer";
 
 const WinProbGraph = lazy(() => import("../components/game/WinProbGraph"));
 const ResponseTimeGraph = lazy(() => import("../components/game/ResponseTimeGraph"));
@@ -112,6 +113,7 @@ export default function GameViewerPage() {
   const { gameId } = useParams<{ gameId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer, playerSecret, reconnectExhausted, reconnect } = useGameWebSocket(gameId!);
+  const announce = useAnnounce();
 
   // Board theme
   const { boardColorPreset, customPieces, theme, setBoardColor, setPieceStyle } = useBoardTheme();
@@ -192,6 +194,33 @@ export default function GameViewerPage() {
       }
     }
   }, [state.moves.length, state.moves, playSound]);
+
+  // Announce the latest move politely for screen readers (debounced in LiveAnnouncer).
+  const prevAnnouncedLenRef = useRef(0);
+  useEffect(() => {
+    const curLen = state.moves.length;
+    const prevLen = prevAnnouncedLenRef.current;
+    prevAnnouncedLenRef.current = curLen;
+    if (curLen <= prevLen || curLen === 0) return;
+    const m = state.moves[curLen - 1];
+    if (!m?.san) return;
+    const side = m.color === "white" ? "White" : "Black";
+    const parts = [`Move ${m.moveNumber}, ${side} ${m.san}`];
+    if (m.classification && m.classification !== "good") {
+      parts.push(m.classification);
+    }
+    if (m.centipawns != null) {
+      const pawns = m.centipawns / 100;
+      if (Math.abs(pawns) < 0.2) {
+        parts.push("even");
+      } else if (pawns > 0) {
+        parts.push(`White ${pawns >= 0 ? "+" : ""}${pawns.toFixed(1)}`);
+      } else {
+        parts.push(`Black +${Math.abs(pawns).toFixed(1)}`);
+      }
+    }
+    announce(parts.join(". ") + ".");
+  }, [state.moves, announce]);
 
   // Play sound on game end
   useEffect(() => {
@@ -441,7 +470,7 @@ export default function GameViewerPage() {
           ) : null}
 
           {humanColor && isLive && !isHumanTurn && state.awaitingHumanMove === null && (
-            <div className="status-message">
+            <div className="status-message" role="status">
               <div className="status-message__spinner" />
               Opponent is thinking...
             </div>
@@ -464,7 +493,7 @@ export default function GameViewerPage() {
           )}
 
           {state.statusMessage && !humanColor && (
-            <div className="status-message">
+            <div className="status-message" role="status">
               <div className="status-message__spinner" />
               {state.statusMessage}
             </div>
