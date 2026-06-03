@@ -11,20 +11,10 @@ import {
 } from "recharts";
 import type { MoveData } from "../../types/websocket";
 import type { CriticalMoment } from "../../types/api";
-
-const CLASSIFICATION_DOT_COLORS: Record<string, string> = {
-  brilliant: "#26c2a3",
-  great: "#5b8bb4",
-  inaccuracy: "#e6b422",
-  mistake: "#e08832",
-  blunder: "#ca3431",
-};
-
-const LARGE_DOT_CLASSIFICATIONS = new Set(["brilliant", "blunder"]);
+import { CLASS_META, LARGE_DOT_CLASSIFICATIONS, isClassification } from "../shared/classification";
 
 function shapeFor(cls: string | null): DotShape {
-  if (cls === "blunder" || cls === "mistake" || cls === "inaccuracy") return "triangle";
-  if (cls === "brilliant" || cls === "great") return "diamond";
+  if (isClassification(cls)) return CLASS_META[cls].shape;
   return "circle";
 }
 
@@ -103,12 +93,12 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
     // Add dots for moves with notable classifications
     for (let i = 0; i < moves.length; i++) {
       const cls = moves[i].classification;
-      if (cls && CLASSIFICATION_DOT_COLORS[cls]) {
+      if (isClassification(cls) && cls !== "good") {
         const wp = moves[i].winProbability != null ? moves[i].winProbability! * 100 : 50;
         result.push({
           index: i,
           y: wp,
-          color: CLASSIFICATION_DOT_COLORS[cls],
+          color: CLASS_META[cls].color,
           r: LARGE_DOT_CLASSIFICATIONS.has(cls) ? 4 : 3,
           shape: shapeFor(cls),
           label: `${moves[i].moveNumber}${moves[i].color === "black" ? "..." : "."} ${moves[i].san} (${cls})`,
@@ -122,9 +112,9 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
       for (const cm of criticalMoments) {
         if (!seen.has(cm.move_index)) {
           const cls = cm.classification;
-          const color = cls && CLASSIFICATION_DOT_COLORS[cls]
-            ? CLASSIFICATION_DOT_COLORS[cls]
-            : cm.swing > 0.25 ? "#ca3431" : "#e6b422";
+          const color = isClassification(cls)
+            ? CLASS_META[cls].color
+            : cm.swing > 0.25 ? CLASS_META.blunder.color : CLASS_META.inaccuracy.color;
           result.push({
             index: cm.move_index,
             y: cm.win_prob_after * 100,

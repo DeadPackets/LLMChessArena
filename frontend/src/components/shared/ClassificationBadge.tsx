@@ -1,30 +1,22 @@
-const SYMBOLS: Record<string, string> = {
-  brilliant: "!!",
-  great: "!",
-  best: "\u2605",      // \u2605 filled star
-  excellent: "\u2606", // \u2606 open star \u2014 visually distinct from best's filled star
-  good: "\u00b7",      // \u00b7 (used only in legends; move list still hides "good")
-  inaccuracy: "?!",
-  mistake: "?",
-  blunder: "??",
-};
+import { CLASS_META, isClassification } from "./classification";
 
 interface Props {
   classification: string | null;
 }
 
 export default function ClassificationBadge({ classification }: Props) {
-  if (!classification || classification === "good") return null;
+  if (!isClassification(classification)) return null;
+  if (classification === "good") return null; // keep "good" silent in dense rows
 
-  const symbol = SYMBOLS[classification] ?? "";
+  const meta = CLASS_META[classification];
 
   return (
     <span
       className={`classification-badge classification-badge--${classification}`}
-      title={classification}
-      aria-label={`Move classified as ${classification}`}
+      title={`${meta.name} — ${meta.meaning}`}
+      aria-label={`Move classified as ${meta.name}: ${meta.meaning}`}
     >
-      {symbol}
+      {meta.symbol}
     </span>
   );
 }

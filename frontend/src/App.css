@@ -726,8 +726,6 @@ a.app-header__live-stat:hover {
   line-height: 1;
 }
 
-.classification-badge--brilliant { background: var(--brilliant); color: #06231d; }
-.classification-badge--great { background: var(--great); color: #0a1822; }
 .classification-badge--best { background: var(--best); color: #0e1a06; }
 .classification-badge--excellent { background: var(--excellent); color: #0c1606; }
 .classification-badge--good { background: var(--good); color: #f2f2f2; }
