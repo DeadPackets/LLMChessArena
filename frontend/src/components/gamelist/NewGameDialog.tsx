@@ -5,6 +5,8 @@ import { useOpenRouterModels } from "../../hooks/useOpenRouterModels";
 import type { CreateGameRequest } from "../../types/api";
 import ModelSelector from "./ModelSelector";
 import { useModal } from "../../hooks/useModal";
+import InfoDot from "../shared/InfoDot";
+import { HELP } from "../shared/helpText";
 
 export type PlayerType = "llm" | "human" | "stockfish";
 
@@ -91,7 +93,10 @@ function StockfishEloSelector({
 }) {
   return (
     <div className="new-game-dialog__stockfish-elo">
-      <label className="new-game-dialog__label">Stockfish Strength</label>
+      <label className="new-game-dialog__label">
+        Stockfish Strength
+        <InfoDot label={HELP.stockfishElo} />
+      </label>
       <select
         className="new-game-dialog__input new-game-dialog__select"
         value={STOCKFISH_PRESETS.some((p) => p.value === value) ? value : "custom"}
@@ -154,6 +159,7 @@ function ModelSettingsPanel({
       <div className="new-game-dialog__field">
         <label className="new-game-dialog__label">
           Temperature
+          <InfoDot label={HELP.temperature} />
           <span className="new-game-dialog__label-hint">{tempDisplay}</span>
         </label>
         <div className="new-game-dialog__range-row">
@@ -190,7 +196,10 @@ function ModelSettingsPanel({
       </div>
 
       <div className="new-game-dialog__field">
-        <label className="new-game-dialog__label">Reasoning Effort</label>
+        <label className="new-game-dialog__label">
+          Reasoning Effort
+          <InfoDot label={HELP.reasoning} />
+        </label>
         <select
           className="new-game-dialog__input new-game-dialog__select"
           value={settings.reasoningEffort}
@@ -276,6 +285,17 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
     (whiteIsLLM ? whiteModel.trim() !== "" : true) &&
     (blackIsLLM ? blackModel.trim() !== "" : true) &&
     !submitting;
+
+  const disabledReason =
+    submitting
+      ? null
+      : whiteIsLLM && whiteModel.trim() === "" && blackIsLLM && blackModel.trim() === ""
+        ? "Select a model for both LLM sides to start."
+        : whiteIsLLM && whiteModel.trim() === ""
+          ? "Select a model for White to start."
+          : blackIsLLM && blackModel.trim() === ""
+            ? "Select a model for Black to start."
+            : null;
 
   function handleWhiteTypeChange(t: PlayerType) {
     setWhiteType(t);
@@ -412,6 +432,7 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
         <div className="new-game-dialog__field">
           <label className="new-game-dialog__label" htmlFor="max-moves">
             Max Moves (optional)
+            <InfoDot label={HELP.maxMoves} />
           </label>
           <input
             id="max-moves"
@@ -450,6 +471,7 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
               onChange={(e) => setChaosMode(e.target.checked)}
             />
             Chaos Mode &mdash; Illegal LLM moves are allowed
+            <InfoDot label={HELP.chaos} />
           </label>
         )}
 
@@ -473,6 +495,7 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
             onChange={(e) => setDrawAdjudication(e.target.checked)}
           />
           Draw Adjudication &mdash; Auto-draw if eval within &plusmn;0.20 for 30 moves
+          <InfoDot label={HELP.drawAdjudication} />
         </label>
 
         {hasLLMSide && (
@@ -526,6 +549,9 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
         )}
 
         <div className="new-game-dialog__actions">
+          {disabledReason && (
+            <span id="start-game-hint" className="new-game-dialog__disabled-hint">{disabledReason}</span>
+          )}
           <button type="button" className="btn btn--ghost" onClick={onClose}>
             Cancel
           </button>
@@ -533,6 +559,8 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
             type="submit"
             className="btn btn--primary"
             disabled={!canSubmit}
+            title={disabledReason ?? undefined}
+            aria-describedby={disabledReason ? "start-game-hint" : undefined}
           >
             {submitting ? "Creating..." : "Start Game"}
           </button>
