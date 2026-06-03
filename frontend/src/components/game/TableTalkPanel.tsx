@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import type { MoveData, IllegalMoveData, ChaosMoveData } from "../../types/websocket";
+import InfoDot from "../shared/InfoDot";
+import { HELP } from "../shared/helpText";
 
 interface Props {
   moves: MoveData[];
@@ -150,6 +152,7 @@ export default function TableTalkPanel({
     <div className="table-talk-panel panel">
       <div className="table-talk-panel__label">
         <h3 className="table-talk-panel__heading">Table Talk</h3>
+        <InfoDot label={HELP.tableTalk} />
         {hasErrors && (
           <button
             className={`table-talk-panel__filter-toggle${hideErrors ? " table-talk-panel__filter-toggle--active" : ""}`}

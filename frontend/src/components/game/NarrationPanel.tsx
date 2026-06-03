@@ -1,4 +1,6 @@
 import type { MoveData } from "../../types/websocket";
+import InfoDot from "../shared/InfoDot";
+import { HELP } from "../shared/helpText";
 
 interface Props {
   move: MoveData | null;
@@ -18,7 +20,7 @@ export default function NarrationPanel({ move }: Props) {
   if (!move) {
     return (
       <div className="narration-panel panel">
-        <h3 className="narration-panel__label">Commentary</h3>
+        <h3 className="narration-panel__label">Commentary<InfoDot label={HELP.commentary} /></h3>
         <div className="narration-panel__text">Select a move to see commentary.</div>
       </div>
     );
@@ -31,6 +33,7 @@ export default function NarrationPanel({ move }: Props) {
     <div className="narration-panel panel">
       <div className="narration-panel__label">
         <span>Commentary</span>
+        <InfoDot label={HELP.commentary} />
         <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: "0.68rem" }}>
           {move.moveNumber}. {move.color === "white" ? "" : "..."}{move.san}
         </span>

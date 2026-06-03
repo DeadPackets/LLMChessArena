@@ -236,7 +236,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         status: "queued",
-        statusMessage: `Queued (${action.payload.position}/${action.payload.max})`,
+        statusMessage: `Server is busy — your game will start automatically (position ${action.payload.position} of ${action.payload.max}).`,
       };
 
     case "STATUS_UPDATE":
