@@ -69,6 +69,24 @@ function isInCheck(selectedMove: MoveData | null): boolean {
   return selectedMove.san.endsWith("+") || selectedMove.san.endsWith("#");
 }
 
+function squareToFileRank(sq: Square): { file: number; rank: number } {
+  return { file: sq.charCodeAt(0) - 97, rank: parseInt(sq[1], 10) - 1 };
+}
+
+function fileRankToSquare(file: number, rank: number): Square | null {
+  if (file < 0 || file > 7 || rank < 0 || rank > 7) return null;
+  return (String.fromCharCode(97 + file) + String(rank + 1)) as Square;
+}
+
+/** Move a square by (df, dr) in board coordinates; clamps to the board. */
+function moveSquare(sq: Square, df: number, dr: number): Square {
+  const { file, rank } = squareToFileRank(sq);
+  return fileRankToSquare(
+    Math.max(0, Math.min(7, file + df)),
+    Math.max(0, Math.min(7, rank + dr)),
+  )!;
+}
+
 const DEFAULT_THEME: BoardThemeColors = {
   light: "#c8b891",
   dark: "#7a6b4e",
@@ -93,6 +111,8 @@ export default function ChessboardPanel({
   const [legalTargets, setLegalTargets] = useState<Square[]>([]);
   // Click-to-move promotion
   const [pendingPromotion, setPendingPromotion] = useState<{ from: Square; to: Square } | null>(null);
+  // Keyboard cursor: roving square highlighted when the board layer has focus.
+  const [cursorSquare, setCursorSquare] = useState<Square | null>(null);
 
   // User-drawn arrows and highlighted squares (right-click)
   const [userArrows, setUserArrows] = useState<Arrow[]>([]);
@@ -131,6 +151,7 @@ export default function ChessboardPanel({
     setSelectedSquare(null);
     setLegalTargets([]);
     setPendingPromotion(null);
+    setCursorSquare(null);
   }, [isHumanTurn, fen]);
 
   // Get legal move targets from a square using chess.js
@@ -235,10 +256,21 @@ export default function ChessboardPanel({
     return styles;
   }, [userHighlights]);
 
-  // Merge last-move highlights with legal-move indicators and user highlights
+  // Cursor highlight (keyboard navigation)
+  const cursorStyle = useMemo<Record<string, React.CSSProperties>>(() => {
+    if (!cursorSquare) return {};
+    return {
+      [cursorSquare]: {
+        boxShadow: "inset 0 0 0 3px var(--amber)",
+        borderRadius: "4px",
+      },
+    };
+  }, [cursorSquare]);
+
+  // Merge last-move highlights with legal-move indicators, user highlights, and cursor
   const combinedSquareStyles = useMemo(
-    () => ({ ...userHighlightStyles, ...lastMoveSquares, ...legalMoveStyles }),
-    [lastMoveSquares, legalMoveStyles, userHighlightStyles],
+    () => ({ ...userHighlightStyles, ...lastMoveSquares, ...legalMoveStyles, ...cursorStyle }),
+    [lastMoveSquares, legalMoveStyles, userHighlightStyles, cursorStyle],
   );
 
   // Arrow showing the current move + user-drawn arrows
@@ -364,6 +396,92 @@ export default function ChessboardPanel({
     setLegalTargets([]);
   }
 
+  // Keyboard play: arrows move the cursor, Enter selects/places, Escape deselects.
+  function handleBoardKeyDown(e: React.KeyboardEvent) {
+    // Orientation factor: when viewing as black, screen-up means rank-down.
+    const flip = boardOrientation === "black" ? -1 : 1;
+    const start: Square = cursorSquare ?? selectedSquare ?? (humanColor === "black" ? "e7" : "e2");
+
+    switch (e.key) {
+      case "ArrowUp":
+        e.preventDefault();
+        setCursorSquare(moveSquare(start, 0, flip));
+        return;
+      case "ArrowDown":
+        e.preventDefault();
+        setCursorSquare(moveSquare(start, 0, -flip));
+        return;
+      case "ArrowLeft":
+        e.preventDefault();
+        setCursorSquare(moveSquare(start, -flip, 0));
+        return;
+      case "ArrowRight":
+        e.preventDefault();
+        setCursorSquare(moveSquare(start, flip, 0));
+        return;
+      case "Escape":
+        if (selectedSquare) {
+          e.preventDefault();
+          setSelectedSquare(null);
+          setLegalTargets([]);
+        }
+        return;
+      case "Enter":
+      case " ": {
+        e.preventDefault();
+        if (!isHumanTurn || !humanColor || !onHumanMove) return;
+        const target = cursorSquare ?? start;
+
+        // If a piece is selected and the cursor is a legal target → make/queue the move.
+        if (selectedSquare && legalTargets.includes(target)) {
+          try {
+            const game = new Chess(displayFen);
+            const srcPiece = game.get(selectedSquare);
+            const isPromotionRank =
+              (humanColor === "white" && target[1] === "8") ||
+              (humanColor === "black" && target[1] === "1");
+            if (srcPiece && srcPiece.type === "p" && isPromotionRank) {
+              setPendingPromotion({ from: selectedSquare, to: target });
+              setSelectedSquare(null);
+              setLegalTargets([]);
+              return;
+            }
+          } catch {
+            /* ignore */
+          }
+          const newFen = tryMove(selectedSquare, target);
+          if (newFen) {
+            setOptimisticFen(newFen);
+            onHumanMove(`${selectedSquare}${target}`);
+          }
+          setSelectedSquare(null);
+          setLegalTargets([]);
+          return;
+        }
+
+        // Otherwise, if the cursor is on the human's own piece → select it.
+        try {
+          const game = new Chess(displayFen);
+          const piece = game.get(target);
+          if (piece) {
+            const pieceColor = piece.color === "w" ? "white" : "black";
+            if (pieceColor === humanColor) {
+              setSelectedSquare(target);
+              setLegalTargets(getLegalTargets(target));
+              return;
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+        // Empty/opponent square with nothing selected → deselect.
+        setSelectedSquare(null);
+        setLegalTargets([]);
+        return;
+      }
+    }
+  }
+
   function onPromotionCheck(sourceSquare: Square, targetSquare: Square, piece: Piece): boolean {
     if (!isHumanTurn || !humanColor) return false;
     const isPawn = piece[1] === "P";
@@ -417,8 +535,28 @@ export default function ChessboardPanel({
     return () => observer.disconnect();
   }, []);
 
+  const lastMove = selectedMove ?? previousMove;
+  const turnLabel = isHumanTurn
+    ? "Your move"
+    : humanColor
+    ? "Opponent to move"
+    : displayFen.split(" ")[1] === "w"
+    ? "White to move"
+    : "Black to move";
+  const boardAriaLabel =
+    `Chess board. ${turnLabel}.` +
+    (lastMove?.san ? ` Last move ${lastMove.san}.` : "") +
+    (isHumanTurn ? " Use arrow keys to move the cursor, Enter to select and place a piece, Escape to deselect." : "");
+
   return (
-    <div ref={containerRef} className="chessboard-panel__board-container">
+    <div
+      ref={containerRef}
+      className="chessboard-panel__board-container"
+      role="application"
+      aria-label={boardAriaLabel}
+      tabIndex={isHumanTurn ? 0 : -1}
+      onKeyDown={handleBoardKeyDown}
+    >
       <Chessboard
         id="game-board"
         position={displayFen}
