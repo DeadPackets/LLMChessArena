@@ -1,3 +1,4 @@
+import { useModal } from "../../hooks/useModal";
 import type { GameOverData } from "../../types/websocket";
 import { formatModelName } from "../../utils/formatModel";
 
@@ -33,10 +34,16 @@ function formatTermination(t: string): string {
 
 export default function GameOverBanner({ data, whiteModel, blackModel, onRematch }: Props) {
   const { title, cls } = outcomeDisplay(data.outcome, whiteModel, blackModel);
+  // Always-open banner: useModal manages initial focus + focus restore on unmount.
+  const { dialogProps, titleId } = useModal(true, () => {});
 
   return (
-    <div className="game-over-banner panel--elevated" role="alert">
-      <div className={`game-over-banner__title ${cls}`}>{title}</div>
+    <div
+      {...dialogProps}
+      ref={dialogProps.ref as React.RefObject<HTMLDivElement>}
+      className="game-over-banner panel--elevated"
+    >
+      <h2 id={titleId} className={`game-over-banner__title ${cls}`}>{title}</h2>
       <div className="game-over-banner__termination">
         {formatTermination(data.termination)}
       </div>
