@@ -917,6 +917,44 @@ a.app-header__live-stat:hover {
   font-weight: 600;
 }
 
+.game-over-banner__series {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.9rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.game-over-banner__series-label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.game-over-banner__series-name {
+  color: var(--text-secondary);
+}
+
+.game-over-banner__series-score {
+  font-weight: 700;
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+}
+
+.game-over-banner__series-dash {
+  color: var(--text-muted);
+}
+
+.game-over-banner__series-draws {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
 /* ─── Status Message ─── */
 .status-message {
   display: flex;
