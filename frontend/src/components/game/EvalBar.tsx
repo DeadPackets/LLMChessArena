@@ -1,3 +1,6 @@
+import InfoDot from "../shared/InfoDot";
+import { HELP } from "../shared/helpText";
+
 interface Props {
   winProbability: number | null;
   centipawns: number | null;
@@ -53,12 +56,15 @@ export default function EvalBar({ winProbability, centipawns, mateIn }: Props) {
     <div
       className="eval-bar"
       role="meter"
-      aria-label="Position evaluation"
+      aria-label="Position evaluation: White win probability and pawn advantage"
       aria-valuenow={whitePct}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuetext={valueText}
     >
+      <span className="eval-bar__info">
+        <InfoDot label={mateIn != null ? HELP.mateIn : HELP.eval} triggerLabel="What the eval bar means" />
+      </span>
       {topLabel && <span className="eval-bar__label eval-bar__label--top" title={topTitle}>{topLabel}</span>}
       {isEven && (
         <span className="eval-bar__label eval-bar__label--even" aria-hidden="true">=</span>

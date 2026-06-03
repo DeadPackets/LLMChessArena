@@ -12,6 +12,8 @@ import {
 import type { MoveData } from "../../types/websocket";
 import type { CriticalMoment } from "../../types/api";
 import { CLASS_META, LARGE_DOT_CLASSIFICATIONS, isClassification } from "../shared/classification";
+import InfoDot from "../shared/InfoDot";
+import { HELP } from "../shared/helpText";
 
 function shapeFor(cls: string | null): DotShape {
   if (isClassification(cls)) return CLASS_META[cls].shape;
@@ -142,6 +144,10 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
 
   return (
     <div className="win-prob-graph panel" role="group" aria-label="Win probability graph">
+      <div className="win-prob-graph__title" aria-hidden="true">
+        Win Probability
+        <InfoDot label={HELP.winProb} />
+      </div>
       <h3 className="visually-hidden">Win probability</h3>
       <p className="visually-hidden">{summary}</p>
       <ResponsiveContainer width="100%" height={100}>

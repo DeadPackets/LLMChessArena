@@ -505,6 +505,14 @@ a.app-header__live-stat:hover {
   opacity: 0.7;
 }
 
+.eval-bar__info {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+}
+
 /* ── InfoDot (P4) — war-room inline help ── */
 .info-dot {
   position: relative;
@@ -1968,6 +1976,16 @@ a.app-header__live-stat:hover {
   padding: 0.25rem 0.25rem;
   cursor: crosshair;
   flex-shrink: 0;
+}
+
+.win-prob-graph__title {
+  display: flex;
+  align-items: center;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
 }
 
 .win-prob-graph .recharts-cartesian-axis-tick-value {

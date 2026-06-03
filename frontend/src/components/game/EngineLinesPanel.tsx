@@ -1,4 +1,6 @@
 import type { EngineLine } from "../../types/websocket";
+import InfoDot from "../shared/InfoDot";
+import { HELP } from "../shared/helpText";
 
 interface Props {
   lines: EngineLine[];
@@ -27,7 +29,7 @@ export default function EngineLinesPanel({ lines, depth }: Props) {
   return (
     <div className="engine-lines panel">
       <div className="engine-lines__header">
-        <span className="engine-lines__title">Engine Lines</span>
+        <span className="engine-lines__title">Engine Lines<InfoDot label={HELP.engineLines} /></span>
         <span className="engine-lines__depth">depth {depth}</span>
       </div>
       <div className="engine-lines__list">
