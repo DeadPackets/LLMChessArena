@@ -3,6 +3,20 @@ import type { GameDetail, ModelStats, EnhancedModelStats, ModelDetailStats, Head
 const BASE = "/api";
 const DEFAULT_TIMEOUT_MS = 15_000;
 
+export class ApiError extends Error {
+  status: number;
+  retryAfter?: number;
+  body?: string;
+
+  constructor(message: string, status: number, opts?: { retryAfter?: number; body?: string }) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.retryAfter = opts?.retryAfter;
+    this.body = opts?.body;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
@@ -15,9 +29,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`${res.status}: ${body}`);
+      if (res.status === 429) {
+        const header = res.headers.get("Retry-After");
+        const retryAfter = header && !Number.isNaN(Number(header)) ? Number(header) : undefined;
+        throw new ApiError(
+          retryAfter != null
+            ? `Rate limited — retrying in ${retryAfter}s`
+            : "Rate limited — please wait a moment and try again",
+          res.status,
+          { retryAfter, body },
+        );
+      }
+      throw new ApiError(
+        `Request failed (${res.status})`,
+        res.status,
+        { body },
+      );
     }
     return res.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new ApiError("Request timed out — check your connection.", 0);
+    }
+    if (err instanceof TypeError) {
+      throw new ApiError("Network error — could not reach the server.", 0);
+    }
+    throw err;
   } finally {
     clearTimeout(timeoutId);
   }
