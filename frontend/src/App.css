@@ -2702,6 +2702,16 @@ button.table-talk-bubble {
   flex-shrink: 0;
 }
 
+.move-rejected {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--blunder, #ca3431);
+  border-radius: 6px;
+  background: rgba(202, 52, 49, 0.12);
+  color: var(--blunder, #ca3431);
+  font-size: 0.78rem;
+}
+
 .illegal-moves-indicator__title {
   font-family: var(--font-mono);
   font-size: 0.72rem;

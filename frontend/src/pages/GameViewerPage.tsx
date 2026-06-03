@@ -28,13 +28,20 @@ const ResponseTimeGraph = lazy(() => import("../components/game/ResponseTimeGrap
 const AnalysisPanel = lazy(() => import("../components/game/AnalysisPanel"));
 const NewGameDialog = lazy(() => import("../components/gamelist/NewGameDialog"));
 
-function IllegalMoveIndicator({ illegalMoves }: { illegalMoves: IllegalMoveData[] }) {
+function IllegalMoveIndicator({
+  illegalMoves,
+  humanColor,
+}: {
+  illegalMoves: IllegalMoveData[];
+  humanColor: "white" | "black" | null;
+}) {
   const invalidUCI = illegalMoves.filter((m) => m.reason === "Invalid UCI notation").length;
   const illegalMovesCt = illegalMoves.length - invalidUCI;
   const whiteCt = illegalMoves.filter((m) => m.color === "white").length;
   const blackCt = illegalMoves.filter((m) => m.color === "black").length;
   const latest = illegalMoves[illegalMoves.length - 1];
-  const latestModel = latest.model.split("/").pop() ?? latest.model;
+  const latestIsHuman = humanColor != null && latest.color === humanColor;
+  const latestActor = latestIsHuman ? "You" : (latest.model.split("/").pop() ?? latest.model);
   const latestType = latest.reason === "Invalid UCI notation" ? "invalid UCI" : "illegal move";
 
   return (
@@ -50,7 +57,7 @@ function IllegalMoveIndicator({ illegalMoves }: { illegalMoves: IllegalMoveData[
         </span>
       </div>
       <div className="illegal-moves-indicator__latest">
-        {latestModel}: <code>{latest.attemptedMove}</code> &mdash; {latestType}
+        {latestActor}: <code>{latest.attemptedMove}</code> &mdash; {latestType}
       </div>
     </div>
   );
@@ -458,7 +465,16 @@ export default function GameViewerPage() {
           />
 
           {state.illegalMoves.length > 0 && (
-            <IllegalMoveIndicator illegalMoves={state.illegalMoves} />
+            <IllegalMoveIndicator
+              illegalMoves={state.illegalMoves}
+              humanColor={humanColor}
+            />
+          )}
+
+          {humanColor && isLive && state.moveError && (
+            <div className="move-rejected" role="alert">
+              {state.moveError}
+            </div>
           )}
 
           {isHumanTurn && state.moveTimeLimit != null ? (

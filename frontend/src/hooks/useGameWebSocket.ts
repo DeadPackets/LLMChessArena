@@ -36,6 +36,7 @@ const initialState: GameState = {
   selectedIndex: -1,
   autoFollow: true,
   statusMessage: null,
+  moveError: null,
   gameOverData: null,
 };
 
@@ -229,6 +230,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         openingName: move.openingName ?? state.openingName,
         awaitingHumanMove: null,
         statusMessage: null,
+        moveError: null,
       };
     }
 
@@ -339,6 +341,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         awaitingHumanMove: action.payload.color,
         statusMessage: null,
+        moveError: null,
       };
 
     case "ILLEGAL_MOVE_ATTEMPT":
@@ -355,6 +358,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     case "SPECTATOR_COUNT":
       return { ...state, spectatorCount: action.payload.count };
+
+    case "SET_MOVE_ERROR":
+      return { ...state, moveError: action.payload };
 
     default:
       return state;
@@ -433,9 +439,14 @@ export function useGameWebSocket(gameId: string) {
             break;
           case "error":
             // Server rejected a move (wrong turn, not running, queue full) or
-            // auth failed. Surface it as a status message and clear any
-            // awaiting-human latch so the board re-enables for another try.
-            dispatch({ type: "STATUS_UPDATE", payload: { message: msg.data?.message ?? "Move not accepted" } });
+            // auth failed. Surface it as a move-rejection banner; it clears
+            // once a legal move advances the board or it's the human's turn.
+            dispatch({
+              type: "SET_MOVE_ERROR",
+              payload: typeof msg.data?.message === "string"
+                ? msg.data.message
+                : "Move not accepted — try again.",
+            });
             break;
         }
       } catch {
@@ -505,6 +516,7 @@ export function useGameWebSocket(gameId: string) {
   const isPlayer = !!playerSecret && state.status !== "completed" && state.status !== "stopped";
 
   const submitMove = useCallback((uci: string) => {
+    dispatch({ type: "SET_MOVE_ERROR", payload: null });
     sendJsonMessage({ type: "human_move", uci, player_secret: playerSecret });
   }, [sendJsonMessage, playerSecret]);
 
