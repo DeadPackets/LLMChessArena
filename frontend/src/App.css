@@ -2391,6 +2391,15 @@ a.app-header__live-stat:hover {
   cursor: pointer;
 }
 
+button.table-talk-bubble {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  appearance: none;
+}
+
 .table-talk-bubble--white {
   align-self: flex-start;
   background: var(--bg-tertiary);

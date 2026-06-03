@@ -52,7 +52,7 @@ function CriticalMomentItem({ cm, onClick }: { cm: CriticalMoment; onClick: () =
 
   return (
     <div className="critical-moment-item" onClick={onClick} role="button" tabIndex={0}
-      onKeyDown={(e) => { if (e.key === "Enter") onClick(); }}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
       aria-label={`Critical moment: ${cm.move_number}${cm.color === "black" ? "..." : "."} ${cm.san}`}
     >
       <ClassificationBadge classification={cm.classification} />

@@ -107,7 +107,7 @@ export default function TableTalkPanel({
     return result;
   }, [moves, illegalMoves, chaosMoves]);
 
-  const selectedBubbleRef = useRef<HTMLDivElement>(null);
+  const selectedBubbleRef = useRef<HTMLButtonElement>(null);
 
   const isMobile = () => window.innerWidth <= 900;
 
@@ -219,12 +219,14 @@ export default function TableTalkPanel({
               : shortModelName(blackModel);
 
           return (
-            <div
+            <button
+              type="button"
               key={`move-${entry.index}`}
-              ref={isSelected ? selectedBubbleRef : undefined}
+              ref={isSelected ? (selectedBubbleRef as React.RefObject<HTMLButtonElement>) : undefined}
               className={`table-talk-bubble table-talk-bubble--${m.color}${
                 isSelected ? " table-talk-bubble--selected" : ""
               }`}
+              aria-pressed={isSelected}
               onClick={() => onSelectMove(entry.index)}
             >
               <div className="table-talk-bubble__header">
@@ -235,7 +237,7 @@ export default function TableTalkPanel({
                 </span>
               </div>
               {m.tableTalk && <div className="table-talk-bubble__text">{m.tableTalk}</div>}
-            </div>
+            </button>
           );
         })}
       </div>
