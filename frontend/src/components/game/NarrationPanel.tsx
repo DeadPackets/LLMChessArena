@@ -18,7 +18,7 @@ export default function NarrationPanel({ move }: Props) {
   if (!move) {
     return (
       <div className="narration-panel panel">
-        <div className="narration-panel__label">Commentary</div>
+        <h3 className="narration-panel__label">Commentary</h3>
         <div className="narration-panel__text">Select a move to see commentary.</div>
       </div>
     );

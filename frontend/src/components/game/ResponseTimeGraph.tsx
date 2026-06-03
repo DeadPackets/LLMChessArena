@@ -49,7 +49,7 @@ export default function ResponseTimeGraph({ moves, selectedIndex, onSelectMove }
 
   return (
     <div className="response-time-graph panel">
-      <div className="response-time-graph__title">Response Time</div>
+      <h3 className="response-time-graph__title">Response Time</h3>
       <ResponsiveContainer width="100%" height={80}>
         <BarChart data={data} onClick={handleClick} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
           <XAxis dataKey="index" hide />

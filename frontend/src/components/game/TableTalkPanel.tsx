@@ -149,7 +149,7 @@ export default function TableTalkPanel({
   return (
     <div className="table-talk-panel panel">
       <div className="table-talk-panel__label">
-        Table Talk
+        <h3 className="table-talk-panel__heading">Table Talk</h3>
         {hasErrors && (
           <button
             className={`table-talk-panel__filter-toggle${hideErrors ? " table-talk-panel__filter-toggle--active" : ""}`}

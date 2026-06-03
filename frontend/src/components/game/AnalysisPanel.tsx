@@ -76,7 +76,7 @@ const AnalysisPanel = forwardRef<HTMLDivElement, Props>(function AnalysisPanel(
   return (
     <div className="analysis-panel panel" ref={ref}>
       <div className="analysis-panel__title">
-        Post-Game Analysis
+        <h2 className="analysis-panel__heading">Post-Game Analysis</h2>
         {onExport && (
           <button
             className="btn btn--ghost btn--sm analysis-panel__export-btn"
@@ -135,7 +135,7 @@ const AnalysisPanel = forwardRef<HTMLDivElement, Props>(function AnalysisPanel(
       {/* Critical moments */}
       {analysis.critical_moments.length > 0 && (
         <div className="critical-moments">
-          <div className="analysis-panel__subtitle">Critical Moments</div>
+          <h3 className="analysis-panel__subtitle">Critical Moments</h3>
           <div className="critical-moments__list">
             {analysis.critical_moments.map((cm) => (
               <CriticalMomentItem

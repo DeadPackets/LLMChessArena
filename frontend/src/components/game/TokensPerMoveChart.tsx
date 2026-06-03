@@ -39,7 +39,7 @@ export default function TokensPerMoveChart({ moves }: Props) {
 
   return (
     <div className="tokens-chart">
-      <div className="analysis-panel__subtitle">Tokens per Move</div>
+      <h3 className="analysis-panel__subtitle">Tokens per Move</h3>
       <ResponsiveContainer width="100%" height={120}>
         <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -10 }}>
           <XAxis dataKey="label" hide />

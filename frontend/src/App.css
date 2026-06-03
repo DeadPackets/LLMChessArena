@@ -1853,6 +1853,13 @@ a.app-header__live-stat:hover {
   color: var(--text-primary);
 }
 
+.analysis-panel__heading {
+  display: inline;
+  font: inherit;
+  color: inherit;
+  margin: 0;
+}
+
 .analysis-panel__subtitle {
   font-size: 0.75rem;
   font-weight: 600;
@@ -2241,6 +2248,7 @@ a.app-header__live-stat:hover {
 .response-time-graph__title {
   font-family: var(--font-mono);
   font-size: 0.7rem;
+  font-weight: 400;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -2334,6 +2342,12 @@ a.app-header__live-stat:hover {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 0 0.5rem 0.35rem;
+}
+
+.table-talk-panel__heading {
+  font: inherit;
+  color: inherit;
+  margin: 0;
 }
 
 .table-talk-panel__filter-toggle {
