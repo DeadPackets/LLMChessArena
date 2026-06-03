@@ -574,6 +574,67 @@ a.app-header__live-stat:hover {
   }
 }
 
+/* ── Legend (P4) — reusable key ── */
+.legend {
+  border: 1px solid #272b3d;
+  border-radius: 6px;
+  background: rgba(20, 22, 31, 0.5);
+  padding: 0.55rem 0.7rem;
+}
+
+.legend__title {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.legend__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.legend__row {
+  display: grid;
+  grid-template-columns: 1.6rem auto 1fr;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+}
+
+.legend__symbol {
+  font-family: var(--font-mono);
+  text-align: center;
+  color: var(--text-secondary, #c8c4bb);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.legend__name {
+  color: var(--text-secondary, #c8c4bb);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.legend__meaning {
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+@media (max-width: 640px) {
+  .legend__row {
+    grid-template-columns: 1.4rem 1fr;
+  }
+  .legend__meaning {
+    grid-column: 2 / -1;
+  }
+}
+
 /* ─── Move List ─── */
 .move-list {
   flex: 1 1 0;
