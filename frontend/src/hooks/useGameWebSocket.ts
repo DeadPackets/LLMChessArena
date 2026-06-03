@@ -117,6 +117,29 @@ function findLastOpening(moves: MoveData[]): { eco: string; name: string } | nul
   return null;
 }
 
+/**
+ * Merge a duplicate (moveNumber,color) move, preferring non-null eval/engine
+ * data from either copy. A live move_played carries eval_after/engine_lines
+ * that the DB-backed catch_up lacks, and vice-versa on reconnect — keep both.
+ */
+function mergeMove(existing: MoveData, incoming: MoveData): MoveData {
+  const evalAfter = incoming.evalAfter ?? existing.evalAfter;
+  const evalBefore = incoming.evalBefore ?? existing.evalBefore;
+  return {
+    ...existing,
+    ...incoming,
+    evalAfter,
+    evalBefore,
+    centipawns: incoming.centipawns ?? existing.centipawns,
+    mateIn: incoming.mateIn ?? existing.mateIn,
+    winProbability: incoming.winProbability ?? existing.winProbability,
+    narration: incoming.narration ?? existing.narration,
+    tableTalk: incoming.tableTalk ?? existing.tableTalk,
+    classification: incoming.classification ?? existing.classification,
+    bestMoveUci: incoming.bestMoveUci ?? existing.bestMoveUci,
+  };
+}
+
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case "CATCH_UP": {
@@ -183,11 +206,17 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     case "MOVE_PLAYED": {
       const move = normalizeLiveMove(action.payload);
-      // Deduplicate: if move already exists (from catch-up race), skip
-      const exists = state.moves.some(
+      // Deduplicate on (moveNumber,color). If a duplicate exists (catch-up/live
+      // race or reconnect), MERGE — preferring non-null eval/engine data from
+      // either copy — instead of discarding the richer entry.
+      const dupIdx = state.moves.findIndex(
         (m) => m.moveNumber === move.moveNumber && m.color === move.color
       );
-      if (exists) return state;
+      if (dupIdx !== -1) {
+        const newMoves = state.moves.slice();
+        newMoves[dupIdx] = mergeMove(newMoves[dupIdx], move);
+        return { ...state, moves: newMoves };
+      }
 
       const newMoves = [...state.moves, move];
       const newIdx = state.autoFollow ? newMoves.length - 1 : state.selectedIndex;
