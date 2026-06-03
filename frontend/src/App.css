@@ -505,6 +505,75 @@ a.app-header__live-stat:hover {
   opacity: 0.7;
 }
 
+/* ── InfoDot (P4) — war-room inline help ── */
+.info-dot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 0.3rem;
+}
+
+.info-dot__trigger {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--amber-dim);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  line-height: 1;
+  cursor: help;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.info-dot__trigger:hover,
+.info-dot__trigger:focus-visible {
+  color: var(--amber);
+  border-color: var(--amber);
+  outline: none;
+}
+
+.info-dot__tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: max-content;
+  max-width: 260px;
+  padding: 0.5rem 0.6rem;
+  background: #14161f;
+  border: 1px solid #272b3d;
+  border-radius: 6px;
+  color: var(--text-secondary, #c8c4bb);
+  font-family: var(--font-sans, inherit);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.info-dot__tip--open {
+  opacity: 1;
+}
+
+/* Flip-safe near the right edge: keep within the viewport on small screens. */
+@media (max-width: 640px) {
+  .info-dot__tip {
+    max-width: 200px;
+  }
+}
+
 /* ─── Move List ─── */
 .move-list {
   flex: 1 1 0;
