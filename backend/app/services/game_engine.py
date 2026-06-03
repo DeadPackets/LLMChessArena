@@ -351,7 +351,14 @@ class GameEngine:
             self.move_history.append(record)
 
             for cb in self.move_callbacks:
-                await cb(record)
+                try:
+                    await cb(record)
+                except Exception:
+                    logger.exception(
+                        "move_callback failed (move %d %s); continuing game",
+                        record.move_number,
+                        record.color,
+                    )
 
             # Draw adjudication check
             if self.config.draw_adjudication and eval_after and not is_chaos:

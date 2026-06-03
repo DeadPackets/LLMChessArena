@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from sqlmodel import select
 from sqlalchemy import update as sa_update
+from sqlalchemy.exc import OperationalError
 
 from app.config import (
     MAX_CONCURRENT_GAMES,
@@ -615,6 +616,28 @@ class GameManager:
             logger.warning("Failed to update illegal move counters", exc_info=True)
 
     async def _persist_move(self, game_id: str, record: MoveRecord) -> None:
+        """Persist a move, retrying transient SQLite write-lock contention.
+
+        A transient 'database is locked' must never abort the game; we retry
+        a few times with a short backoff before giving up (and logging).
+        """
+        for attempt in range(1, 4):
+            try:
+                await self._persist_move_once(game_id, record)
+                return
+            except OperationalError as e:
+                if "database is locked" in str(e).lower() and attempt < 3:
+                    logger.warning(
+                        "Game %s: move persist locked (attempt %d/3), retrying",
+                        game_id,
+                        attempt,
+                    )
+                    await asyncio.sleep(0.1 * attempt)
+                    continue
+                logger.exception("Game %s: move persist failed permanently", game_id)
+                return
+
+    async def _persist_move_once(self, game_id: str, record: MoveRecord) -> None:
         async with get_session_factory()() as session:
             move = Move(
                 game_id=game_id,
