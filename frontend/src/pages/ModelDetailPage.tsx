@@ -8,10 +8,12 @@ import ClassificationBadge from "../components/shared/ClassificationBadge";
 import { formatModelName } from "../utils/formatModel";
 import { useAsync } from "../hooks/useAsync";
 import AsyncBoundary from "../components/shared/AsyncBoundary";
+import InfoDot from "../components/shared/InfoDot";
+import Legend from "../components/shared/Legend";
+import { HELP } from "../components/shared/helpText";
+import { CLASS_ORDER, CLASS_META } from "../components/shared/classification";
 
 const EloHistoryChart = lazy(() => import("../components/model/EloHistoryChart"));
-
-const CLASS_ORDER = ["best", "excellent", "good", "inaccuracy", "mistake", "blunder"];
 
 export default function ModelDetailPage() {
   const location = useLocation();
@@ -49,6 +51,7 @@ export default function ModelDetailPage() {
         </div>
         <div className="model-detail-page__elo">
           {Math.round(model.elo_rating)} ELO
+          <InfoDot label={HELP.elo} />
         </div>
       </div>
 
@@ -66,13 +69,13 @@ export default function ModelDetailPage() {
           <div className="stat-card__value">
             {model.avg_accuracy != null ? `${model.avg_accuracy.toFixed(1)}%` : "--"}
           </div>
-          <div className="stat-card__label">Accuracy</div>
+          <div className="stat-card__label">Accuracy<InfoDot label={HELP.accuracy} /></div>
         </div>
         <div className="stat-card">
           <div className="stat-card__value">
             {model.avg_acpl != null ? model.avg_acpl.toFixed(1) : "--"}
           </div>
-          <div className="stat-card__label">Avg ACPL</div>
+          <div className="stat-card__label">Avg ACPL<InfoDot label={HELP.acpl} /></div>
         </div>
         <div className="stat-card">
           <div className="stat-card__value">${model.avg_cost_per_game.toFixed(4)}</div>
@@ -106,7 +109,20 @@ export default function ModelDetailPage() {
 
         {classEntries.length > 0 && (
           <div style={{ marginTop: "0.75rem" }}>
-            <div className="analysis-panel__subtitle">Move Classifications</div>
+            <div className="analysis-panel__subtitle">
+              Move Classifications
+              <InfoDot label="How this model's moves rated against the engine across all its games." />
+            </div>
+            <Legend
+              title="Move quality"
+              items={CLASS_ORDER.map((c) => ({
+                symbol: (
+                  <span style={{ color: CLASS_META[c].color }}>{CLASS_META[c].symbol || "·"}</span>
+                ),
+                name: CLASS_META[c].name,
+                meaning: CLASS_META[c].meaning,
+              }))}
+            />
             <div className="classification-grid">
               {classEntries.map(({ cls, count }) => (
                 <span key={cls} className="classification-stat">
