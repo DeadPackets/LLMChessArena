@@ -750,6 +750,27 @@ a.app-header__live-stat:hover {
   justify-content: center;
 }
 
+.game-controls__copy-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.game-controls__copied-pill {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  color: var(--bg, #0e1017);
+  background: var(--amber);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
 .game-controls__btn {
   display: flex;
   align-items: center;

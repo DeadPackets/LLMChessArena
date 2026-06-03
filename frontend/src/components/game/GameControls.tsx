@@ -165,14 +165,19 @@ export default function GameControls({
         </button>
       )}
 
-      <button
-        className="game-controls__btn game-controls__copy-btn"
-        onClick={copyPositionLink}
-        title="Copy link to this position"
-        aria-label="Copy link to current position"
-      >
-        {linkCopied ? "\u2713" : "\uD83D\uDD17"}
-      </button>
+      <span className="game-controls__copy-wrap">
+        <button
+          className="game-controls__btn game-controls__copy-btn"
+          onClick={copyPositionLink}
+          title="Copy link to this position"
+          aria-label="Copy link to current position"
+        >
+          {"\uD83D\uDD17"}
+        </button>
+        {linkCopied && (
+          <span className="game-controls__copied-pill" role="status">Copied!</span>
+        )}
+      </span>
 
       {onShowShortcuts && (
         <button
