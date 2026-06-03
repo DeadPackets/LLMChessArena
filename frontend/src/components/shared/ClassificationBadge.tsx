@@ -1,9 +1,9 @@
 const SYMBOLS: Record<string, string> = {
   brilliant: "!!",
   great: "!",
-  best: "\u2605",
-  excellent: "\u2713",
-  good: "",
+  best: "\u2605",      // \u2605 filled star
+  excellent: "\u2606", // \u2606 open star \u2014 visually distinct from best's filled star
+  good: "\u00b7",      // \u00b7 (used only in legends; move list still hides "good")
   inaccuracy: "?!",
   mistake: "?",
   blunder: "??",

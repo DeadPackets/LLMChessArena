@@ -596,14 +596,14 @@ a.app-header__live-stat:hover {
   line-height: 1;
 }
 
-.classification-badge--brilliant { background: var(--brilliant); color: #fff; }
-.classification-badge--great { background: var(--great); color: #fff; }
-.classification-badge--best { background: var(--best); color: #111; }
-.classification-badge--excellent { background: var(--excellent); color: #111; }
-.classification-badge--good { background: var(--good); color: #ddd; }
-.classification-badge--inaccuracy { background: var(--inaccuracy); color: #111; }
-.classification-badge--mistake { background: var(--mistake); color: #fff; }
-.classification-badge--blunder { background: var(--blunder); color: #fff; }
+.classification-badge--brilliant { background: var(--brilliant); color: #06231d; }
+.classification-badge--great { background: var(--great); color: #0a1822; }
+.classification-badge--best { background: var(--best); color: #0e1a06; }
+.classification-badge--excellent { background: var(--excellent); color: #0c1606; }
+.classification-badge--good { background: var(--good); color: #f2f2f2; }
+.classification-badge--inaccuracy { background: var(--inaccuracy); color: #1a1400; }
+.classification-badge--mistake { background: var(--mistake); color: #1c0e00; }
+.classification-badge--blunder { background: var(--blunder); color: #ffffff; }
 
 /* ─── Game Controls ─── */
 .game-controls {
