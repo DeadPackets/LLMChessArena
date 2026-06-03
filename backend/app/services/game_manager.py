@@ -209,13 +209,21 @@ class GameManager:
             async with get_session_factory()() as session:
                 game = await session.get(Game, game_id)
                 if game:
-                    game.status = "stopped"
-                    game.outcome = "*"
-                    game.termination = "stopped"
-                    game.completed_at = datetime.now(timezone.utc)
+                    # Idempotent: if a terminal write already landed, don't clobber it.
+                    if game.status in {"completed", "stopped"}:
+                        logger.info(
+                            "Game %s: stop requested but already %s; skipping write",
+                            game_id,
+                            game.status,
+                        )
+                    else:
+                        game.status = "stopped"
+                        game.outcome = "*"
+                        game.termination = "stopped"
+                        game.completed_at = datetime.now(timezone.utc)
+                        session.add(game)
+                        await session.commit()
                     total_moves = game.total_moves or 0
-                    session.add(game)
-                    await session.commit()
             # Broadcast game_over so WS clients update cleanly
             await self._broadcast(
                 game_id,
@@ -496,8 +504,7 @@ class GameManager:
                 result.total_moves,
                 result.total_cost_usd,
             )
-            await self._persist_result(game_id, result)
-            # Normalize model IDs for non-LLM sides before ELO update
+            # Normalize model IDs for non-LLM sides before persist/ELO
             if config.white_is_stockfish:
                 result.white_model = "Stockfish"
             elif config.white_is_human:
@@ -517,11 +524,13 @@ class GameManager:
                     "chaos mode" if config.chaos_mode else "strength-limited Stockfish"
                 )
                 logger.info("Game %s: skipping ELO update (%s)", game_id, reason)
-            else:
-                await self._update_elo(result)
+            wrote = await self._persist_result(
+                game_id, result, apply_elo=not skip_elo
+            )
             logger.info(
-                "Game %s: results persisted%s",
+                "Game %s: results persisted%s%s",
                 game_id,
+                "" if wrote else " (already terminal — skipped)",
                 f" (ELO skipped — {reason})" if skip_elo else " and ELO updated",
             )
             await self._broadcast(
@@ -545,9 +554,9 @@ class GameManager:
             logger.exception("Game %s failed", game_id)
             async with get_session_factory()() as session:
                 game = await session.get(Game, game_id)
-                if game:
+                if game and game.status not in {"completed", "stopped"}:
                     game.status = "completed"
-                    game.outcome = "draw"
+                    game.outcome = "*"
                     game.termination = "error"
                     game.completed_at = datetime.now(timezone.utc)
                     session.add(game)
@@ -557,7 +566,7 @@ class GameManager:
                 {
                     "type": "game_over",
                     "data": {
-                        "outcome": "draw",
+                        "outcome": "*",
                         "termination": "error",
                         "total_moves": 0,
                     },
@@ -676,25 +685,50 @@ class GameManager:
             session.add(move)
             await session.commit()
 
-    async def _persist_result(self, game_id: str, result: GameResult) -> None:
+    async def _persist_result(
+        self, game_id: str, result: GameResult, apply_elo: bool = False
+    ) -> bool:
+        """Persist the terminal game state (idempotently) and optionally fold in
+        the ELO update within the same transaction.
+
+        Returns True only if this call performed the terminal write. If the row
+        was already completed/stopped, returns False and does nothing — so ELO is
+        applied at most once even if this path runs twice.
+        """
         now = datetime.now(timezone.utc)
         async with get_session_factory()() as session:
             game = await session.get(Game, game_id)
-            if game:
-                game.status = "completed"
-                game.outcome = result.outcome
-                game.termination = result.termination
-                game.opening_eco = result.opening_eco
-                game.opening_name = result.opening_name
-                game.pgn = result.pgn
-                game.total_moves = result.total_moves
-                game.total_cost_usd = result.total_cost_usd
-                game.completed_at = now
-                session.add(game)
-                await session.commit()
+            if not game:
+                return False
+            if game.status in {"completed", "stopped"}:
+                logger.info(
+                    "Game %s: result persist skipped (already %s)", game_id, game.status
+                )
+                return False
 
-    async def _update_elo(self, result: GameResult) -> None:
-        """Update ELO ratings for both models after a game."""
+            game.status = "completed"
+            game.outcome = result.outcome
+            game.termination = result.termination
+            game.opening_eco = result.opening_eco
+            game.opening_name = result.opening_name
+            game.pgn = result.pgn
+            game.total_moves = result.total_moves
+            game.total_cost_usd = result.total_cost_usd
+            game.completed_at = now
+            session.add(game)
+
+            if apply_elo and not game.rated:
+                await self._apply_elo(session, result)
+                game.rated = True
+
+            await session.commit()
+            return True
+
+    async def _apply_elo(self, session, result: GameResult) -> None:
+        """Apply an ELO update to both models within the caller's session.
+
+        Does not commit — the caller commits as part of the result transaction.
+        """
         if "white_wins" in result.outcome:
             score_white = 1.0
         elif "black_wins" in result.outcome:
@@ -702,30 +736,26 @@ class GameManager:
         else:
             score_white = 0.5
 
-        async with get_session_factory()() as session:
-            w = await session.get(LLMModel, result.white_model)
-            b = await session.get(LLMModel, result.black_model)
+        w = await session.get(LLMModel, result.white_model)
+        b = await session.get(LLMModel, result.black_model)
+        if not w or not b:
+            return
 
-            if not w or not b:
-                return
+        new_w, new_b = calculate_elo_change(w.elo_rating, b.elo_rating, score_white)
 
-            new_w, new_b = calculate_elo_change(w.elo_rating, b.elo_rating, score_white)
+        w.elo_rating = new_w
+        w.games_played += 1
+        w.wins += 1 if score_white == 1.0 else 0
+        w.draws += 1 if score_white == 0.5 else 0
+        w.losses += 1 if score_white == 0.0 else 0
+        session.add(w)
 
-            w.elo_rating = new_w
-            w.games_played += 1
-            w.wins += 1 if score_white == 1.0 else 0
-            w.draws += 1 if score_white == 0.5 else 0
-            w.losses += 1 if score_white == 0.0 else 0
-            session.add(w)
-
-            b.elo_rating = new_b
-            b.games_played += 1
-            b.wins += 1 if score_white == 0.0 else 0
-            b.draws += 1 if score_white == 0.5 else 0
-            b.losses += 1 if score_white == 1.0 else 0
-            session.add(b)
-
-            await session.commit()
+        b.elo_rating = new_b
+        b.games_played += 1
+        b.wins += 1 if score_white == 0.0 else 0
+        b.draws += 1 if score_white == 0.5 else 0
+        b.losses += 1 if score_white == 1.0 else 0
+        session.add(b)
 
     async def _ensure_model(self, model_id: str) -> None:
         """Insert the model into the models table if it doesn't exist."""

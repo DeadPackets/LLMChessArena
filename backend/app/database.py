@@ -31,6 +31,7 @@ class Game(SQLModel, table=True):
     total_moves: int = Field(default=0)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    rated: bool = Field(default=False)
     white_illegal_moves: int = Field(default=0)
     black_illegal_moves: int = Field(default=0)
     total_cost_usd: float = Field(default=0.0)
@@ -153,6 +154,7 @@ async def _migrate_add_columns(conn) -> None:
         ("moves", "centipawns_before", "INTEGER"),
         ("moves", "mate_in_before", "INTEGER"),
         ("moves", "win_probability_before", "FLOAT"),
+        ("games", "rated", "BOOLEAN DEFAULT 0"),
     ]
     for table, column, col_type in migrations:
         try:
