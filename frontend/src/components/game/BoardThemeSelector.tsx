@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { BOARD_COLORS, PIECE_STYLES } from "../../hooks/useBoardTheme";
 import type { BoardColorPreset } from "../../hooks/useBoardTheme";
 
@@ -16,9 +16,32 @@ export default function BoardThemeSelector({
   onPieceStyleChange,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside-click (mousedown, matching ModelSelector).
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  // Close on Escape.
+  useEffect(() => {
+    if (!open) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [open]);
 
   return (
-    <div className="board-theme-selector">
+    <div className="board-theme-selector" ref={containerRef}>
       <button
         className="board-theme-selector__toggle"
         onClick={() => setOpen((v) => !v)}
@@ -36,7 +59,7 @@ export default function BoardThemeSelector({
       </button>
 
       {open && (
-        <div className="board-theme-selector__dropdown">
+        <div className="board-theme-selector__dropdown" role="group" aria-label="Board and piece theme options">
           <div className="board-theme-selector__row">
             <span className="board-theme-selector__label">Board</span>
             <div className="board-theme-selector__swatches">
