@@ -185,6 +185,10 @@ class GameManager:
     def get_spectator_count(self, game_id: str) -> int:
         return len(self.event_queues.get(game_id, []))
 
+    def total_spectators(self) -> int:
+        """Total live WebSocket spectators across all games."""
+        return sum(len(queues) for queues in self.event_queues.values())
+
     async def _broadcast_spectator_count(self, game_id: str) -> None:
         count = self.get_spectator_count(game_id)
         await self._broadcast(
