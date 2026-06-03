@@ -4,6 +4,10 @@ import type { MoveData } from "../../types/websocket";
 import ClassificationBadge from "../shared/ClassificationBadge";
 import TokensPerMoveChart from "./TokensPerMoveChart";
 import { formatModelName } from "../../utils/formatModel";
+import InfoDot from "../shared/InfoDot";
+import Legend from "../shared/Legend";
+import { HELP } from "../shared/helpText";
+import { CLASS_ORDER, CLASS_META } from "../shared/classification";
 
 interface Props {
   analysis: GameAnalysis;
@@ -21,8 +25,6 @@ function accuracyClass(acc: number | null): string {
   if (acc >= 50) return "accuracy-card__value--mid";
   return "accuracy-card__value--low";
 }
-
-const CLASS_ORDER = ["best", "excellent", "good", "inaccuracy", "mistake", "blunder"];
 
 function ClassificationBreakdown({ classifications }: { classifications: Record<string, number> }) {
   const entries = CLASS_ORDER.filter((c) => classifications[c]).map((c) => ({
@@ -90,6 +92,10 @@ const AnalysisPanel = forwardRef<HTMLDivElement, Props>(function AnalysisPanel(
       </div>
 
       {/* Accuracy cards */}
+      <div className="analysis-panel__subtitle" style={{ marginBottom: "0.4rem" }}>
+        Accuracy
+        <InfoDot label={HELP.accuracy} />
+      </div>
       <div className="analysis-panel__accuracy-row">
         <div className="accuracy-card">
           <div className={`accuracy-card__value ${accuracyClass(analysis.white_accuracy)}`}>
@@ -97,7 +103,10 @@ const AnalysisPanel = forwardRef<HTMLDivElement, Props>(function AnalysisPanel(
           </div>
           <div className="accuracy-card__label">{formatModelName(whiteModel)}</div>
           {analysis.white_acpl != null && (
-            <div className="accuracy-card__acpl">ACPL: {analysis.white_acpl.toFixed(1)}</div>
+            <div className="accuracy-card__acpl">
+              ACPL: {analysis.white_acpl.toFixed(1)}
+              <InfoDot label={HELP.acpl} />
+            </div>
           )}
           <ClassificationBreakdown classifications={analysis.white_classifications} />
         </div>
@@ -107,7 +116,10 @@ const AnalysisPanel = forwardRef<HTMLDivElement, Props>(function AnalysisPanel(
           </div>
           <div className="accuracy-card__label">{formatModelName(blackModel)}</div>
           {analysis.black_acpl != null && (
-            <div className="accuracy-card__acpl">ACPL: {analysis.black_acpl.toFixed(1)}</div>
+            <div className="accuracy-card__acpl">
+              ACPL: {analysis.black_acpl.toFixed(1)}
+              <InfoDot label={HELP.acpl} />
+            </div>
           )}
           <ClassificationBreakdown classifications={analysis.black_classifications} />
         </div>
@@ -135,7 +147,20 @@ const AnalysisPanel = forwardRef<HTMLDivElement, Props>(function AnalysisPanel(
       {/* Critical moments */}
       {analysis.critical_moments.length > 0 && (
         <div className="critical-moments">
-          <h3 className="analysis-panel__subtitle">Critical Moments</h3>
+          <h3 className="analysis-panel__subtitle">
+            Critical Moments
+            <InfoDot label="Critical Moments — the moves where the win probability swung the most. Click one to jump to that position." />
+          </h3>
+          <Legend
+            title="Move quality"
+            items={CLASS_ORDER.map((c) => ({
+              symbol: (
+                <span style={{ color: CLASS_META[c].color }}>{CLASS_META[c].symbol || "·"}</span>
+              ),
+              name: CLASS_META[c].name,
+              meaning: CLASS_META[c].meaning,
+            }))}
+          />
           <div className="critical-moments__list">
             {analysis.critical_moments.map((cm) => (
               <CriticalMomentItem
