@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useAsync } from "../hooks/useAsync";
 import AsyncBoundary from "../components/shared/AsyncBoundary";
 import {
@@ -93,6 +94,9 @@ export default function CostDashboardPage() {
             <div className="empty-state panel">
               <div className="empty-state__icon">&#9816;</div>
               <div className="empty-state__text">No completed games yet — costs appear once games finish.</div>
+              <Link to="/" className="btn btn--primary" style={{ marginTop: "0.75rem" }}>
+                Start a game
+              </Link>
             </div>
           }
         >
