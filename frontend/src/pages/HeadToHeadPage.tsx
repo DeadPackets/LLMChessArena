@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { compareModels, getLeaderboard } from "../api/client";
 import type { HeadToHeadComparison, EnhancedModelStats } from "../types/api";
 import GameCard from "../components/gamelist/GameCard";
 import { formatModelName } from "../utils/formatModel";
 import { useAsync } from "../hooks/useAsync";
 import AsyncBoundary from "../components/shared/AsyncBoundary";
+import InfoDot from "../components/shared/InfoDot";
+import { HELP } from "../components/shared/helpText";
 
 export default function HeadToHeadPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -84,7 +86,10 @@ export default function HeadToHeadPage() {
       {!paramA || !paramB ? (
         <div className="empty-state panel">
           <div className="empty-state__icon">&#9816;</div>
-          <div className="empty-state__text">Select two models to compare their head-to-head record.</div>
+          <div className="empty-state__text">Select two models above to compare their head-to-head record, or start a game to build one.</div>
+          <Link to="/" className="btn btn--primary" style={{ marginTop: "0.75rem" }}>
+            Start a game
+          </Link>
         </div>
       ) : (
         <AsyncBoundary
@@ -138,7 +143,7 @@ export default function HeadToHeadPage() {
                       <span className="analysis-panel__stat-val">
                         {comparison.model_a_avg_accuracy != null ? `${comparison.model_a_avg_accuracy.toFixed(1)}%` : "--"}
                       </span>
-                      <span className="analysis-panel__stat-label">Accuracy</span>
+                      <span className="analysis-panel__stat-label">Accuracy<InfoDot label={HELP.accuracy} /></span>
                       <span className="analysis-panel__stat-val">
                         {comparison.model_b_avg_accuracy != null ? `${comparison.model_b_avg_accuracy.toFixed(1)}%` : "--"}
                       </span>
@@ -147,7 +152,7 @@ export default function HeadToHeadPage() {
                       <span className="analysis-panel__stat-val">
                         {comparison.model_a_avg_acpl != null ? comparison.model_a_avg_acpl.toFixed(1) : "--"}
                       </span>
-                      <span className="analysis-panel__stat-label">Avg ACPL</span>
+                      <span className="analysis-panel__stat-label">Avg ACPL<InfoDot label={HELP.acpl} /></span>
                       <span className="analysis-panel__stat-val">
                         {comparison.model_b_avg_acpl != null ? comparison.model_b_avg_acpl.toFixed(1) : "--"}
                       </span>
