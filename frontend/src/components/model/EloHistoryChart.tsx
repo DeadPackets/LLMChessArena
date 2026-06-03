@@ -11,16 +11,41 @@ interface Props {
 export default function EloHistoryChart({ modelId, currentElo }: Props) {
   const [history, setHistory] = useState<EloHistoryPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
+    setError(null);
     getEloHistory(modelId)
-      .then(setHistory)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .then((h) => {
+        if (!cancelled) setHistory(h);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load ELO history");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [modelId]);
 
   if (loading) return null;
+
+  if (error) {
+    return (
+      <div className="panel" style={{ padding: "1rem" }}>
+        <div className="analysis-panel__title">ELO History</div>
+        <div style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginTop: "0.5rem" }}>
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  // Fewer than 2 rated games is a genuine empty state, not an error — stay hidden.
   if (history.length < 2) return null;
 
   const data = [
