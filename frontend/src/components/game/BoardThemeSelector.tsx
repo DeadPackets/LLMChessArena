@@ -23,6 +23,8 @@ export default function BoardThemeSelector({
         className="board-theme-selector__toggle"
         onClick={() => setOpen((v) => !v)}
         title="Board &amp; piece theme"
+        aria-label="Board and piece theme"
+        aria-expanded={open}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.9 0 1.8-.1 2.6-.4a1 1 0 0 0 .6-1.3c-.4-1 .2-2.3 1.3-2.3h1.5c2.2 0 4-1.8 4-4 0-5-4.5-9-10-9z"/>
@@ -46,6 +48,8 @@ export default function BoardThemeSelector({
                   }`}
                   onClick={() => onBoardColorChange(preset.id)}
                   title={preset.label}
+                  aria-label={`Board color: ${preset.label}`}
+                  aria-pressed={preset.id === activeBoardColor}
                 >
                   <span
                     className="board-theme-selector__swatch-inner"
@@ -67,6 +71,7 @@ export default function BoardThemeSelector({
                     style.id === activePieceStyle ? " board-theme-selector__piece-btn--active" : ""
                   }`}
                   onClick={() => onPieceStyleChange(style.id)}
+                  aria-pressed={style.id === activePieceStyle}
                 >
                   {style.label}
                 </button>
