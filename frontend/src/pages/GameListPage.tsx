@@ -26,6 +26,7 @@ export default function GameListPage() {
   const [hasMore, setHasMore] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
 
   // Local search input (debounced before pushing to URL)
   const [searchInput, setSearchInput] = useState(searchQuery);
@@ -103,8 +104,9 @@ export default function GameListPage() {
       setGames(data.games);
       setTotalCount(data.total_count);
       setHasMore(data.has_more);
+      setFetchError(false);
     } catch {
-      // silently fail, keep stale data
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -120,9 +122,26 @@ export default function GameListPage() {
   // Tick counter to force timeAgo re-renders even when data hasn't changed
   const [, setTick] = useState(0);
 
-  // Poll for updates every 10s — refresh first page only
+  // Poll the first page on an interval, paused while the tab is hidden, with
+  // exponential backoff on failure. Self-scheduling (setTimeout) so a hidden
+  // tab fires no network calls and a failing backend doesn't hammer the API.
   useEffect(() => {
-    const interval = setInterval(async () => {
+    const BASE_MS = 10_000;
+    const MAX_MS = 60_000;
+    let cancelled = false;
+    let backoff = BASE_MS;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const schedule = (ms: number) => {
+      if (cancelled) return;
+      timer = setTimeout(tick, ms);
+    };
+
+    const tick = async () => {
+      if (document.hidden) {
+        schedule(BASE_MS);
+        return;
+      }
       setTick((t) => t + 1);
       try {
         const f = filtersRef.current;
@@ -132,17 +151,37 @@ export default function GameListPage() {
         if (f.outcome) params.outcome = f.outcome;
         if (f.opening) params.opening = f.opening;
         const data = await listGames(params as Parameters<typeof listGames>[0]);
+        if (cancelled) return;
         setGames((prev) => {
           const loadedExtra = prev.slice(PAGE_SIZE);
           return [...data.games, ...loadedExtra];
         });
         setTotalCount(data.total_count);
         setHasMore(data.has_more);
+        setFetchError(false);
+        backoff = BASE_MS;
       } catch {
-        // ignore
+        if (cancelled) return;
+        setFetchError(true);
+        backoff = Math.min(backoff * 2, MAX_MS);
       }
-    }, 10000);
-    return () => clearInterval(interval);
+      schedule(backoff);
+    };
+
+    schedule(BASE_MS);
+
+    const onVisible = () => {
+      if (document.hidden || cancelled) return;
+      if (timer) clearTimeout(timer);
+      tick();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   const handleLoadMore = useCallback(async () => {
@@ -239,6 +278,14 @@ export default function GameListPage() {
       {loading ? (
         <div className="spinner-page">
           <div className="spinner-lg" />
+        </div>
+      ) : games.length === 0 && fetchError ? (
+        <div className="empty-state panel async-error">
+          <div className="empty-state__icon">&#9888;</div>
+          <div className="empty-state__text">Couldn't load games — the server may be unavailable.</div>
+          <button className="btn btn--ghost btn--sm async-error__retry" onClick={() => { setLoading(true); fetchFirstPage(); }}>
+            Retry
+          </button>
         </div>
       ) : games.length === 0 ? (
         <div className="empty-state panel">
