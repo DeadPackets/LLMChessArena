@@ -2353,6 +2353,25 @@ a.app-header__live-stat:hover {
   color: var(--amber);
 }
 
+.leaderboard-page__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.leaderboard-sort {
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.leaderboard__value {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--amber);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ─── Responsive (legacy, merged into 768px+ block below) ─── */
 
 
@@ -3587,7 +3606,7 @@ button.table-talk-bubble {
     font-size: 1.4rem;
   }
 
-  /* Hide W/D/L(4), Accuracy(6), ACPL(7), Avg Cost(8), Avg Time(9) */
+  /* Hide W/D/L(4), Accuracy(6), ACPL(7), Avg Cost(8), Avg Time(9), Value cols(10,11) */
   .leaderboard-table--enhanced th:nth-child(4),
   .leaderboard-table--enhanced td:nth-child(4),
   .leaderboard-table--enhanced th:nth-child(6),
@@ -3597,7 +3616,11 @@ button.table-talk-bubble {
   .leaderboard-table--enhanced th:nth-child(8),
   .leaderboard-table--enhanced td:nth-child(8),
   .leaderboard-table--enhanced th:nth-child(9),
-  .leaderboard-table--enhanced td:nth-child(9) {
+  .leaderboard-table--enhanced td:nth-child(9),
+  .leaderboard-table--enhanced th:nth-child(10),
+  .leaderboard-table--enhanced td:nth-child(10),
+  .leaderboard-table--enhanced th:nth-child(11),
+  .leaderboard-table--enhanced td:nth-child(11) {
     display: none;
   }
 
