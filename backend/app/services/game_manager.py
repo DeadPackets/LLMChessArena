@@ -804,6 +804,16 @@ class GameManager:
                     self.event_queues.get(game_id, []).remove(q)
                 except ValueError:
                     pass
+                # Wake the WS reader blocked on queue.get() so it terminates and
+                # the client reconnects + re-catches-up, instead of hanging.
+                try:
+                    q.get_nowait()  # drain one slot so the sentinel fits
+                except asyncio.QueueEmpty:
+                    pass
+                try:
+                    q.put_nowait(None)
+                except asyncio.QueueFull:
+                    pass
         if dropped:
             logger.warning(
                 "Game %s: broadcast %s dropped for %d/%d subscribers (queue full)",
