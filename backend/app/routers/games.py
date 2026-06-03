@@ -235,10 +235,18 @@ async def list_games(
 
 
 @router.get("/queue-status")
-async def queue_status(request: Request):
-    """Return the current game queue state."""
+async def queue_status(
+    request: Request, session: AsyncSession = Depends(get_session)
+):
+    """Return the current game queue state plus live activity counts."""
     manager = request.app.state.game_manager
-    return manager.queue_status()
+    state = manager.queue_status()
+    total_games = (
+        await session.exec(select(func.count()).select_from(Game))
+    ).one()
+    state["total_spectators"] = manager.total_spectators()
+    state["total_games"] = int(total_games)
+    return state
 
 
 @router.get("/{game_id}/board.png")
