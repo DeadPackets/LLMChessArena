@@ -1,4 +1,4 @@
-import { useReducer, useCallback, useEffect, useRef } from "react";
+import { useReducer, useCallback, useEffect, useRef, useState } from "react";
 import useWebSocket, { ReadyState } from "react-use-websocket";
 import type { GameState, GameAction, MoveData, PositionEval, GameOverData, IllegalMoveData, ChaosMoveData } from "../types/websocket";
 
@@ -363,13 +363,19 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
 export function useGameWebSocket(gameId: string) {
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  const [reconnectExhausted, setReconnectExhausted] = useState(false);
+  // Bumping this nonce changes the WS URL, forcing react-use-websocket to
+  // open a brand-new connection — our manual-reconnect mechanism.
+  const [reconnectNonce, setReconnectNonce] = useState(0);
 
   // Use a ref for status to avoid stale closures in shouldReconnect
   const statusRef = useRef(state.status);
   statusRef.current = state.status;
 
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${protocol}//${window.location.host}/ws/games/${gameId}`;
+  const wsUrl = `${protocol}//${window.location.host}/ws/games/${gameId}${
+    reconnectNonce > 0 ? `?r=${reconnectNonce}` : ""
+  }`;
 
   const { readyState, sendJsonMessage } = useWebSocket(wsUrl, {
     onMessage: (event) => {
@@ -433,6 +439,8 @@ export function useGameWebSocket(gameId: string) {
     shouldReconnect: () => statusRef.current === "active" || statusRef.current === "queued" || statusRef.current === null,
     reconnectAttempts: 10,
     reconnectInterval: 3000,
+    onReconnectStop: () => setReconnectExhausted(true),
+    onOpen: () => setReconnectExhausted(false),
   });
 
   useEffect(() => {
@@ -498,5 +506,10 @@ export function useGameWebSocket(gameId: string) {
     sendJsonMessage({ type: "resign", player_secret: playerSecret });
   }, [sendJsonMessage, playerSecret]);
 
-  return { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer, playerSecret };
+  const reconnect = useCallback(() => {
+    setReconnectExhausted(false);
+    setReconnectNonce((n) => n + 1);
+  }, []);
+
+  return { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer, playerSecret, reconnectExhausted, reconnect };
 }

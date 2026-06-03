@@ -1776,6 +1776,36 @@ a.app-header__live-stat:hover {
   font-size: 0.9rem;
 }
 
+.live-connection-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.9rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--amber);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.live-connection-banner__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.live-connection-banner__text {
+  flex: 1;
+}
+
+.live-connection-banner__btn {
+  white-space: nowrap;
+}
+
 /* ─── Win Probability Graph ─── */
 .win-prob-graph {
   border-radius: var(--radius);

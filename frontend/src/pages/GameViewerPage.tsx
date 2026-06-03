@@ -111,7 +111,7 @@ function detectSoundType(san: string): SoundType {
 export default function GameViewerPage() {
   const { gameId } = useParams<{ gameId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer, playerSecret } = useGameWebSocket(gameId!);
+  const { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer, playerSecret, reconnectExhausted, reconnect } = useGameWebSocket(gameId!);
 
   // Board theme
   const { boardColorPreset, customPieces, theme, setBoardColor, setPieceStyle } = useBoardTheme();
@@ -307,9 +307,28 @@ export default function GameViewerPage() {
   const isHumanTurn = !!(humanColor && state.awaitingHumanMove === humanColor && isLive);
   const boardOrientation: "white" | "black" = humanColor === "black" ? "black" : "white";
 
+  const showReconnectBanner =
+    state.connectionStatus === "disconnected" && (state.status === "active" || state.status === "queued");
+
   return (
     <div className="game-viewer">
       <GameInfoHeader state={state} />
+
+      {showReconnectBanner && (
+        <div className="live-connection-banner" role="status" aria-live="polite">
+          <span className="live-connection-banner__dot" aria-hidden="true" />
+          <span className="live-connection-banner__text">
+            {reconnectExhausted
+              ? "Live connection lost. Auto-reconnect gave up."
+              : "Live connection lost — reconnecting…"}
+          </span>
+          {reconnectExhausted && (
+            <button className="btn btn--ghost btn--sm live-connection-banner__btn" onClick={reconnect}>
+              Reconnect
+            </button>
+          )}
+        </div>
+      )}
 
       {state.gameOverData && (
         <GameOverBanner
