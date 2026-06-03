@@ -1,11 +1,13 @@
+import { useModal } from "../../hooks/useModal";
+
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
 const SHORTCUTS = [
-  { keys: ["\u2190"], label: "Previous move" },
-  { keys: ["\u2192"], label: "Next move" },
+  { keys: ["←"], label: "Previous move" },
+  { keys: ["→"], label: "Next move" },
   { keys: ["Home"], label: "First move" },
   { keys: ["End"], label: "Last move" },
   { keys: ["?"], label: "Toggle this help" },
@@ -15,14 +17,24 @@ const SHORTCUTS = [
 ];
 
 export default function KeyboardShortcutsModal({ open, onClose }: Props) {
+  const { dialogProps, titleId } = useModal(open, onClose);
   if (!open) return null;
 
   return (
     <div className="dialog-overlay" onClick={onClose}>
-      <div className="keyboard-shortcuts-modal panel" onClick={(e) => e.stopPropagation()}>
+      <div
+        {...dialogProps}
+        ref={dialogProps.ref as React.RefObject<HTMLDivElement>}
+        className="keyboard-shortcuts-modal panel"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="keyboard-shortcuts-modal__header">
-          <h3 className="keyboard-shortcuts-modal__title">Keyboard Shortcuts</h3>
-          <button className="keyboard-shortcuts-modal__close" onClick={onClose}>&times;</button>
+          <h3 id={titleId} className="keyboard-shortcuts-modal__title">Keyboard Shortcuts</h3>
+          <button
+            className="keyboard-shortcuts-modal__close"
+            onClick={onClose}
+            aria-label="Close keyboard shortcuts"
+          >&times;</button>
         </div>
         <div className="keyboard-shortcuts-modal__list">
           {SHORTCUTS.map((s) => (
