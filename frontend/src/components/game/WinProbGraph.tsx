@@ -22,11 +22,36 @@ const CLASSIFICATION_DOT_COLORS: Record<string, string> = {
 
 const LARGE_DOT_CLASSIFICATIONS = new Set(["brilliant", "blunder"]);
 
+function shapeFor(cls: string | null): DotShape {
+  if (cls === "blunder" || cls === "mistake" || cls === "inaccuracy") return "triangle";
+  if (cls === "brilliant" || cls === "great") return "diamond";
+  return "circle";
+}
+
+function DotShapeMark({ cx, cy, r, color, shape }: { cx?: number; cy?: number; r: number; color: string; shape: DotShape }) {
+  if (cx == null || cy == null) return null;
+  if (shape === "triangle") {
+    const h = r * 1.6;
+    const pts = `${cx},${cy - h} ${cx - h},${cy + h * 0.7} ${cx + h},${cy + h * 0.7}`;
+    return <polygon points={pts} fill={color} stroke="#0e1017" strokeWidth={0.75} />;
+  }
+  if (shape === "diamond") {
+    const h = r * 1.5;
+    const pts = `${cx},${cy - h} ${cx + h},${cy} ${cx},${cy + h} ${cx - h},${cy}`;
+    return <polygon points={pts} fill={color} stroke="#0e1017" strokeWidth={0.75} />;
+  }
+  return <circle cx={cx} cy={cy} r={r} fill={color} stroke="#0e1017" strokeWidth={0.5} />;
+}
+
+type DotShape = "triangle" | "diamond" | "circle";
+
 interface DotInfo {
   index: number;
   y: number;
   color: string;
   r: number;
+  shape: DotShape;
+  label: string;
 }
 
 interface Props {
@@ -85,6 +110,8 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
           y: wp,
           color: CLASSIFICATION_DOT_COLORS[cls],
           r: LARGE_DOT_CLASSIFICATIONS.has(cls) ? 4 : 3,
+          shape: shapeFor(cls),
+          label: `${moves[i].moveNumber}${moves[i].color === "black" ? "..." : "."} ${moves[i].san} (${cls})`,
         });
         seen.add(i);
       }
@@ -103,6 +130,8 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
             y: cm.win_prob_after * 100,
             color,
             r: 3,
+            shape: shapeFor(cls),
+            label: `${cm.san} (${cls ?? (cm.swing > 0.25 ? "blunder" : "inaccuracy")})`,
           });
         }
       }
@@ -111,8 +140,20 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
     return result;
   }, [moves, criticalMoments]);
 
+  const summary =
+    dots.length === 0
+      ? "Win probability over the game. No critical moments."
+      : `Win probability over the game. ${dots.length} critical moment${dots.length === 1 ? "" : "s"}: ` +
+        dots
+          .slice()
+          .sort((a, b) => a.index - b.index)
+          .map((d) => d.label)
+          .join("; ") + ".";
+
   return (
-    <div className="win-prob-graph panel">
+    <div className="win-prob-graph panel" role="group" aria-label="Win probability graph">
+      <h3 className="visually-hidden">Win probability</h3>
+      <p className="visually-hidden">{summary}</p>
       <ResponsiveContainer width="100%" height={100}>
         <AreaChart data={data} onClick={handleClick} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
           <defs>
@@ -135,8 +176,11 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
               x={dot.index}
               y={dot.y}
               r={dot.r}
-              fill={dot.color}
-              stroke="none"
+              // recharts 3 shape render-prop typings are loose
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              shape={((props: any) => (
+                <DotShapeMark cx={props.cx} cy={props.cy} r={dot.r} color={dot.color} shape={dot.shape} />
+              )) as any}
             />
           ))}
           <Area
@@ -164,6 +208,18 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
           />
         </AreaChart>
       </ResponsiveContainer>
+      <ul className="visually-hidden">
+        {dots
+          .slice()
+          .sort((a, b) => a.index - b.index)
+          .map((d) => (
+            <li key={`jump-${d.index}`}>
+              <button type="button" onClick={() => onSelectMove(d.index)}>
+                Go to {d.label}
+              </button>
+            </li>
+          ))}
+      </ul>
     </div>
   );
 }
