@@ -66,7 +66,16 @@ async def _receive_messages(websocket: WebSocket, game_id: str) -> None:
                 logger.info(
                     "WebSocket human move received: game=%s, uci=%s", game_id, uci
                 )
-                await manager.submit_human_move(game_id, uci)
+                accepted, reason = await manager.submit_human_move(game_id, uci)
+                if not accepted:
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "error",
+                                "data": {"message": reason or "Move not accepted"},
+                            }
+                        )
+                    )
             else:
                 logger.warning("WebSocket human_move missing uci: game=%s", game_id)
         elif msg_type == "resign":
@@ -83,7 +92,7 @@ async def _receive_messages(websocket: WebSocket, game_id: str) -> None:
                 )
                 continue
             logger.info("WebSocket resignation received: game=%s", game_id)
-            await manager.submit_human_move(game_id, "resign")
+            await manager.submit_human_move(game_id, "resign")  # tuple result ignored
         else:
             logger.debug(
                 "WebSocket unknown message type: game=%s, type=%s", game_id, msg_type

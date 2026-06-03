@@ -431,6 +431,12 @@ export function useGameWebSocket(gameId: string) {
           case "spectator_count":
             dispatch({ type: "SPECTATOR_COUNT", payload: { count: msg.data.count } });
             break;
+          case "error":
+            // Server rejected a move (wrong turn, not running, queue full) or
+            // auth failed. Surface it as a status message and clear any
+            // awaiting-human latch so the board re-enables for another try.
+            dispatch({ type: "STATUS_UPDATE", payload: { message: msg.data?.message ?? "Move not accepted" } });
+            break;
         }
       } catch {
         // ignore malformed messages

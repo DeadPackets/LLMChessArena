@@ -251,14 +251,34 @@ class GameManager:
             return False
         return secrets_mod.compare_digest(expected, secret or "")
 
-    async def submit_human_move(self, game_id: str, uci: str) -> bool:
-        """Submit a human move for an active game. Returns True if queued."""
+    async def submit_human_move(
+        self, game_id: str, uci: str, color: str | None = None
+    ) -> tuple[bool, str | None]:
+        """Submit a human move for an active game.
+
+        Returns (accepted, reason). `reason` is a short message to relay back to
+        the client when rejected, so the UI can re-enable the board.
+        """
         queue = self.human_move_queues.get(game_id)
         if queue is None:
             logger.warning("Game %s: human move submitted but no queue exists", game_id)
-            return False
-        await queue.put(uci)
-        return True
+            return False, "This game is not accepting moves."
+
+        # The game must currently be awaiting a human move.
+        awaiting = self._awaiting_human_move.get(game_id)
+        if awaiting is None:
+            return False, "It is not your turn yet."
+
+        # If the caller's color is known, it must match the side to move.
+        if color is not None and color != awaiting and uci != "resign":
+            return False, "It is not your turn yet."
+
+        try:
+            queue.put_nowait(uci)
+        except asyncio.QueueFull:
+            logger.warning("Game %s: human move queue full, rejecting", game_id)
+            return False, "A move is already being processed — try again."
+        return True, None
 
     async def get_catch_up_state(self, game_id: str) -> dict | None:
         """Get full game state for a late-joining WebSocket client."""
@@ -392,7 +412,7 @@ class GameManager:
         # Create human move queue if either side is human
         human_queue: asyncio.Queue | None = None
         if config.white_is_human or config.black_is_human:
-            human_queue = asyncio.Queue()
+            human_queue = asyncio.Queue(maxsize=2)
             self.human_move_queues[game_id] = human_queue
 
         # Create strength-limited Stockfish player(s) if needed
