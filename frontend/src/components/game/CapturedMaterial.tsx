@@ -78,8 +78,15 @@ export default function CapturedMaterial({ fen }: Props) {
   const hasCaptured = capturedBlack.length > 0 || capturedWhite.length > 0;
   if (!hasCaptured) return null;
 
+  const materialLabel =
+    materialDiff === 0
+      ? "Captured material: even"
+      : materialDiff > 0
+        ? `Captured material: White is up ${materialDiff} point${materialDiff === 1 ? "" : "s"}`
+        : `Captured material: Black is up ${Math.abs(materialDiff)} point${Math.abs(materialDiff) === 1 ? "" : "s"}`;
+
   return (
-    <div className="captured-mat">
+    <div className="captured-mat" role="img" aria-label={materialLabel}>
       {/* Left side: captured by white (shown as white pieces), grows left→right */}
       <div className="captured-mat__left">
         {capturedBlack.map((p, i) => (

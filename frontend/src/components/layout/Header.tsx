@@ -7,7 +7,7 @@ export default function Header() {
     <header className="app-header">
       <div className="app-header__brand">
         <NavLink to="/" className="app-header__logo">
-          <span className="app-header__logo-icon">&#9816;</span>
+          <span className="app-header__logo-icon" aria-hidden="true">&#9816;</span>
           LLM Chess Arena
         </NavLink>
         {stats && (

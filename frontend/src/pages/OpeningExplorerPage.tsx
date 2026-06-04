@@ -46,15 +46,21 @@ export default function OpeningExplorerPage() {
               <table className="opening-explorer-page__table">
                 <thead>
                   <tr>
-                    <th onClick={() => setSortBy("eco")} className="opening-explorer-page__th--sortable">
-                      ECO {sortBy === "eco" && "▲"}
+                    <th aria-sort={sortBy === "eco" ? "ascending" : "none"} className="opening-explorer-page__th--sortable">
+                      <button type="button" className="sortable-header" onClick={() => setSortBy("eco")}>
+                        ECO {sortBy === "eco" && "▲"}
+                      </button>
                     </th>
                     <th>Opening</th>
-                    <th onClick={() => setSortBy("games")} className="opening-explorer-page__th--sortable">
-                      Games {sortBy === "games" && "▼"}
+                    <th aria-sort={sortBy === "games" ? "descending" : "none"} className="opening-explorer-page__th--sortable">
+                      <button type="button" className="sortable-header" onClick={() => setSortBy("games")}>
+                        Games {sortBy === "games" && "▼"}
+                      </button>
                     </th>
-                    <th onClick={() => setSortBy("white_wr")} className="opening-explorer-page__th--sortable">
-                      White WR {sortBy === "white_wr" && "▼"}
+                    <th aria-sort={sortBy === "white_wr" ? "descending" : "none"} className="opening-explorer-page__th--sortable">
+                      <button type="button" className="sortable-header" onClick={() => setSortBy("white_wr")}>
+                        White WR {sortBy === "white_wr" && "▼"}
+                      </button>
                     </th>
                     <th>Draw</th>
                     <th>Black WR</th>

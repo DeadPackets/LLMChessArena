@@ -38,6 +38,8 @@
   --inaccuracy: #e6b422;
   --mistake: #e08832;
   --blunder: #dd4441;
+  /* Lighter red for small text — --blunder fails 4.5:1 on dark panels. */
+  --blunder-text: #e8716c;
 
   --font-display: "Cormorant Garamond", Georgia, serif;
   --font-body: "Outfit", system-ui, sans-serif;
@@ -1257,7 +1259,7 @@ a.app-header__live-stat:hover {
 }
 
 .game-card__eval--white { color: var(--best); }
-.game-card__eval--black { color: var(--blunder); }
+.game-card__eval--black { color: var(--blunder-text); }
 .game-card__eval--even { color: var(--text-muted); }
 
 /* ─── New Game Dialog ─── */
@@ -1767,6 +1769,12 @@ a.app-header__live-stat:hover {
 .resign-btn:hover {
   background: rgba(202, 52, 49, 0.15);
   border-color: var(--blunder);
+}
+
+.new-game-dialog__checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .new-game-dialog__checkbox-label {
@@ -2558,13 +2566,22 @@ a.app-header__live-stat:hover {
   overflow-x: auto;
 }
 
+/* Rendered as a <button> inside the <th> so sorting is keyboard-operable.
+   Inherit the header's typography and fill the cell. */
 .sortable-header {
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: inherit;
 }
 
-.sortable-header:hover {
+.sortable-header:hover,
+.sortable-header:focus-visible {
   color: var(--amber);
 }
 
@@ -2873,7 +2890,7 @@ button.table-talk-bubble {
   border: 1px solid var(--blunder, #ca3431);
   border-radius: 6px;
   background: rgba(202, 52, 49, 0.12);
-  color: var(--blunder, #ca3431);
+  color: var(--blunder-text, #e8716c);
   font-size: 0.78rem;
 }
 
@@ -3874,11 +3891,92 @@ button.table-talk-bubble {
   }
 }
 
+
+/* ========================================================================
+   MOBILE & TOUCH REFINEMENTS  (mobile + accessibility audit)
+   ======================================================================== */
+
+/* Touch devices: enforce ~40px hit areas regardless of viewport width.
+   min-width/min-height win over the smaller width/height set at the phone
+   breakpoint, without changing the visual size on mouse/pointer devices. */
+@media (pointer: coarse) {
+  .game-controls__btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .filter-btn,
+  .board-theme-selector__toggle,
+  .board-theme-selector__piece-btn {
+    min-height: 38px;
+  }
+
+  .app-header__link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+
+  .board-theme-selector__swatch {
+    width: 30px;
+    height: 30px;
+  }
+
+  /* Keep the 14px InfoDot dot, but expand its invisible tap zone to ~36px. */
+  .info-dot__trigger {
+    position: relative;
+  }
+  .info-dot__trigger::after {
+    content: "";
+    position: absolute;
+    inset: -11px;
+  }
+}
+
+/* iOS Safari zooms the page when a < 16px form field gains focus. Pin to 16px;
+   !important is needed to beat the component classes' own (smaller) font-size. */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Header: wrap the nav onto its own row instead of crushing the logo/links. */
+@media (max-width: 560px) {
+  .app-header {
+    flex-wrap: wrap;
+    row-gap: 0.4rem;
+  }
+  .app-header__nav {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 0.15rem;
+  }
+}
+
+/* New Game dialog & theme dropdown on narrow screens. */
+@media (max-width: 520px) {
+  .new-game-dialog__settings-grid {
+    grid-template-columns: 1fr;
+  }
+  .board-theme-selector__dropdown {
+    max-width: calc(100vw - 1.5rem);
+    white-space: normal;
+  }
+  .board-theme-selector__swatches {
+    flex-wrap: wrap;
+  }
+}
+
 /* ── Game Embed Page ── */
 
 .game-embed {
-  width: 100vw;
+  width: 100%;
   height: 100vh;
+  height: 100dvh; /* avoid iOS toolbar overflow; falls back to 100vh */
   display: flex;
   flex-direction: column;
   background: var(--bg-deep);

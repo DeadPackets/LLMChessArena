@@ -54,6 +54,7 @@ export default function HeadToHeadPage() {
           className="h2h-page__select"
           value={modelA}
           onChange={(e) => setModelA(e.target.value)}
+          aria-label="First model to compare"
         >
           <option value="">Select Model A</option>
           {models.map((m) => (
@@ -65,6 +66,7 @@ export default function HeadToHeadPage() {
           className="h2h-page__select"
           value={modelB}
           onChange={(e) => setModelB(e.target.value)}
+          aria-label="Second model to compare"
         >
           <option value="">Select Model B</option>
           {models.map((m) => (

@@ -16,6 +16,7 @@ export default function HeadToHeadTable({ records }: Props) {
   }
 
   return (
+    <div className="leaderboard-table-wrap">
     <table className="leaderboard-table">
       <thead>
         <tr>
@@ -51,5 +52,6 @@ export default function HeadToHeadTable({ records }: Props) {
         })}
       </tbody>
     </table>
+    </div>
   );
 }

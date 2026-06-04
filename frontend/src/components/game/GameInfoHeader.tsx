@@ -29,14 +29,16 @@ export default function GameInfoHeader({ state }: Props) {
     <div className="game-info panel">
       <div className="game-info__players">
         <div className="game-info__player">
-          <span className="game-info__player-icon game-info__player-icon--white">&#9812;</span>
+          <span className="game-info__player-icon game-info__player-icon--white" aria-hidden="true">&#9812;</span>
+          <span className="visually-hidden">White: </span>
           <span className="game-info__player-name" title={state.whiteModel ?? undefined}>
             {whiteLabel}
           </span>
         </div>
         <span className="game-info__vs">vs</span>
         <div className="game-info__player">
-          <span className="game-info__player-icon game-info__player-icon--black">&#9818;</span>
+          <span className="game-info__player-icon game-info__player-icon--black" aria-hidden="true">&#9818;</span>
+          <span className="visually-hidden">Black: </span>
           <span className="game-info__player-name" title={state.blackModel ?? undefined}>
             {blackLabel}
           </span>

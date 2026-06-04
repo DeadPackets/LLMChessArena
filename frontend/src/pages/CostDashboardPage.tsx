@@ -138,6 +138,9 @@ export default function CostDashboardPage() {
     return sortDir === "desc" ? " \u25BC" : " \u25B2";
   };
 
+  const ariaSort = (key: SortKey): "ascending" | "descending" | "none" =>
+    sortKey !== key ? "none" : sortDir === "desc" ? "descending" : "ascending";
+
   return (
     <div className="cost-dashboard">
       <h1 className="cost-dashboard__title">Cost & Performance</h1>
@@ -243,19 +246,27 @@ export default function CostDashboardPage() {
             <thead>
               <tr>
                 <th>Model</th>
-                <th className="sortable-header" onClick={() => handleSort("games")}>
-                  Games{sortIndicator("games")}
+                <th aria-sort={ariaSort("games")}>
+                  <button type="button" className="sortable-header" onClick={() => handleSort("games")}>
+                    Games{sortIndicator("games")}
+                  </button>
                 </th>
-                <th className="sortable-header" onClick={() => handleSort("cost")}>
-                  Total Cost{sortIndicator("cost")}
+                <th aria-sort={ariaSort("cost")}>
+                  <button type="button" className="sortable-header" onClick={() => handleSort("cost")}>
+                    Total Cost{sortIndicator("cost")}
+                  </button>
                 </th>
                 <th>Avg Cost/Game</th>
-                <th className="sortable-header" onClick={() => handleSort("tokens")}>
-                  Total Tokens{sortIndicator("tokens")}
+                <th aria-sort={ariaSort("tokens")}>
+                  <button type="button" className="sortable-header" onClick={() => handleSort("tokens")}>
+                    Total Tokens{sortIndicator("tokens")}
+                  </button>
                 </th>
                 <th>Input / Output</th>
-                <th className="sortable-header" onClick={() => handleSort("response")}>
-                  Avg Response{sortIndicator("response")}
+                <th aria-sort={ariaSort("response")}>
+                  <button type="button" className="sortable-header" onClick={() => handleSort("response")}>
+                    Avg Response{sortIndicator("response")}
+                  </button>
                 </th>
               </tr>
             </thead>

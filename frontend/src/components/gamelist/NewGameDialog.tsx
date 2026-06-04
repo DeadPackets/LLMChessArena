@@ -463,16 +463,18 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
         </div>
 
         {hasLLMSide && (
-          <label className="new-game-dialog__checkbox-label">
-            <input
-              type="checkbox"
-              className="new-game-dialog__checkbox"
-              checked={chaosMode}
-              onChange={(e) => setChaosMode(e.target.checked)}
-            />
-            Chaos Mode &mdash; Illegal LLM moves are allowed
+          <div className="new-game-dialog__checkbox-row">
+            <label className="new-game-dialog__checkbox-label">
+              <input
+                type="checkbox"
+                className="new-game-dialog__checkbox"
+                checked={chaosMode}
+                onChange={(e) => setChaosMode(e.target.checked)}
+              />
+              Chaos Mode &mdash; Illegal LLM moves are allowed
+            </label>
             <InfoDot label={HELP.chaos} />
-          </label>
+          </div>
         )}
 
         {chaosMode && (
@@ -487,16 +489,18 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
           </div>
         )}
 
-        <label className="new-game-dialog__checkbox-label">
-          <input
-            type="checkbox"
-            className="new-game-dialog__checkbox"
-            checked={drawAdjudication}
-            onChange={(e) => setDrawAdjudication(e.target.checked)}
-          />
-          Draw Adjudication &mdash; Auto-draw if eval within &plusmn;0.20 for 30 moves
+        <div className="new-game-dialog__checkbox-row">
+          <label className="new-game-dialog__checkbox-label">
+            <input
+              type="checkbox"
+              className="new-game-dialog__checkbox"
+              checked={drawAdjudication}
+              onChange={(e) => setDrawAdjudication(e.target.checked)}
+            />
+            Draw Adjudication &mdash; Auto-draw if eval within &plusmn;0.20 for 30 moves
+          </label>
           <InfoDot label={HELP.drawAdjudication} />
-        </label>
+        </div>
 
         {hasLLMSide && (
           <button

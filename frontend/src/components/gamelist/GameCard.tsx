@@ -59,14 +59,14 @@ export default function GameCard({ game }: Props) {
     <Link to={`/game/${game.id}`} className="game-card panel" aria-label={`Game: ${game.white_model} vs ${game.black_model}`}>
       <div className="game-card__players">
         <div className="game-card__player">
-          <span className="game-card__piece game-card__piece--white">&#9812;</span>
+          <span className="game-card__piece game-card__piece--white" aria-hidden="true">&#9812;</span>
           <span>{whiteLabel}</span>
           {winner === "white" && <span className="game-card__result game-card__result--winner">1</span>}
           {winner === "black" && <span className="game-card__result">0</span>}
           {game.outcome === "draw" && <span className="game-card__result">&frac12;</span>}
         </div>
         <div className="game-card__player">
-          <span className="game-card__piece game-card__piece--black">&#9818;</span>
+          <span className="game-card__piece game-card__piece--black" aria-hidden="true">&#9818;</span>
           <span>{blackLabel}</span>
           {winner === "black" && <span className="game-card__result game-card__result--winner">1</span>}
           {winner === "white" && <span className="game-card__result">0</span>}

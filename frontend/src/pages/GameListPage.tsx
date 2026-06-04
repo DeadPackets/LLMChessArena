@@ -231,12 +231,13 @@ export default function GameListPage() {
       <div className="game-list-page__header">
         <h2 className="game-list-page__title">Games</h2>
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          <div className="game-list-page__filters">
+          <div className="game-list-page__filters" role="group" aria-label="Filter games by status">
             {(["all", "active", "completed"] as Filter[]).map((f) => (
               <button
                 key={f}
                 className={`filter-btn${filter === f ? " filter-btn--active" : ""}`}
                 onClick={() => setFilter(f)}
+                aria-pressed={filter === f}
               >
                 {f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
