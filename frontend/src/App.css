@@ -549,7 +549,10 @@ a.app-header__live-stat:hover {
 
 /* Rendered in the top layer (popover) and pinned with JS via fixed coords, so
    it is never clipped by an ancestor's overflow nor painted under a sibling
-   stacking context. inset/margin reset undoes the popover UA centering. */
+   stacking context. inset/margin reset undoes the popover UA centering.
+   The popover is still a DOM descendant of its trigger, so it would otherwise
+   inherit uppercase / bold / mono from table headers, subtitles, etc. — the
+   typography resets below keep every tooltip visually identical. */
 .info-dot__tip {
   position: fixed;
   inset: auto;
@@ -562,9 +565,13 @@ a.app-header__live-stat:hover {
   border: 1px solid #272b3d;
   border-radius: 6px;
   color: var(--text-secondary, #c8c4bb);
-  font-family: var(--font-sans, inherit);
+  font-family: var(--font-body);
   font-size: 0.72rem;
-  line-height: 1.4;
+  font-weight: 400;
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  line-height: 1.45;
   text-align: left;
   white-space: normal;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
@@ -956,16 +963,6 @@ a.app-header__live-stat:hover {
 .game-over-banner__series-draws {
   color: var(--text-muted);
   font-size: 0.7rem;
-}
-
-.game-over-banner__secondary {
-  display: flex;
-  justify-content: center;
-  margin-top: -0.4rem;
-}
-
-.game-over-banner__customize {
-  font-size: 0.78rem;
 }
 
 /* ─── Status Message ─── */
@@ -2148,34 +2145,48 @@ a.app-header__live-stat:hover {
   margin-top: 0.15rem;
 }
 
+/* Mirrors the two-column white/black accuracy cards above: one tertiary card
+   laid out as a SINGLE 3-column grid. Rows use display:contents so all rows
+   share the same columns — values line up vertically no matter how long each
+   metric's label is (e.g. "COST" vs "TOTAL TOKENS"). */
 .analysis-panel__stats {
-  margin-bottom: 0.75rem;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding: 0 0.85rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
 }
 
 .analysis-panel__stat-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.2rem 0;
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
+  display: contents;
+}
+
+.analysis-panel__stat-val,
+.analysis-panel__stat-label {
+  padding: 0.5rem 0.75rem;
+  text-align: center;
+}
+
+.analysis-panel__stat-row:not(:first-child) > .analysis-panel__stat-val,
+.analysis-panel__stat-row:not(:first-child) > .analysis-panel__stat-label {
+  border-top: 1px solid var(--border);
 }
 
 .analysis-panel__stat-val {
   color: var(--text-primary);
   font-weight: 600;
-  min-width: 3rem;
-  text-align: right;
+  font-size: 0.82rem;
 }
 
 .analysis-panel__stat-label {
   color: var(--text-muted);
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  min-width: 5rem;
-  text-align: center;
+  white-space: nowrap;
 }
 
 /* ─── Classification Grid ─── */
@@ -2223,7 +2234,17 @@ a.app-header__live-stat:hover {
   background: var(--bg-hover);
 }
 
+.critical-moment-item__move {
+  min-width: 5.5rem;
+}
+
+.critical-moment-item__quality {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
 .critical-moment-item__swing {
+  margin-left: auto;
   font-weight: 700;
 }
 

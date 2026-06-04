@@ -7,58 +7,12 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
-  ReferenceDot,
 } from "recharts";
 import type { MoveData } from "../../types/websocket";
 import type { CriticalMoment } from "../../types/api";
-import { CLASS_META, isClassification, type Classification } from "../shared/classification";
+import { isClassification } from "../shared/classification";
 import InfoDot from "../shared/InfoDot";
 import { HELP } from "../shared/helpText";
-
-function shapeFor(cls: string | null): DotShape {
-  if (isClassification(cls)) return CLASS_META[cls].shape;
-  return "circle";
-}
-
-function DotShapeMark({ cx, cy, r, color, shape, opacity = 1 }: { cx?: number; cy?: number; r: number; color: string; shape: DotShape; opacity?: number }) {
-  if (cx == null || cy == null) return null;
-  if (shape === "triangle") {
-    const h = r * 1.6;
-    const pts = `${cx},${cy - h} ${cx - h},${cy + h * 0.7} ${cx + h},${cy + h * 0.7}`;
-    return <polygon points={pts} fill={color} fillOpacity={opacity} stroke="#0e1017" strokeWidth={0.75} />;
-  }
-  if (shape === "diamond") {
-    const h = r * 1.5;
-    const pts = `${cx},${cy - h} ${cx + h},${cy} ${cx},${cy + h} ${cx - h},${cy}`;
-    return <polygon points={pts} fill={color} fillOpacity={opacity} stroke="#0e1017" strokeWidth={0.75} />;
-  }
-  return <circle cx={cx} cy={cy} r={r} fill={color} fillOpacity={opacity} stroke="#0e1017" strokeWidth={0.5} />;
-}
-
-// Positive classifications (the engine's best / near-best moves) are the most
-// common notable markers; rendering them big and fully saturated drowns the
-// graph in bright diamonds. Render them small and translucent so the eye lands
-// on the mistakes and blunders that actually tell the story of the game.
-const POSITIVE_CLASSIFICATIONS = new Set<Classification>(["best", "excellent"]);
-
-function dotWeight(cls: Classification): { r: number; opacity: number } {
-  if (cls === "blunder") return { r: 4, opacity: 1 };
-  if (cls === "mistake") return { r: 3.5, opacity: 1 };
-  if (POSITIVE_CLASSIFICATIONS.has(cls)) return { r: 2.5, opacity: 0.55 };
-  return { r: 3, opacity: 1 }; // inaccuracy and any other notable
-}
-
-type DotShape = "triangle" | "diamond" | "circle";
-
-interface DotInfo {
-  index: number;
-  y: number;
-  color: string;
-  r: number;
-  opacity: number;
-  shape: DotShape;
-  label: string;
-}
 
 interface Props {
   moves: MoveData[];
@@ -71,6 +25,11 @@ interface DataPoint {
   index: number;
   label: string;
   wp: number;
+}
+
+interface CriticalLabel {
+  index: number;
+  label: string;
 }
 
 export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criticalMoments }: Props) {
@@ -101,63 +60,44 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
 
   const selectedDataIndex = selectedIndex + 1; // offset by 1 for "Start" point
 
-  // Build classification-aware dots from moves and critical moments
-  const dots = useMemo<DotInfo[]>(() => {
+  // Notable moments — kept only for the screen-reader summary and jump list.
+  // The graph itself is intentionally dot-free; the eval line tells the story
+  // and the move list / critical-moments panel carry the per-move detail.
+  const criticalLabels = useMemo<CriticalLabel[]>(() => {
     const seen = new Set<number>();
-    const result: DotInfo[] = [];
+    const result: CriticalLabel[] = [];
 
-    // Add dots for moves with notable classifications
     for (let i = 0; i < moves.length; i++) {
       const cls = moves[i].classification;
       if (isClassification(cls) && cls !== "good") {
-        const wp = moves[i].winProbability != null ? moves[i].winProbability! * 100 : 50;
-        const w = dotWeight(cls);
         result.push({
           index: i,
-          y: wp,
-          color: CLASS_META[cls].color,
-          r: w.r,
-          opacity: w.opacity,
-          shape: shapeFor(cls),
           label: `${moves[i].moveNumber}${moves[i].color === "black" ? "..." : "."} ${moves[i].san} (${cls})`,
         });
         seen.add(i);
       }
     }
 
-    // Add critical moments that weren't already included (e.g. large swings without classification)
     if (criticalMoments) {
       for (const cm of criticalMoments) {
         if (!seen.has(cm.move_index)) {
           const cls = cm.classification;
-          const color = isClassification(cls)
-            ? CLASS_META[cls].color
-            : cm.swing > 0.25 ? CLASS_META.blunder.color : CLASS_META.inaccuracy.color;
           result.push({
             index: cm.move_index,
-            y: cm.win_prob_after * 100,
-            color,
-            r: 3,
-            opacity: 1,
-            shape: shapeFor(cls),
             label: `${cm.san} (${cls ?? (cm.swing > 0.25 ? "blunder" : "inaccuracy")})`,
           });
         }
       }
     }
 
-    return result;
+    return result.sort((a, b) => a.index - b.index);
   }, [moves, criticalMoments]);
 
   const summary =
-    dots.length === 0
+    criticalLabels.length === 0
       ? "Win probability over the game. No critical moments."
-      : `Win probability over the game. ${dots.length} critical moment${dots.length === 1 ? "" : "s"}: ` +
-        dots
-          .slice()
-          .sort((a, b) => a.index - b.index)
-          .map((d) => d.label)
-          .join("; ") + ".";
+      : `Win probability over the game. ${criticalLabels.length} critical moment${criticalLabels.length === 1 ? "" : "s"}: ` +
+        criticalLabels.map((d) => d.label).join("; ") + ".";
 
   return (
     <div className="win-prob-graph panel" role="group" aria-label="Win probability graph">
@@ -183,19 +123,6 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
           {selectedDataIndex >= 0 && selectedDataIndex < data.length && (
             <ReferenceLine x={data[selectedDataIndex]?.index} stroke="#d4a843" strokeWidth={1.5} />
           )}
-          {dots.map((dot) => (
-            <ReferenceDot
-              key={`dot-${dot.index}`}
-              x={dot.index}
-              y={dot.y}
-              r={dot.r}
-              // recharts 3 shape render-prop typings are loose
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              shape={((props: any) => (
-                <DotShapeMark cx={props.cx} cy={props.cy} r={dot.r} color={dot.color} shape={dot.shape} opacity={dot.opacity} />
-              )) as any}
-            />
-          ))}
           <Area
             type="monotone"
             dataKey="wp"
@@ -222,16 +149,13 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
         </AreaChart>
       </ResponsiveContainer>
       <ul className="visually-hidden">
-        {dots
-          .slice()
-          .sort((a, b) => a.index - b.index)
-          .map((d) => (
-            <li key={`jump-${d.index}`}>
-              <button type="button" onClick={() => onSelectMove(d.index)}>
-                Go to {d.label}
-              </button>
-            </li>
-          ))}
+        {criticalLabels.map((d) => (
+          <li key={`jump-${d.index}`}>
+            <button type="button" onClick={() => onSelectMove(d.index)}>
+              Go to {d.label}
+            </button>
+          </li>
+        ))}
       </ul>
     </div>
   );

@@ -51,7 +51,7 @@ export default function ResponseTimeGraph({ moves, selectedIndex, onSelectMove }
     <div className="response-time-graph panel">
       <h3 className="response-time-graph__title">Response Time</h3>
       <ResponsiveContainer width="100%" height={80}>
-        <BarChart data={data} onClick={handleClick} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+        <BarChart data={data} onClick={handleClick} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
           <XAxis dataKey="index" hide />
           <YAxis tick={{ fill: "#908e87", fontSize: 10 }} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}s`} width={32} />
           {selectedIndex >= 0 && selectedIndex < data.length && (

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect, useCallback, useRef } from "react";
+import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { useGameWebSocket } from "../hooks/useGameWebSocket";
 import { useReplayControls } from "../hooks/useReplayControls";
@@ -20,18 +20,16 @@ import { useChessSound } from "../hooks/useChessSound";
 import { useBoardTheme } from "../hooks/useBoardTheme";
 import type { SoundType } from "../hooks/useChessSound";
 import type { IllegalMoveData } from "../types/websocket";
-import type { PlayerType } from "../components/gamelist/NewGameDialog";
 import { useAnnounce } from "../components/shared/LiveAnnouncer";
 import WinProbGraph from "../components/game/WinProbGraph";
 import ResponseTimeGraph from "../components/game/ResponseTimeGraph";
 import AnalysisPanel from "../components/game/AnalysisPanel";
 
-// Only the rematch dialog stays code-split — it is truly on-demand. The win-prob
-// graph, response-time graph and analysis panel are core to the watch page and
-// must appear as soon as their data arrives. Lazy-loading them made them
-// silently no-op on the first (catch-up) render of an already-finished game,
-// only popping in after some unrelated re-render (selecting a move, a new ply).
-const NewGameDialog = lazy(() => import("../components/gamelist/NewGameDialog"));
+// The win-prob graph, response-time graph and analysis panel are imported
+// eagerly (not lazy): they're core to the watch page and must appear as soon as
+// their data arrives. Lazy-loading them made them silently no-op on the first
+// (catch-up) render of an already-finished game, only appearing after an
+// unrelated re-render.
 
 function IllegalMoveIndicator({
   illegalMoves,
@@ -285,7 +283,6 @@ export default function GameViewerPage() {
     }
   }, [state.status, gameId]);
 
-  const [rematchOpen, setRematchOpen] = useState(false);
   const [rematchPending, setRematchPending] = useState(false);
   const handleRematch = useCallback(async () => {
     if (rematchPending) return;
@@ -413,17 +410,6 @@ export default function GameViewerPage() {
           onRematch={isCompleted ? handleRematch : undefined}
           rematchPending={rematchPending}
         />
-      )}
-
-      {state.gameOverData && isCompleted && (
-        <div className="game-over-banner__secondary">
-          <button
-            className="btn btn--ghost game-over-banner__customize"
-            onClick={() => setRematchOpen(true)}
-          >
-            Customize rematch…
-          </button>
-        </div>
       )}
 
       <div className="game-viewer__main">
@@ -594,35 +580,6 @@ export default function GameViewerPage() {
       )}
 
       <KeyboardShortcutsModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-
-      {rematchOpen && (
-        <Suspense fallback={null}>
-          <NewGameDialog
-            open={rematchOpen}
-            onClose={() => setRematchOpen(false)}
-            initialSettings={{
-              white_model: state.whiteModel || "",
-              black_model: state.blackModel || "",
-              max_moves: 200,
-              white_temperature: state.whiteTemperature,
-              black_temperature: state.blackTemperature,
-              white_reasoning_effort: state.whiteReasoningEffort,
-              black_reasoning_effort: state.blackReasoningEffort,
-              white_is_human: state.whiteIsHuman,
-              black_is_human: state.blackIsHuman,
-              white_is_stockfish: state.whiteIsStockfish,
-              black_is_stockfish: state.blackIsStockfish,
-              white_stockfish_elo: state.whiteStockfishElo,
-              black_stockfish_elo: state.blackStockfishElo,
-              chaos_mode: state.chaosMode,
-              move_time_limit: state.moveTimeLimit,
-              draw_adjudication: state.drawAdjudication,
-              whiteType: (state.whiteIsHuman ? "human" : state.whiteIsStockfish ? "stockfish" : "llm") as PlayerType,
-              blackType: (state.blackIsHuman ? "human" : state.blackIsStockfish ? "stockfish" : "llm") as PlayerType,
-            }}
-          />
-        </Suspense>
-      )}
     </div>
   );
 }

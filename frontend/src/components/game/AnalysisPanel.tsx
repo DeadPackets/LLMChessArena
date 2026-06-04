@@ -5,9 +5,8 @@ import ClassificationBadge from "../shared/ClassificationBadge";
 import TokensPerMoveChart from "./TokensPerMoveChart";
 import { formatModelName } from "../../utils/formatModel";
 import InfoDot from "../shared/InfoDot";
-import Legend from "../shared/Legend";
 import { HELP } from "../shared/helpText";
-import { CLASS_ORDER, CLASS_META } from "../shared/classification";
+import { CLASS_ORDER, CLASS_META, isClassification } from "../shared/classification";
 
 interface Props {
   analysis: GameAnalysis;
@@ -51,19 +50,20 @@ function CriticalMomentItem({ cm, onClick }: { cm: CriticalMoment; onClick: () =
     ? (isGainForWhite ? "+" : "-")
     : (isGainForWhite ? "-" : "+");
   const swingPct = (cm.swing * 100).toFixed(0);
+  const qualityName = isClassification(cm.classification) ? CLASS_META[cm.classification].name : null;
 
   return (
     <div className="critical-moment-item" onClick={onClick} role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
-      aria-label={`Critical moment: ${cm.move_number}${cm.color === "black" ? "..." : "."} ${cm.san}`}
+      aria-label={`Critical moment: ${cm.move_number}${cm.color === "black" ? "..." : "."} ${cm.san}${qualityName ? `, ${qualityName}` : ""}`}
     >
       <ClassificationBadge classification={cm.classification} />
-      <span>
+      <span className="critical-moment-item__move">
         {cm.move_number}{cm.color === "black" ? "..." : "."} {cm.san}
       </span>
+      {qualityName && <span className="critical-moment-item__quality">{qualityName}</span>}
       <span
         className={`critical-moment-item__swing ${direction === "+" ? "critical-moment-item__swing--positive" : "critical-moment-item__swing--negative"}`}
-        style={{ marginLeft: "auto" }}
       >
         {direction}{swingPct}%
       </span>
@@ -151,16 +151,6 @@ const AnalysisPanel = forwardRef<HTMLDivElement, Props>(function AnalysisPanel(
             Critical Moments
             <InfoDot label="Critical Moments — the moves where the win probability swung the most. Click one to jump to that position." />
           </h3>
-          <Legend
-            title="Move quality"
-            items={CLASS_ORDER.map((c) => ({
-              symbol: (
-                <span style={{ color: CLASS_META[c].color }}>{CLASS_META[c].symbol || "·"}</span>
-              ),
-              name: CLASS_META[c].name,
-              meaning: CLASS_META[c].meaning,
-            }))}
-          />
           <div className="critical-moments__list">
             {analysis.critical_moments.map((cm) => (
               <CriticalMomentItem
