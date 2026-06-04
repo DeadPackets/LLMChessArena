@@ -39,14 +39,11 @@ export default function HeadToHeadPage() {
     [paramA, paramB],
     (c) => c.total_games === 0,
   );
-  const comparison = paramA && paramB ? compareState.data : null;
 
   function handleCompare() {
     if (!modelA || !modelB || modelA === modelB) return;
     setSearchParams({ a: modelA, b: modelB }, { replace: true });
   }
-
-  const total = comparison ? comparison.total_games : 0;
 
   return (
     <div className="h2h-page">
@@ -87,7 +84,7 @@ export default function HeadToHeadPage() {
         <div className="empty-state panel">
           <div className="empty-state__icon">&#9816;</div>
           <div className="empty-state__text">Select two models above to compare their head-to-head record, or start a game to build one.</div>
-          <Link to="/" className="btn btn--primary" style={{ marginTop: "0.75rem" }}>
+          <Link to="/" className="btn btn--primary">
             Start a game
           </Link>
         </div>

@@ -299,11 +299,11 @@ export default function GameListPage() {
                 : `No ${filter} games found.`}
           </div>
           {hasActiveFilters ? (
-            <button className="btn btn--ghost" style={{ marginTop: "0.75rem" }} onClick={clearFilters}>
+            <button className="btn btn--ghost" onClick={clearFilters}>
               Clear filters
             </button>
           ) : (
-            <button className="btn btn--primary" style={{ marginTop: "0.75rem" }} onClick={() => setDialogOpen(true)}>
+            <button className="btn btn--primary" onClick={() => setDialogOpen(true)}>
               New Game
             </button>
           )}

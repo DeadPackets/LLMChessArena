@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import type { MoveData } from "../../types/websocket";
 import type { CriticalMoment } from "../../types/api";
-import { CLASS_META, LARGE_DOT_CLASSIFICATIONS, isClassification } from "../shared/classification";
+import { CLASS_META, isClassification, type Classification } from "../shared/classification";
 import InfoDot from "../shared/InfoDot";
 import { HELP } from "../shared/helpText";
 
@@ -20,19 +20,32 @@ function shapeFor(cls: string | null): DotShape {
   return "circle";
 }
 
-function DotShapeMark({ cx, cy, r, color, shape }: { cx?: number; cy?: number; r: number; color: string; shape: DotShape }) {
+function DotShapeMark({ cx, cy, r, color, shape, opacity = 1 }: { cx?: number; cy?: number; r: number; color: string; shape: DotShape; opacity?: number }) {
   if (cx == null || cy == null) return null;
   if (shape === "triangle") {
     const h = r * 1.6;
     const pts = `${cx},${cy - h} ${cx - h},${cy + h * 0.7} ${cx + h},${cy + h * 0.7}`;
-    return <polygon points={pts} fill={color} stroke="#0e1017" strokeWidth={0.75} />;
+    return <polygon points={pts} fill={color} fillOpacity={opacity} stroke="#0e1017" strokeWidth={0.75} />;
   }
   if (shape === "diamond") {
     const h = r * 1.5;
     const pts = `${cx},${cy - h} ${cx + h},${cy} ${cx},${cy + h} ${cx - h},${cy}`;
-    return <polygon points={pts} fill={color} stroke="#0e1017" strokeWidth={0.75} />;
+    return <polygon points={pts} fill={color} fillOpacity={opacity} stroke="#0e1017" strokeWidth={0.75} />;
   }
-  return <circle cx={cx} cy={cy} r={r} fill={color} stroke="#0e1017" strokeWidth={0.5} />;
+  return <circle cx={cx} cy={cy} r={r} fill={color} fillOpacity={opacity} stroke="#0e1017" strokeWidth={0.5} />;
+}
+
+// Positive classifications (the engine's best / near-best moves) are the most
+// common notable markers; rendering them big and fully saturated drowns the
+// graph in bright diamonds. Render them small and translucent so the eye lands
+// on the mistakes and blunders that actually tell the story of the game.
+const POSITIVE_CLASSIFICATIONS = new Set<Classification>(["best", "excellent"]);
+
+function dotWeight(cls: Classification): { r: number; opacity: number } {
+  if (cls === "blunder") return { r: 4, opacity: 1 };
+  if (cls === "mistake") return { r: 3.5, opacity: 1 };
+  if (POSITIVE_CLASSIFICATIONS.has(cls)) return { r: 2.5, opacity: 0.55 };
+  return { r: 3, opacity: 1 }; // inaccuracy and any other notable
 }
 
 type DotShape = "triangle" | "diamond" | "circle";
@@ -42,6 +55,7 @@ interface DotInfo {
   y: number;
   color: string;
   r: number;
+  opacity: number;
   shape: DotShape;
   label: string;
 }
@@ -97,11 +111,13 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
       const cls = moves[i].classification;
       if (isClassification(cls) && cls !== "good") {
         const wp = moves[i].winProbability != null ? moves[i].winProbability! * 100 : 50;
+        const w = dotWeight(cls);
         result.push({
           index: i,
           y: wp,
           color: CLASS_META[cls].color,
-          r: LARGE_DOT_CLASSIFICATIONS.has(cls) ? 4 : 3,
+          r: w.r,
+          opacity: w.opacity,
           shape: shapeFor(cls),
           label: `${moves[i].moveNumber}${moves[i].color === "black" ? "..." : "."} ${moves[i].san} (${cls})`,
         });
@@ -122,6 +138,7 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
             y: cm.win_prob_after * 100,
             color,
             r: 3,
+            opacity: 1,
             shape: shapeFor(cls),
             label: `${cm.san} (${cls ?? (cm.swing > 0.25 ? "blunder" : "inaccuracy")})`,
           });
@@ -175,7 +192,7 @@ export default function WinProbGraph({ moves, selectedIndex, onSelectMove, criti
               // recharts 3 shape render-prop typings are loose
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               shape={((props: any) => (
-                <DotShapeMark cx={props.cx} cy={props.cy} r={dot.r} color={dot.color} shape={dot.shape} />
+                <DotShapeMark cx={props.cx} cy={props.cy} r={dot.r} color={dot.color} shape={dot.shape} opacity={dot.opacity} />
               )) as any}
             />
           ))}

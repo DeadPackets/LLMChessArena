@@ -388,7 +388,7 @@ a.app-header__live-stat:hover {
 }
 
 .game-over-banner__rematch {
-  margin-top: 0.8rem;
+  margin-top: 0.65rem;
 }
 
 /* ─── Status Badges ─── */
@@ -547,12 +547,14 @@ a.app-header__live-stat:hover {
   outline: none;
 }
 
+/* Rendered in the top layer (popover) and pinned with JS via fixed coords, so
+   it is never clipped by an ancestor's overflow nor painted under a sibling
+   stacking context. inset/margin reset undoes the popover UA centering. */
 .info-dot__tip {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 50;
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  z-index: 1000;
   width: max-content;
   max-width: 260px;
   padding: 0.5rem 0.6rem;
@@ -874,10 +876,11 @@ a.app-header__live-stat:hover {
 /* ─── Game Over Banner ─── */
 .game-over-banner {
   position: relative;
-  padding: 1.5rem;
+  padding: 1rem 1.5rem;
   text-align: center;
   animation: slide-in 0.4s ease-out;
   border: 1px solid var(--border-light);
+  border-radius: var(--radius);
   background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
 }
 
@@ -888,9 +891,9 @@ a.app-header__live-stat:hover {
 
 .game-over-banner__title {
   font-family: var(--font-display);
-  font-size: 1.6rem;
+  font-size: 1.45rem;
   font-weight: 700;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.15rem;
 }
 
 .game-over-banner__title--white { color: var(--text-primary); }
@@ -900,7 +903,7 @@ a.app-header__live-stat:hover {
 .game-over-banner__termination {
   font-size: 0.85rem;
   color: var(--text-secondary);
-  margin-bottom: 0.8rem;
+  margin-bottom: 0.6rem;
 }
 
 .game-over-banner__stats {
@@ -923,7 +926,7 @@ a.app-header__live-stat:hover {
   justify-content: center;
   flex-wrap: wrap;
   gap: 0.4rem;
-  margin-top: 0.9rem;
+  margin-top: 0.65rem;
   font-family: var(--font-mono);
   font-size: 0.8rem;
   color: var(--text-secondary);
@@ -1936,20 +1939,25 @@ a.app-header__live-stat:hover {
 
 /* ─── Empty / Loading States ─── */
 .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  padding: 3rem 1rem;
+  padding: 3rem 1.5rem;
+  gap: 1rem;
   color: var(--text-muted);
 }
 
 .empty-state__icon {
   font-size: 2.5rem;
-  margin-bottom: 0.5rem;
   opacity: 0.5;
+  /* spacing handled by the flex gap above */
 }
 
 .empty-state__text {
   font-size: 0.9rem;
   color: var(--text-muted);
+  max-width: 42ch;
 }
 
 .spinner-page {
@@ -2362,8 +2370,77 @@ a.app-header__live-stat:hover {
 
 .leaderboard-sort {
   display: inline-flex;
+  align-items: center;
   gap: 0.4rem;
 }
+
+.leaderboard-sort__label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-right: 0.15rem;
+}
+
+/* Visual break between the sort group and the (separate) toggle. */
+.leaderboard-page__divider {
+  width: 1px;
+  align-self: stretch;
+  min-height: 1.4rem;
+  background: var(--border-light);
+}
+
+/* Checkbox-style toggle — reads as an on/off switch, not a 4th sort pill. */
+.toggle-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  padding: 0.3rem 0.55rem 0.3rem 0.45rem;
+  border-radius: 999px;
+  transition: color var(--transition), background-color var(--transition);
+}
+
+.toggle-check:hover { color: var(--text-primary); }
+.toggle-check:hover .toggle-check__box { border-color: var(--amber-dim); }
+
+.toggle-check__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.toggle-check__box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--border-light);
+  background: var(--bg-tertiary);
+  color: transparent;
+  transition: background-color var(--transition), border-color var(--transition), color var(--transition);
+}
+
+.toggle-check__input:checked + .toggle-check__box {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: #14161f;
+}
+
+.toggle-check__input:focus-visible + .toggle-check__box {
+  outline: 2px solid var(--amber-bright);
+  outline-offset: 2px;
+}
+
+.toggle-check__input:checked ~ .toggle-check__text { color: var(--amber); }
 
 .leaderboard__value {
   font-family: var(--font-mono);

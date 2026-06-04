@@ -22,10 +22,15 @@ import type { SoundType } from "../hooks/useChessSound";
 import type { IllegalMoveData } from "../types/websocket";
 import type { PlayerType } from "../components/gamelist/NewGameDialog";
 import { useAnnounce } from "../components/shared/LiveAnnouncer";
+import WinProbGraph from "../components/game/WinProbGraph";
+import ResponseTimeGraph from "../components/game/ResponseTimeGraph";
+import AnalysisPanel from "../components/game/AnalysisPanel";
 
-const WinProbGraph = lazy(() => import("../components/game/WinProbGraph"));
-const ResponseTimeGraph = lazy(() => import("../components/game/ResponseTimeGraph"));
-const AnalysisPanel = lazy(() => import("../components/game/AnalysisPanel"));
+// Only the rematch dialog stays code-split — it is truly on-demand. The win-prob
+// graph, response-time graph and analysis panel are core to the watch page and
+// must appear as soon as their data arrives. Lazy-loading them made them
+// silently no-op on the first (catch-up) render of an already-finished game,
+// only popping in after some unrelated re-render (selecting a move, a new ply).
 const NewGameDialog = lazy(() => import("../components/gamelist/NewGameDialog"));
 
 function IllegalMoveIndicator({

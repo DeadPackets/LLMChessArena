@@ -26,7 +26,7 @@ export default function OpeningExplorerPage() {
           <div className="empty-state panel">
             <div className="empty-state__icon">&#9816;</div>
             <div className="empty-state__text">No completed games with opening data yet.</div>
-            <Link to="/" className="btn btn--primary" style={{ marginTop: "0.75rem" }}>
+            <Link to="/" className="btn btn--primary">
               Start a game
             </Link>
           </div>

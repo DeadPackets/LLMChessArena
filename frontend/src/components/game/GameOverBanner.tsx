@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { useModal } from "../../hooks/useModal";
+import { useEffect, useState, useId } from "react";
 import type { GameOverData } from "../../types/websocket";
 import type { HeadToHeadComparison } from "../../types/api";
 import { compareModels } from "../../api/client";
@@ -75,14 +74,17 @@ function SeriesScore({ whiteModel, blackModel }: { whiteModel: string; blackMode
 
 export default function GameOverBanner({ data, whiteModel, blackModel, onRematch, rematchPending }: Props) {
   const { title, cls } = outcomeDisplay(data.outcome, whiteModel, blackModel);
-  // Always-open banner: useModal manages initial focus + focus restore on unmount.
-  const { dialogProps, titleId } = useModal(true, () => {});
+  const titleId = useId();
 
+  // Inline result banner — a labeled region, NOT a modal. It must not lock body
+  // scroll or trap focus (doing so previously made completed games unscrollable
+  // and trapped keyboard users inside the banner). role="status" lets screen
+  // readers announce the result when it appears.
   return (
-    <div
-      {...dialogProps}
-      ref={dialogProps.ref as React.RefObject<HTMLDivElement>}
+    <section
       className="game-over-banner panel--elevated"
+      role="status"
+      aria-labelledby={titleId}
     >
       <h2 id={titleId} className={`game-over-banner__title ${cls}`}>{title}</h2>
       <div className="game-over-banner__termination">
@@ -120,6 +122,6 @@ export default function GameOverBanner({ data, whiteModel, blackModel, onRematch
           {rematchPending ? "Starting rematch…" : "Rematch (swap colors)"}
         </button>
       )}
-    </div>
+    </section>
   );
 }

@@ -55,6 +55,7 @@ export default function LeaderboardPage() {
         <h1 className="leaderboard-page__title" style={{ marginBottom: 0 }}>Leaderboard</h1>
         <div className="leaderboard-page__controls">
           <div className="leaderboard-sort" role="group" aria-label="Sort leaderboard">
+            <span className="leaderboard-sort__label">Sort</span>
             <button
               className={`filter-btn${sortMode === "strength" ? " filter-btn--active" : ""}`}
               onClick={() => setSortMode("strength")}
@@ -77,13 +78,21 @@ export default function LeaderboardPage() {
               Speed
             </button>
           </div>
-          <button
-            className={`filter-btn${showHuman ? " filter-btn--active" : ""}`}
-            onClick={() => setShowHuman(!showHuman)}
-            aria-pressed={showHuman}
-          >
-            Include Human
-          </button>
+          <span className="leaderboard-page__divider" aria-hidden="true" />
+          <label className="toggle-check">
+            <input
+              type="checkbox"
+              className="toggle-check__input"
+              checked={showHuman}
+              onChange={(e) => setShowHuman(e.target.checked)}
+            />
+            <span className="toggle-check__box" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+                <path d="M2 8.5l3.5 3.5L14 3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span className="toggle-check__text">Include Human</span>
+          </label>
         </div>
       </div>
 
@@ -95,7 +104,7 @@ export default function LeaderboardPage() {
             <div className="empty-state__text">
               No models ranked yet. Play some games first!
             </div>
-            <Link to="/" className="btn btn--primary" style={{ marginTop: "0.75rem" }}>
+            <Link to="/" className="btn btn--primary">
               Start a game
             </Link>
           </div>
