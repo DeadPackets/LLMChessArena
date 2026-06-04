@@ -1,9 +1,29 @@
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Literal
+from datetime import datetime, timezone
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
+
+
+def _serialize_utc(dt: datetime) -> str:
+    """Serialize a datetime as an explicit-UTC ISO-8601 string (trailing ``Z``).
+
+    Backend timestamps are created with ``datetime.now(timezone.utc)``, but the
+    SQLite round-trip drops the tzinfo, leaving naive (UTC) values. Emitted
+    without an offset, the browser's ``new Date(...)`` parses them as *local*
+    time, skewing every relative "x ago" label by the viewer's UTC offset.
+    Stamping a ``Z`` makes the instant unambiguous for every consumer.
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+# A datetime that always serializes to UTC ISO-8601 with a trailing "Z".
+UTCDateTime = Annotated[
+    datetime, PlainSerializer(_serialize_utc, return_type=str, when_used="json")
+]
 
 
 ReasoningEffort = Literal["none", "low", "medium", "high"]
@@ -49,8 +69,8 @@ class GameSummary(BaseModel):
     live_move_count: int | None = None
     current_eval_cp: int | None = None
     current_mate_in: int | None = None
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
+    started_at: UTCDateTime | None = None
+    completed_at: UTCDateTime | None = None
     white_temperature: float | None = None
     black_temperature: float | None = None
     white_reasoning_effort: str | None = None
@@ -222,7 +242,7 @@ class EloHistoryPoint(BaseModel):
     elo_change: float
     opponent: str
     outcome: str
-    played_at: datetime | None = None
+    played_at: UTCDateTime | None = None
 
 
 class PaginatedGamesResponse(BaseModel):
