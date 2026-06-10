@@ -4122,3 +4122,84 @@ button.table-talk-bubble {
     max-height: 200px;
   }
 }
+
+/* ─── Admin controls (delete broken games) ─── */
+.btn--danger {
+  background: var(--blunder);
+  color: #fff;
+}
+.btn--danger:hover {
+  filter: brightness(1.08);
+}
+.btn--danger:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Admin strip in the game viewer */
+.admin-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.admin-strip__label {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+.admin-strip__error {
+  color: var(--blunder-text);
+  font-size: 0.85rem;
+}
+
+/* Per-card delete control (sibling of the card link, shown on hover) */
+.game-card-wrap {
+  position: relative;
+}
+.game-card__admin {
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+.game-card-wrap:hover .game-card__admin,
+.game-card__admin:focus-within {
+  opacity: 1;
+}
+.game-card__admin-btn {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.game-card__admin-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+.game-card__admin-btn--danger {
+  color: #fff;
+  background: var(--blunder);
+  border-color: var(--blunder);
+}
+.game-card__admin-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Touch devices have no hover — keep the control visible for admins. */
+@media (pointer: coarse) {
+  .game-card__admin {
+    opacity: 1;
+  }
+}

@@ -2,7 +2,8 @@ import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { useGameWebSocket } from "../hooks/useGameWebSocket";
 import { useReplayControls } from "../hooks/useReplayControls";
-import { getGame, stopGame, createGame } from "../api/client";
+import { getGame, stopGame, createGame, deleteGame } from "../api/client";
+import { getAdminToken } from "../utils/admin";
 import type { GameDetail } from "../types/api";
 import ChessboardPanel from "../components/game/ChessboardPanel";
 import EvalBar from "../components/game/EvalBar";
@@ -330,6 +331,25 @@ export default function GameViewerPage() {
     }
   }, [gameId, playerSecret, stopping]);
 
+  // Admin: delete this game (two-step inline confirm)
+  const adminToken = getAdminToken();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [adminDeleting, setAdminDeleting] = useState(false);
+  const [adminError, setAdminError] = useState<string | null>(null);
+  const handleAdminDelete = useCallback(async () => {
+    if (!gameId || !adminToken || adminDeleting) return;
+    setAdminDeleting(true);
+    setAdminError(null);
+    try {
+      await deleteGame(gameId, adminToken);
+      navigateRoute("/");
+    } catch (err) {
+      setAdminDeleting(false);
+      setConfirmDelete(false);
+      setAdminError(err instanceof Error ? err.message : "Delete failed.");
+    }
+  }, [gameId, adminToken, adminDeleting, navigateRoute]);
+
   // Replay controls (for completed games)
   const replay = useReplayControls({
     totalMoves: state.moves.length,
@@ -369,6 +389,17 @@ export default function GameViewerPage() {
     );
   }
 
+  if (state.deleted) {
+    return (
+      <div className="connecting-overlay">
+        <div className="connecting-overlay__text">This game has been removed.</div>
+        <button className="btn btn--primary btn--sm" onClick={() => navigateRoute("/")}>
+          Back to games
+        </button>
+      </div>
+    );
+  }
+
   const isCompleted = state.status === "completed";
   const isLive = state.status === "active" || state.status === "queued";
 
@@ -385,6 +416,48 @@ export default function GameViewerPage() {
   return (
     <div className="game-viewer">
       <GameInfoHeader state={state} />
+
+      {adminToken && (
+        <div className="admin-strip" role="group" aria-label="Admin controls">
+          {!confirmDelete ? (
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm admin-strip__btn"
+              onClick={() => {
+                setAdminError(null);
+                setConfirmDelete(true);
+              }}
+            >
+              <span aria-hidden="true">🗑</span> Delete game
+            </button>
+          ) : (
+            <>
+              <span className="admin-strip__label">Delete this game permanently?</span>
+              <button
+                type="button"
+                className="btn btn--danger btn--sm"
+                onClick={handleAdminDelete}
+                disabled={adminDeleting}
+              >
+                {adminDeleting ? "Deleting…" : "Confirm delete"}
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={() => setConfirmDelete(false)}
+                disabled={adminDeleting}
+              >
+                Cancel
+              </button>
+            </>
+          )}
+          {adminError && (
+            <span className="admin-strip__error" role="alert">
+              {adminError}
+            </span>
+          )}
+        </div>
+      )}
 
       {showReconnectBanner && (
         <div className="live-connection-banner" role="status" aria-live="polite">

@@ -38,6 +38,7 @@ const initialState: GameState = {
   statusMessage: null,
   moveError: null,
   gameOverData: null,
+  deleted: false,
 };
 
 function normalizeEval(raw: Record<string, unknown>): PositionEval {
@@ -362,6 +363,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case "SET_MOVE_ERROR":
       return { ...state, moveError: action.payload };
 
+    case "GAME_DELETED":
+      return { ...state, deleted: true };
+
     default:
       return state;
   }
@@ -436,6 +440,9 @@ export function useGameWebSocket(gameId: string) {
             break;
           case "spectator_count":
             dispatch({ type: "SPECTATOR_COUNT", payload: { count: msg.data.count } });
+            break;
+          case "game_deleted":
+            dispatch({ type: "GAME_DELETED" });
             break;
           case "error":
             // Server rejected a move (wrong turn, not running, queue full) or

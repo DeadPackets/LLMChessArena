@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlmodel import select
-from sqlalchemy import update as sa_update
+from sqlalchemy import update as sa_update, delete as sa_delete
 from sqlalchemy.exc import OperationalError
 
 from app.config import (
@@ -239,6 +239,74 @@ class GameManager:
             task.cancel()
             return True
         return False
+
+    async def delete_game(self, game_id: str) -> bool:
+        """Hard-delete a game and its moves (admin action).
+
+        Cancels the game if it is still running so its task and in-memory state
+        are torn down cleanly, then removes the DB rows. ELO is intentionally
+        left untouched. Returns False if no such game exists.
+        """
+        async with get_session_factory()() as session:
+            game_row = await session.get(Game, game_id)
+            exists = game_row is not None
+            was_rated = bool(game_row.rated) if game_row else False
+        is_active = game_id in self.active_games
+        is_queued = game_id in self._queued_games
+        if not exists and not is_active and not is_queued:
+            return False
+
+        logger.info(
+            "Game %s: admin delete requested (rated=%s)", game_id, was_rated
+        )
+
+        # Tell spectators the game is gone before we tear down their queues.
+        await self._broadcast(
+            game_id, {"type": "game_deleted", "data": {"game_id": game_id}}
+        )
+
+        # Cancel a running task; its finally-block frees the semaphore slot and
+        # pops the in-memory dicts (active_games, event_queues, ...).
+        task = self.active_games.get(game_id)
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+
+        # Drop it from the wait queue if it never started.
+        try:
+            self._queued_games.remove(game_id)
+        except ValueError:
+            pass
+
+        # Defensive cleanup for non-active games (the finally-block above already
+        # handles games that were running).
+        self.player_secrets.pop(game_id, None)
+        self.human_move_queues.pop(game_id, None)
+        self._awaiting_human_move.pop(game_id, None)
+        self._running_games.discard(game_id)
+        for q in self.event_queues.pop(game_id, []):
+            try:
+                q.put_nowait(None)
+            except asyncio.QueueFull:
+                pass
+
+        # Hard-delete: moves first (FK-free, but keeps the row count honest), then the game.
+        async with get_session_factory()() as session:
+            await session.exec(sa_delete(Move).where(Move.game_id == game_id))  # type: ignore[call-overload]
+            game = await session.get(Game, game_id)
+            if game:
+                await session.delete(game)
+            await session.commit()
+
+        # A removed rated game invalidates every later rating — rebuild from scratch.
+        if was_rated:
+            await self.recompute_all_elo()
+
+        logger.info("Game %s: deleted (elo_recomputed=%s)", game_id, was_rated)
+        return True
 
     async def validate_player_secret(self, game_id: str, secret: str | None) -> bool:
         """Check if the provided secret matches the game's player secret."""
@@ -776,6 +844,76 @@ class GameManager:
         b.draws += 1 if score_white == 0.5 else 0
         b.losses += 1 if score_white == 1.0 else 0
         session.add(b)
+
+    async def recompute_all_elo(self) -> None:
+        """Rebuild every model's ELO rating and W/D/L from scratch.
+
+        ELO is path-dependent (each step's K-factor applies to the ratings *at
+        that moment*), so removing one rated game invalidates every rating that
+        came after it. The only correct fix is to reset all models to the default
+        rating and replay every remaining rated game in the order it completed —
+        which reproduces the live ``_apply_elo`` result exactly (same ordering,
+        same per-step rounding). Filtering on ``Game.rated`` matches precisely the
+        games the live path scored (it excludes chaos and strength-limited
+        Stockfish games, which set ``rated=False``).
+        """
+        async with get_session_factory()() as session:
+            models = list((await session.exec(select(LLMModel))).all())
+            for m in models:
+                m.elo_rating = DEFAULT_MODEL_ELO
+                m.games_played = 0
+                m.wins = 0
+                m.draws = 0
+                m.losses = 0
+                session.add(m)
+            by_id = {m.id: m for m in models}
+
+            games = list(
+                (
+                    await session.exec(
+                        select(Game)
+                        .where(Game.rated == True)  # noqa: E712
+                        .order_by(
+                            Game.completed_at.asc(),  # type: ignore[union-attr]
+                            Game.id.asc(),  # type: ignore[union-attr]
+                        )
+                    )
+                ).all()
+            )
+
+            for g in games:
+                w = by_id.get(g.white_model)
+                b = by_id.get(g.black_model)
+                if not w or not b:
+                    continue
+                # Same outcome->score mapping as _apply_elo.
+                if g.outcome and "white_wins" in g.outcome:
+                    score_white = 1.0
+                elif g.outcome and "black_wins" in g.outcome:
+                    score_white = 0.0
+                else:
+                    score_white = 0.5
+
+                new_w, new_b = calculate_elo_change(
+                    w.elo_rating, b.elo_rating, score_white
+                )
+                w.elo_rating = new_w
+                w.games_played += 1
+                w.wins += 1 if score_white == 1.0 else 0
+                w.draws += 1 if score_white == 0.5 else 0
+                w.losses += 1 if score_white == 0.0 else 0
+
+                b.elo_rating = new_b
+                b.games_played += 1
+                b.wins += 1 if score_white == 0.0 else 0
+                b.draws += 1 if score_white == 0.5 else 0
+                b.losses += 1 if score_white == 1.0 else 0
+
+            await session.commit()
+
+        logger.info(
+            "Recomputed ELO: %d models from %d rated games", len(models), len(games)
+        )
 
     async def _ensure_model(self, model_id: str) -> None:
         """Insert the model into the models table if it doesn't exist."""

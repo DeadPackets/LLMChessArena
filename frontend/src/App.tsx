@@ -1,6 +1,7 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Routes, Route, useParams } from "react-router-dom";
 import Layout from "./components/layout/Layout";
+import { captureAdminTokenFromUrl } from "./utils/admin";
 
 const GameListPage = lazy(() => import("./pages/GameListPage"));
 const GameViewerPage = lazy(() => import("./pages/GameViewerPage"));
@@ -26,6 +27,11 @@ function RouteFallback() {
 }
 
 export default function App() {
+  // Bootstrap admin mode from ?admin=<token> (then strip it from the URL).
+  useEffect(() => {
+    captureAdminTokenFromUrl();
+  }, []);
+
   return (
     <Suspense fallback={<RouteFallback />}>
       <Routes>

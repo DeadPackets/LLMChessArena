@@ -100,6 +100,7 @@ export interface GameState {
   statusMessage: string | null;
   moveError: string | null;
   gameOverData: GameOverData | null;
+  deleted: boolean;
 }
 
 export type GameAction =
@@ -117,4 +118,5 @@ export type GameAction =
   | { type: "AWAITING_HUMAN_MOVE"; payload: { color: string } }
   | { type: "CHAOS_MOVE_DETECTED"; payload: ChaosMoveData }
   | { type: "SPECTATOR_COUNT"; payload: { count: number } }
-  | { type: "SET_MOVE_ERROR"; payload: string | null };
+  | { type: "SET_MOVE_ERROR"; payload: string | null }
+  | { type: "GAME_DELETED" };

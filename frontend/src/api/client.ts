@@ -99,6 +99,24 @@ export async function stopGame(gameId: string, playerSecret: string): Promise<{ 
   });
 }
 
+export async function deleteGame(gameId: string, adminToken: string): Promise<void> {
+  // DELETE returns 204 (no body), so we don't go through `request` (which parses JSON).
+  const res = await fetch(`${BASE}/games/${gameId}`, {
+    method: "DELETE",
+    headers: { "X-Admin-Token": adminToken },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    const msg =
+      res.status === 403
+        ? "Admin token rejected."
+        : res.status === 404
+          ? "Admin actions are not enabled on this server."
+          : `Delete failed (${res.status})`;
+    throw new ApiError(msg, res.status, { body });
+  }
+}
+
 export async function listModels(): Promise<ModelStats[]> {
   return request<ModelStats[]>("/models");
 }

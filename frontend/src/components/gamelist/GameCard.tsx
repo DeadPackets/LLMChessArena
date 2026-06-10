@@ -1,9 +1,13 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { GameSummary } from "../../types/api";
 import { formatModelLabel } from "../../utils/formatModel";
+import { getAdminToken } from "../../utils/admin";
+import { deleteGame } from "../../api/client";
 
 interface Props {
   game: GameSummary;
+  onDeleted?: (id: string) => void;
 }
 
 function timeAgo(dateStr: string | null): string {
@@ -38,11 +42,28 @@ function getWinner(game: GameSummary): "white" | "black" | null {
   return null;
 }
 
-export default function GameCard({ game }: Props) {
+export default function GameCard({ game, onDeleted }: Props) {
   const winner = getWinner(game);
   const isLive = game.status === "active";
   const isQueued = game.status === "queued";
   const timestamp = game.completed_at ?? game.started_at;
+
+  // Admin: delete control (two-step inline confirm). Rendered as a sibling of
+  // the card <Link>, never nested inside it (invalid interactive-in-anchor HTML).
+  const adminToken = getAdminToken();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const handleDelete = async () => {
+    if (!adminToken || busy) return;
+    setBusy(true);
+    try {
+      await deleteGame(game.id, adminToken);
+      onDeleted?.(game.id);
+    } catch {
+      setBusy(false);
+      setConfirming(false);
+    }
+  };
 
   const whiteLabel = game.white_is_human
     ? "Human"
@@ -56,6 +77,7 @@ export default function GameCard({ game }: Props) {
     : formatModelLabel(game.black_model, game.black_reasoning_effort, game.black_temperature);
 
   return (
+    <div className="game-card-wrap">
     <Link to={`/game/${game.id}`} className="game-card panel" aria-label={`Game: ${game.white_model} vs ${game.black_model}`}>
       <div className="game-card__players">
         <div className="game-card__player">
@@ -123,5 +145,40 @@ export default function GameCard({ game }: Props) {
         )}
       </div>
     </Link>
+    {adminToken && onDeleted && (
+      <div className="game-card__admin">
+        {!confirming ? (
+          <button
+            type="button"
+            className="game-card__admin-btn"
+            aria-label="Delete game"
+            title="Delete game"
+            onClick={() => setConfirming(true)}
+          >
+            <span aria-hidden="true">&#128465;</span>
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="game-card__admin-btn game-card__admin-btn--danger"
+              onClick={handleDelete}
+              disabled={busy}
+            >
+              {busy ? "…" : "Delete"}
+            </button>
+            <button
+              type="button"
+              className="game-card__admin-btn"
+              onClick={() => setConfirming(false)}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+          </>
+        )}
+      </div>
+    )}
+    </div>
   );
 }

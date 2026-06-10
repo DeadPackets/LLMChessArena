@@ -15,6 +15,7 @@ from app.config import (
     MAX_CONSECUTIVE_ILLEGAL_MOVES,
     DRAW_ADJUDICATION_CP,
     DRAW_ADJUDICATION_MOVES,
+    LLM_MAX_TOKENS,
 )
 from app.models.chess_models import (
     ChessMove,
@@ -557,7 +558,7 @@ class GameEngine:
                 if color == "white"
                 else self.config.black_reasoning_effort
             )
-            settings: ModelSettings = {}
+            settings: ModelSettings = {"max_tokens": LLM_MAX_TOKENS}
             if temp is not None:
                 settings["temperature"] = temp
             if reasoning:

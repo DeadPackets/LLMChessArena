@@ -4,7 +4,7 @@ import logging
 import secrets
 
 import chess
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func
@@ -12,6 +12,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import (
+    ADMIN_TOKEN,
     MAX_MOVES_PER_SIDE,
     MIN_MOVE_TIME_LIMIT,
     MAX_MOVE_TIME_LIMIT,
@@ -402,3 +403,26 @@ async def stop_game(game_id: str, body: StopGameRequest, request: Request):
         raise HTTPException(409, "Game is not currently running")
     logger.info("API: game stopped — id=%s", game_id)
     return {"status": "stopped"}
+
+
+@router.delete("/{game_id}", status_code=204)
+async def delete_game(
+    game_id: str,
+    request: Request,
+    x_admin_token: str | None = Header(default=None),
+):
+    """Admin: hard-delete a game and all its moves. Requires the X-Admin-Token header.
+
+    Cancels the game first if it is still running. ELO is left untouched.
+    Returns 404 (feature disabled) unless ADMIN_TOKEN is configured on the server.
+    """
+    if not ADMIN_TOKEN:
+        raise HTTPException(404, "Not found")
+    if not x_admin_token or not secrets.compare_digest(x_admin_token, ADMIN_TOKEN):
+        raise HTTPException(403, "Unauthorized")
+    manager = request.app.state.game_manager
+    deleted = await manager.delete_game(game_id)
+    if not deleted:
+        raise HTTPException(404, "Game not found")
+    logger.info("API: game deleted by admin — id=%s", game_id)
+    return Response(status_code=204)

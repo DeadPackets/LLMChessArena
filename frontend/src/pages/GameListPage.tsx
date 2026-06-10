@@ -313,7 +313,14 @@ export default function GameListPage() {
         <>
           <div className="game-list">
             {games.map((game) => (
-              <GameCard key={game.id} game={game} />
+              <GameCard
+                key={game.id}
+                game={game}
+                onDeleted={(id) => {
+                  setGames((prev) => prev.filter((g) => g.id !== id));
+                  setTotalCount((c) => Math.max(0, c - 1));
+                }}
+              />
             ))}
           </div>
 

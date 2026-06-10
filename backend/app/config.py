@@ -46,6 +46,20 @@ DRAW_ADJUDICATION_MOVES = int(os.getenv("DRAW_ADJUDICATION_MOVES", "30"))
 
 # LLM output limits
 NARRATION_CHAR_CAP = int(os.getenv("NARRATION_CHAR_CAP", "128"))
+# Cap on completion tokens per LLM move. Sent as max_tokens to OpenRouter.
+# When unset, OpenRouter falls back to the model's full output ceiling (e.g. 64k
+# for Claude Opus), which makes its pre-flight credit check reserve enough credit
+# for that worst case and can 402 on premium models. This also bounds reasoning:
+# on the reasoning.effort path the thinking budget is a fraction of max_tokens
+# (high ~= 0.8), so 16384 gives high-effort models ~13k thinking tokens plus
+# ample room for the small move/narration/table_talk response.
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "16384"))
+
+# Admin — shared secret authorizing destructive admin actions (e.g. deleting
+# broken games) via the X-Admin-Token header. Left empty by default: when unset,
+# the admin endpoints are disabled entirely (return 404), so public/forked
+# deployments expose nothing. Set this in your own deployment to enable them.
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
