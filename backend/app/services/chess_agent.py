@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import chess
 from pydantic_ai import Agent
 
-from app.config import NARRATION_CHAR_CAP
+from app.config import NARRATION_CHAR_CAP, MOVE_HISTORY_PLIES, TABLE_TALK_HISTORY
 from app.models.chess_models import ChessMove
 
 
@@ -156,8 +156,10 @@ def build_user_prompt(
     include_legal_moves: bool = False,
 ) -> str:
     """Build the user prompt with board state and recent history."""
-    # Last 10 moves in SAN
-    recent = move_history
+    # Only the most recent plies — the FEN already encodes the full position, so a
+    # bounded window keeps the prompt small (and cacheable) without losing tactical
+    # continuity. Older moves are dropped.
+    recent = move_history[-MOVE_HISTORY_PLIES:]
     if recent:
         history_lines = []
         for m in recent:
@@ -203,7 +205,7 @@ def build_user_prompt(
     # Inject recent table talk for conversational memory
     table_talk_entries = [
         m for m in move_history if m.get("table_talk")
-    ][-20:]
+    ][-TABLE_TALK_HISTORY:]
     if table_talk_entries:
         parts.extend(["", "--- TABLE TALK HISTORY ---"])
         for m in table_talk_entries:

@@ -21,8 +21,9 @@ interface Props {
   initialSettings?: RematchSettings;
 }
 
+// No "Default" entry: effort is part of the leaderboard identity, so every game
+// declares one explicitly. New games default to "high"; "none" is non-reasoning.
 const REASONING_OPTIONS = [
-  { value: "", label: "Default" },
   { value: "none", label: "None" },
   { value: "low", label: "Low" },
   { value: "medium", label: "Medium" },
@@ -170,7 +171,7 @@ function ModelSettingsPanel({
             min="0"
             max="2"
             step="0.1"
-            value={settings.temperature !== "" ? settings.temperature : "1"}
+            value={settings.temperature !== "" ? settings.temperature : "0.7"}
             onChange={(e) =>
               onChange({ ...settings, temperature: e.target.value })
             }
@@ -178,7 +179,7 @@ function ModelSettingsPanel({
             aria-valuetext={
               settings.temperature !== ""
                 ? parseFloat(settings.temperature).toFixed(1)
-                : "default (1.0)"
+                : "default (0.7)"
             }
           />
           <span className="new-game-dialog__range-label">2</span>
@@ -230,15 +231,16 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [whiteSettings, setWhiteSettings] = useState<ModelSettings>({
     temperature: "",
-    reasoningEffort: "",
+    reasoningEffort: "high",
   });
   const [blackSettings, setBlackSettings] = useState<ModelSettings>({
     temperature: "",
-    reasoningEffort: "",
+    reasoningEffort: "high",
   });
   const [whiteStockfishElo, setWhiteStockfishElo] = useState("");
   const [blackStockfishElo, setBlackStockfishElo] = useState("");
   const [chaosMode, setChaosMode] = useState(false);
+  const [useNitro, setUseNitro] = useState(false);
   const [drawAdjudication, setDrawAdjudication] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
@@ -255,6 +257,7 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
       setMaxMoves(String(initialSettings.max_moves ?? 200));
       setMoveTimeLimit(initialSettings.move_time_limit ? String(initialSettings.move_time_limit) : "");
       setChaosMode(initialSettings.chaos_mode ?? false);
+      setUseNitro(initialSettings.use_nitro ?? false);
       setDrawAdjudication(initialSettings.draw_adjudication ?? true);
       setWhiteStockfishElo(initialSettings.white_stockfish_elo ? String(initialSettings.white_stockfish_elo) : "");
       setBlackStockfishElo(initialSettings.black_stockfish_elo ? String(initialSettings.black_stockfish_elo) : "");
@@ -346,6 +349,7 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
         chaos_mode: chaosMode,
         move_time_limit: moveTimeLimit ? parseInt(moveTimeLimit, 10) : null,
         draw_adjudication: drawAdjudication,
+        use_nitro: useNitro,
       });
       if (resp.player_secret) {
         localStorage.setItem(`chess_player_secret_${resp.id}`, resp.player_secret);
@@ -501,6 +505,21 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
           </label>
           <InfoDot label={HELP.drawAdjudication} />
         </div>
+
+        {hasLLMSide && (
+          <div className="new-game-dialog__checkbox-row">
+            <label className="new-game-dialog__checkbox-label">
+              <input
+                type="checkbox"
+                className="new-game-dialog__checkbox"
+                checked={useNitro}
+                onChange={(e) => setUseNitro(e.target.checked)}
+              />
+              Speed (Nitro) &mdash; Fastest provider instead of cheapest
+            </label>
+            <InfoDot label={HELP.nitro} />
+          </div>
+        )}
 
         {hasLLMSide && (
           <button

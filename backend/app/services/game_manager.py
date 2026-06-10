@@ -19,13 +19,81 @@ from app.config import (
 )
 from app.database import Game, Move, LLMModel, get_session_factory
 from app.models.chess_models import GameConfig, GameResult, MoveRecord
-from app.services.elo_service import calculate_elo_change, score_white_from_outcome
+from app.services.elo_service import (
+    calculate_elo_change,
+    rating_display,
+    rating_key,
+    score_white_from_outcome,
+    temperature_is_default,
+)
 from app.services.game_engine import GameEngine
 from app.services.opening_detector import OpeningDetector
 from app.services.stockfish_service import StockfishService
 from app.services.stockfish_player_service import StockfishPlayerService
 
 logger = logging.getLogger(__name__)
+
+
+def side_label(
+    is_human: bool, is_stockfish: bool, model: str, sf_elo: int | None = None
+) -> str:
+    """Raw player label stored in Game.white_model/black_model and shown per-game.
+
+    LLMs use their model id; Human/Stockfish get a fixed label (strength-limited
+    Stockfish carries its ELO). The leaderboard *identity* is derived from this via
+    ``elo_service.rating_key`` (which adds the reasoning tier for LLMs)."""
+    if is_human:
+        return "Human"
+    if is_stockfish:
+        return f"Stockfish ({sf_elo})" if sf_elo else "Stockfish"
+    return model
+
+
+def _game_rating_keys(g: Game) -> tuple[str, str]:
+    """(white_key, black_key) leaderboard identities for a stored game row."""
+    wk = rating_key(
+        g.white_model,
+        g.white_reasoning_effort,
+        bool(g.white_is_human),
+        bool(g.white_is_stockfish),
+    )
+    bk = rating_key(
+        g.black_model,
+        g.black_reasoning_effort,
+        bool(g.black_is_human),
+        bool(g.black_is_stockfish),
+    )
+    return wk, bk
+
+
+def game_eligible_for_elo(g: Game) -> bool:
+    """Whether a stored game counts toward ELO under the current rules.
+
+    Excludes chaos games, strength-limited Stockfish, and games where either LLM
+    side used a non-default temperature. Requires a completed game with a decisive
+    or drawn outcome. This is the single predicate shared by the live persist path
+    and ``recompute_all_elo`` so the leaderboard and the ELO-history chart agree.
+    """
+    if g.status != "completed":
+        return False
+    if g.outcome not in ("white_wins", "black_wins", "draw"):
+        return False
+    if g.chaos_mode:
+        return False
+    if g.white_stockfish_elo is not None or g.black_stockfish_elo is not None:
+        return False
+    white_is_llm = not (g.white_is_human or g.white_is_stockfish)
+    black_is_llm = not (g.black_is_human or g.black_is_stockfish)
+    if white_is_llm and not temperature_is_default(g.white_temperature):
+        return False
+    if black_is_llm and not temperature_is_default(g.black_temperature):
+        return False
+    # Self-play (same identity on both sides) can't move a rating against itself —
+    # one entity would be credited a win and a loss simultaneously. Skip it.
+    wk, bk = _game_rating_keys(g)
+    if wk == bk:
+        return False
+    return True
 
 
 class GameManager:
@@ -101,22 +169,13 @@ class GameManager:
         if is_queued and not self.can_accept_new_game():
             raise ValueError("Game queue is full. Please try again later.")
 
-        def _side_label(
-            is_human: bool, is_stockfish: bool, model: str, sf_elo: int | None = None
-        ) -> str:
-            if is_human:
-                return "Human"
-            if is_stockfish:
-                return f"Stockfish ({sf_elo})" if sf_elo else "Stockfish"
-            return model
-
-        white_label = _side_label(
+        white_label = side_label(
             config.white_is_human,
             config.white_is_stockfish,
             config.white_model,
             config.white_stockfish_elo,
         )
-        black_label = _side_label(
+        black_label = side_label(
             config.black_is_human,
             config.black_is_stockfish,
             config.black_model,
@@ -129,9 +188,21 @@ class GameManager:
             black_label,
         )
 
-        # Register models (Human/Stockfish get their own model entries)
-        await self._ensure_model(white_label)
-        await self._ensure_model(black_label)
+        # Register leaderboard entries. LLMs are keyed by (model + reasoning tier);
+        # Human/Stockfish keep their plain label. Game.white_model still stores the
+        # raw label (above) for per-game display; the composite is the rating identity.
+        await self._ensure_model(
+            rating_key(white_label, config.white_reasoning_effort,
+                       config.white_is_human, config.white_is_stockfish),
+            rating_display(white_label, config.white_reasoning_effort,
+                           config.white_is_human, config.white_is_stockfish),
+        )
+        await self._ensure_model(
+            rating_key(black_label, config.black_reasoning_effort,
+                       config.black_is_human, config.black_is_stockfish),
+            rating_display(black_label, config.black_reasoning_effort,
+                           config.black_is_human, config.black_is_stockfish),
+        )
 
         if player_secret:
             self.player_secrets[game_id] = player_secret
@@ -502,6 +573,7 @@ class GameManager:
             stockfish_player_black=stockfish_player_black,
             opening_detector=self.opening_detector,
             human_move_queue=human_queue,
+            game_id=game_id,
         )
 
         async def on_move(record: MoveRecord) -> None:
@@ -575,6 +647,10 @@ class GameManager:
                     "black_is_stockfish": config.black_is_stockfish,
                     "white_stockfish_elo": config.white_stockfish_elo,
                     "black_stockfish_elo": config.black_stockfish_elo,
+                    "white_reasoning_effort": config.white_reasoning_effort,
+                    "black_reasoning_effort": config.black_reasoning_effort,
+                    "white_temperature": config.white_temperature,
+                    "black_temperature": config.black_temperature,
                     "chaos_mode": config.chaos_mode,
                     "move_time_limit": config.move_time_limit,
                     "draw_adjudication": config.draw_adjudication,
@@ -592,28 +668,62 @@ class GameManager:
                 result.total_moves,
                 result.total_cost_usd,
             )
-            # Normalize model IDs for non-LLM sides before persist/ELO
-            if config.white_is_stockfish:
-                result.white_model = "Stockfish"
-            elif config.white_is_human:
-                result.white_model = "Human"
-            if config.black_is_stockfish:
-                result.black_model = "Stockfish"
-            elif config.black_is_human:
-                result.black_model = "Human"
+            # Leaderboard identities (model + reasoning tier for LLMs; plain label
+            # for Human/Stockfish). Game.white_model keeps the raw label for
+            # per-game display; these composite keys are the rating identity.
+            white_label = side_label(
+                config.white_is_human, config.white_is_stockfish,
+                config.white_model, config.white_stockfish_elo,
+            )
+            black_label = side_label(
+                config.black_is_human, config.black_is_stockfish,
+                config.black_model, config.black_stockfish_elo,
+            )
+            white_key = rating_key(
+                white_label, config.white_reasoning_effort,
+                config.white_is_human, config.white_is_stockfish,
+            )
+            black_key = rating_key(
+                black_label, config.black_reasoning_effort,
+                config.black_is_human, config.black_is_stockfish,
+            )
+
+            # Rated unless chaos, strength-limited Stockfish, or a side used a
+            # non-default temperature. Changing reasoning effort is allowed (it
+            # ranks as a separate leaderboard entry).
             has_limited_sf = (
                 config.white_stockfish_elo is not None
                 or config.black_stockfish_elo is not None
             )
-            skip_elo = config.chaos_mode or has_limited_sf
+            white_is_llm = not (config.white_is_human or config.white_is_stockfish)
+            black_is_llm = not (config.black_is_human or config.black_is_stockfish)
+            custom_temp = (
+                white_is_llm and not temperature_is_default(config.white_temperature)
+            ) or (
+                black_is_llm and not temperature_is_default(config.black_temperature)
+            )
+            self_play = white_key == black_key
+            skip_elo = (
+                config.chaos_mode or has_limited_sf or custom_temp or self_play
+            )
             reason = ""
             if skip_elo:
                 reason = (
-                    "chaos mode" if config.chaos_mode else "strength-limited Stockfish"
+                    "chaos mode"
+                    if config.chaos_mode
+                    else "strength-limited Stockfish"
+                    if has_limited_sf
+                    else "custom temperature"
+                    if custom_temp
+                    else "self-play"
                 )
                 logger.info("Game %s: skipping ELO update (%s)", game_id, reason)
             wrote = await self._persist_result(
-                game_id, result, apply_elo=not skip_elo
+                game_id,
+                result,
+                apply_elo=not skip_elo,
+                white_key=white_key,
+                black_key=black_key,
             )
             logger.info(
                 "Game %s: results persisted%s%s",
@@ -686,9 +796,11 @@ class GameManager:
             },
         )
 
-        # Update counters in DB using atomic increments to avoid race conditions
+        # Update counters in DB using atomic increments to avoid race conditions.
+        # The model counter lives on the composite leaderboard identity (rating_key);
+        # fall back to the raw label for events emitted before this field existed.
         color = event.get("color", "white")
-        model_id = event.get("model", "")
+        model_id = event.get("rating_key") or event.get("model", "")
         try:
             async with get_session_factory()() as session:
                 if color == "white":
@@ -774,14 +886,21 @@ class GameManager:
             await session.commit()
 
     async def _persist_result(
-        self, game_id: str, result: GameResult, apply_elo: bool = False
+        self,
+        game_id: str,
+        result: GameResult,
+        apply_elo: bool = False,
+        white_key: str | None = None,
+        black_key: str | None = None,
     ) -> bool:
         """Persist the terminal game state (idempotently) and optionally fold in
         the ELO update within the same transaction.
 
-        Returns True only if this call performed the terminal write. If the row
-        was already completed/stopped, returns False and does nothing — so ELO is
-        applied at most once even if this path runs twice.
+        ``white_key``/``black_key`` are the composite leaderboard identities to
+        credit (model + reasoning tier for LLMs). Returns True only if this call
+        performed the terminal write. If the row was already completed/stopped,
+        returns False and does nothing — so ELO is applied at most once even if
+        this path runs twice.
         """
         now = datetime.now(timezone.utc)
         async with get_session_factory()() as session:
@@ -805,24 +924,36 @@ class GameManager:
             game.completed_at = now
             session.add(game)
 
-            if apply_elo and not game.rated:
-                await self._apply_elo(session, result)
-                game.rated = True
+            if apply_elo and not game.rated and white_key and black_key:
+                applied = await self._apply_elo(
+                    session, white_key, black_key, result.outcome
+                )
+                # Only flag rated if the update actually landed, so a game can
+                # never appear in the chart/recompute without a matching ELO change.
+                game.rated = applied
 
             await session.commit()
             return True
 
-    async def _apply_elo(self, session, result: GameResult) -> None:
-        """Apply an ELO update to both models within the caller's session.
-
-        Does not commit — the caller commits as part of the result transaction.
+    async def _apply_elo(
+        self, session, white_key: str, black_key: str, outcome: str | None
+    ) -> bool:
+        """Apply an ELO update to both leaderboard identities within the caller's
+        session. Does not commit — the caller commits as part of the result txn.
+        Returns True if the update was applied, False if it was a no-op.
         """
-        score_white = score_white_from_outcome(result.outcome)
+        # Self-play would credit one identity a win and a loss at once (same row
+        # fetched twice). Never rate it. The caller's skip_elo already guards this;
+        # this is defence in depth so the invariant holds wherever _apply_elo runs.
+        if white_key == black_key:
+            return False
 
-        w = await session.get(LLMModel, result.white_model)
-        b = await session.get(LLMModel, result.black_model)
+        score_white = score_white_from_outcome(outcome)
+
+        w = await session.get(LLMModel, white_key)
+        b = await session.get(LLMModel, black_key)
         if not w or not b:
-            return
+            return False
 
         new_w, new_b = calculate_elo_change(w.elo_rating, b.elo_rating, score_white)
 
@@ -839,18 +970,24 @@ class GameManager:
         b.draws += 1 if score_white == 0.5 else 0
         b.losses += 1 if score_white == 1.0 else 0
         session.add(b)
+        return True
 
     async def recompute_all_elo(self) -> None:
-        """Rebuild every model's ELO rating and W/D/L from scratch.
+        """Rebuild every leaderboard identity's ELO and W/D/L from scratch.
 
         ELO is path-dependent (each step's K-factor applies to the ratings *at
-        that moment*), so removing one rated game invalidates every rating that
-        came after it. The only correct fix is to reset all models to the default
-        rating and replay every remaining rated game in the order it completed —
-        which reproduces the live ``_apply_elo`` result exactly (same ordering,
-        same per-step rounding). Filtering on ``Game.rated`` matches precisely the
-        games the live path scored (it excludes chaos and strength-limited
-        Stockfish games, which set ``rated=False``).
+        that moment*), so any change — a deleted game, or new rating rules —
+        invalidates every later rating. The only correct fix is to reset all
+        identities to the default and replay every eligible game in completion
+        order, which reproduces the live ``_apply_elo`` result exactly (same
+        ordering, same per-step rounding).
+
+        Eligibility (``game_eligible_for_elo``) and the (model + reasoning tier)
+        identity (``_game_rating_keys``) are re-derived from each game row, so this
+        also migrates existing data to the current convention. ``Game.rated`` is
+        rewritten to match, keeping the ELO-history chart (which filters on
+        ``Game.rated``) in lock-step. Identities with no eligible games are left at
+        zero and hidden by the leaderboard's ``games_played > 0`` filter.
         """
         async with get_session_factory()() as session:
             models = list((await session.exec(select(LLMModel))).all())
@@ -863,11 +1000,21 @@ class GameManager:
                 session.add(m)
             by_id = {m.id: m for m in models}
 
+            def ensure(key: str, display: str) -> LLMModel:
+                row = by_id.get(key)
+                if row is None:
+                    row = LLMModel(
+                        id=key, display_name=display, elo_rating=DEFAULT_MODEL_ELO
+                    )
+                    session.add(row)
+                    by_id[key] = row
+                return row
+
             games = list(
                 (
                     await session.exec(
                         select(Game)
-                        .where(Game.rated == True)  # noqa: E712
+                        .where(Game.status == "completed")
                         .order_by(
                             Game.completed_at.asc(),  # type: ignore[union-attr]
                             Game.id.asc(),  # type: ignore[union-attr]
@@ -876,13 +1023,31 @@ class GameManager:
                 ).all()
             )
 
+            replayed = 0
             for g in games:
-                w = by_id.get(g.white_model)
-                b = by_id.get(g.black_model)
-                if not w or not b:
+                eligible = game_eligible_for_elo(g)
+                if bool(g.rated) != eligible:
+                    g.rated = eligible
+                    session.add(g)
+                if not eligible:
                     continue
-                score_white = score_white_from_outcome(g.outcome)
 
+                white_key, black_key = _game_rating_keys(g)
+                w = ensure(
+                    white_key,
+                    rating_display(
+                        g.white_model, g.white_reasoning_effort,
+                        bool(g.white_is_human), bool(g.white_is_stockfish),
+                    ),
+                )
+                b = ensure(
+                    black_key,
+                    rating_display(
+                        g.black_model, g.black_reasoning_effort,
+                        bool(g.black_is_human), bool(g.black_is_stockfish),
+                    ),
+                )
+                score_white = score_white_from_outcome(g.outcome)
                 new_w, new_b = calculate_elo_change(
                     w.elo_rating, b.elo_rating, score_white
                 )
@@ -897,21 +1062,24 @@ class GameManager:
                 b.wins += 1 if score_white == 0.0 else 0
                 b.draws += 1 if score_white == 0.5 else 0
                 b.losses += 1 if score_white == 1.0 else 0
+                replayed += 1
 
             await session.commit()
 
         logger.info(
-            "Recomputed ELO: %d models from %d rated games", len(models), len(games)
+            "Recomputed ELO: %d identities from %d eligible games",
+            len(by_id),
+            replayed,
         )
 
-    async def _ensure_model(self, model_id: str) -> None:
-        """Insert the model into the models table if it doesn't exist."""
+    async def _ensure_model(self, model_id: str, display_name: str) -> None:
+        """Insert the leaderboard identity into the models table if it's new."""
         async with get_session_factory()() as session:
             existing = await session.get(LLMModel, model_id)
             if not existing:
                 model = LLMModel(
                     id=model_id,
-                    display_name=model_id.split("/")[-1],
+                    display_name=display_name,
                     elo_rating=DEFAULT_MODEL_ELO,
                 )
                 session.add(model)

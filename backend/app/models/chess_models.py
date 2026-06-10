@@ -42,6 +42,10 @@ class GameConfig(BaseModel):
     chaos_mode: bool = False
     move_time_limit: float | None = Field(default=None, gt=0)
     draw_adjudication: bool = True  # Auto-draw if eval within ±20cp for 30+ moves
+    # Routing preference: False (default) sorts OpenRouter providers by price
+    # (cheapest, the ":floor" variant); True sorts by throughput (":nitro").
+    # Speed vs cost — does not affect results, so it is not persisted or rated.
+    use_nitro: bool = False
 
 
 class EngineLine(BaseModel):

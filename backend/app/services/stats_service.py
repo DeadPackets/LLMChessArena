@@ -11,7 +11,12 @@ from app.database import Game, Move, LLMModel
 from sqlalchemy import func as sa_func
 
 from app.config import DEFAULT_MODEL_ELO
-from app.services.elo_service import calculate_elo_change, score_white_from_outcome
+from app.services.elo_service import (
+    calculate_elo_change,
+    raw_label_of,
+    rating_key,
+    score_white_from_outcome,
+)
 from app.models.api_models import (
     CriticalMoment,
     EloHistoryPoint,
@@ -25,6 +30,25 @@ from app.models.api_models import (
 
 # Cap per-move loss to avoid mate scores (±9999cp) from destroying the average
 MAX_LOSS_PER_MOVE = 1000
+
+
+def _white_key(g: Game) -> str:
+    """Composite leaderboard identity (model + reasoning tier) for a game's white side."""
+    return rating_key(
+        g.white_model,
+        g.white_reasoning_effort,
+        bool(g.white_is_human),
+        bool(g.white_is_stockfish),
+    )
+
+
+def _black_key(g: Game) -> str:
+    return rating_key(
+        g.black_model,
+        g.black_reasoning_effort,
+        bool(g.black_is_human),
+        bool(g.black_is_stockfish),
+    )
 
 # ── Lichess accuracy constants (full precision) ──
 _ACC_MULTIPLIER = 103.1668100711649
@@ -257,15 +281,21 @@ async def compute_model_aggregate_stats(session: AsyncSession, model_id: str) ->
 
     Uses a single JOIN query to fetch games + moves together (avoids N+1).
     """
-    # Get all completed games this model played in
+    # Prefilter on the raw label (what the DB stores), then match the full
+    # composite identity (model + reasoning tier) in Python.
+    raw = raw_label_of(model_id)
     results = await session.exec(
         select(Game).where(
             Game.status == "completed",
-            (Game.white_model == model_id) | (Game.black_model == model_id),
+            (Game.white_model == raw) | (Game.black_model == raw),
             Game.chaos_mode != True,  # noqa: E712 — exclude chaos games from stats
         )
     )
-    games = results.all()
+    games = [
+        g
+        for g in results.all()
+        if _white_key(g) == model_id or _black_key(g) == model_id
+    ]
 
     if not games:
         return {
@@ -277,7 +307,7 @@ async def compute_model_aggregate_stats(session: AsyncSession, model_id: str) ->
 
     game_ids = [g.id for g in games]
     game_color_map = {
-        g.id: ("white" if g.white_model == model_id else "black") for g in games
+        g.id: ("white" if _white_key(g) == model_id else "black") for g in games
     }
 
     # Single query for ALL moves across ALL matching games
@@ -401,22 +431,27 @@ async def compute_head_to_head(
     session: AsyncSession, model_id: str
 ) -> list[HeadToHeadRecord]:
     """Compute head-to-head records for a model against all opponents."""
+    raw = raw_label_of(model_id)
     results = await session.exec(
         select(Game).where(
             Game.status == "completed",
-            (Game.white_model == model_id) | (Game.black_model == model_id),
+            (Game.white_model == raw) | (Game.black_model == raw),
             Game.chaos_mode != True,  # noqa: E712 — exclude chaos games
         )
     )
-    games = results.all()
+    games = [
+        g
+        for g in results.all()
+        if _white_key(g) == model_id or _black_key(g) == model_id
+    ]
 
     records: dict[str, dict] = defaultdict(
         lambda: {"wins": 0, "losses": 0, "draws": 0, "total": 0}
     )
 
     for game in games:
-        if game.white_model == model_id:
-            opponent = game.black_model
+        if _white_key(game) == model_id:
+            opponent = _black_key(game)
             if game.outcome and "white" in game.outcome:
                 records[opponent]["wins"] += 1
             elif game.outcome and "black" in game.outcome:
@@ -424,7 +459,7 @@ async def compute_head_to_head(
             else:
                 records[opponent]["draws"] += 1
         else:
-            opponent = game.white_model
+            opponent = _white_key(game)
             if game.outcome and "black" in game.outcome:
                 records[opponent]["wins"] += 1
             elif game.outcome and "white" in game.outcome:
@@ -475,12 +510,12 @@ async def compute_platform_overview(session: AsyncSession) -> PlatformOverview:
 
     total_cost = sum(g.total_cost_usd or 0.0 for g in games)
 
-    # Collect all model IDs that participated
+    # Collect all leaderboard identities (model + reasoning tier) that participated
     model_ids: set[str] = set()
     game_map: dict[str, Game] = {}
     for g in games:
-        model_ids.add(g.white_model)
-        model_ids.add(g.black_model)
+        model_ids.add(_white_key(g))
+        model_ids.add(_black_key(g))
         game_map[g.id] = g
 
     # Per-model aggregation
@@ -499,8 +534,8 @@ async def compute_platform_overview(session: AsyncSession) -> PlatformOverview:
     total_output_tokens = 0
 
     for game in games:
-        breakdowns[game.white_model]["games"] += 1
-        breakdowns[game.black_model]["games"] += 1
+        breakdowns[_white_key(game)]["games"] += 1
+        breakdowns[_black_key(game)]["games"] += 1
 
     # Single query for ALL moves across ALL games
     game_ids = list(game_map.keys())
@@ -513,7 +548,7 @@ async def compute_platform_overview(session: AsyncSession) -> PlatformOverview:
         game = game_map.get(move.game_id)
         if not game:
             continue
-        mid = game.white_model if move.color == "white" else game.black_model
+        mid = _white_key(game) if move.color == "white" else _black_key(game)
         inp = move.input_tokens or 0
         out = move.output_tokens or 0
         cost = move.cost_usd or 0.0
@@ -642,7 +677,7 @@ async def compute_elo_history(
     eligible_ids = {
         g.id
         for g in rated_games
-        if g.white_model == model_id or g.black_model == model_id
+        if _white_key(g) == model_id or _black_key(g) == model_id
     }
     if not eligible_ids:
         return []
@@ -651,8 +686,8 @@ async def compute_elo_history(
     history: list[EloHistoryPoint] = []
 
     for g in rated_games:
-        w_id = g.white_model
-        b_id = g.black_model
+        w_id = _white_key(g)
+        b_id = _black_key(g)
         w_elo = running_elos.get(w_id, DEFAULT_MODEL_ELO)
         b_elo = running_elos.get(b_id, DEFAULT_MODEL_ELO)
 

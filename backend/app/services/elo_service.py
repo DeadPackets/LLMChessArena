@@ -1,6 +1,65 @@
 from __future__ import annotations
 
-from app.config import ELO_K_FACTOR
+from app.config import DEFAULT_TEMPERATURE, ELO_K_FACTOR
+
+# Delimiter joining a model id to its reasoning tier in the composite leaderboard
+# identity, e.g. ``anthropic/claude-opus-4.8::high``. Chosen because real
+# OpenRouter model ids never contain ``::`` and it is URL-safe (the leaderboard
+# links to ``/model/<id>`` unencoded, and ids already contain ``/``).
+RATING_KEY_SEP = "::"
+
+
+def _effort_norm(effort: str | None) -> str:
+    """Normalize a reasoning effort to one of low/medium/high/none."""
+    return effort if effort in ("low", "medium", "high") else "none"
+
+
+def reasoning_suffix(effort: str | None) -> str:
+    """Human-readable reasoning tier, e.g. ``Reasoning, High`` / ``Non-reasoning``."""
+    e = _effort_norm(effort)
+    return "Non-reasoning" if e == "none" else f"Reasoning, {e.capitalize()}"
+
+
+def rating_key(
+    label: str, effort: str | None, is_human: bool, is_stockfish: bool
+) -> str:
+    """Leaderboard identity for one side.
+
+    Following the convention benchmarks use, LLMs are split by reasoning tier:
+    ``Opus`` at high effort ranks separately from ``Opus`` non-reasoning. Humans
+    and Stockfish have no reasoning tier, so their label is used unchanged. This
+    is the single source of truth shared by the live ELO path, the leaderboard
+    recompute, the ELO-history chart, and every per-model stat so they can never
+    disagree. ``label`` is the raw player label stored in ``Game.white_model``
+    (the model id, ``"Human"``, or ``"Stockfish"``).
+    """
+    if is_human or is_stockfish:
+        return label
+    return f"{label}{RATING_KEY_SEP}{_effort_norm(effort)}"
+
+
+def rating_display(
+    label: str, effort: str | None, is_human: bool, is_stockfish: bool
+) -> str:
+    """Pretty leaderboard label, e.g. ``claude-opus-4.8 (Reasoning, High)``."""
+    if is_human or is_stockfish:
+        return label
+    base = label.split("/")[-1]
+    return f"{base} ({reasoning_suffix(effort)})"
+
+
+def raw_label_of(rating_key_value: str) -> str:
+    """Strip the reasoning-tier suffix back to the raw player label.
+
+    Used to prefilter games in SQL (which stores the raw label) before matching
+    the full composite key in Python. Human/Stockfish keys have no suffix.
+    """
+    return rating_key_value.rsplit(RATING_KEY_SEP, 1)[0]
+
+
+def temperature_is_default(temp: float | None) -> bool:
+    """True when a side's temperature is left at the rated default (or unset)."""
+    return temp is None or abs(temp - DEFAULT_TEMPERATURE) < 1e-6
 
 
 def score_white_from_outcome(outcome: str | None) -> float:

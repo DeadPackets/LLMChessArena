@@ -51,6 +51,7 @@ class CreateGameRequest(BaseModel):
     chaos_mode: bool = False
     move_time_limit: float | None = Field(default=None, gt=0)
     draw_adjudication: bool = True
+    use_nitro: bool = False  # True = fastest provider (:nitro); False = cheapest (:floor)
 
 
 # --- Responses ---

@@ -16,6 +16,7 @@ from app.config import (
     DRAW_ADJUDICATION_CP,
     DRAW_ADJUDICATION_MOVES,
     LLM_MAX_TOKENS,
+    DEFAULT_TEMPERATURE,
 )
 from app.models.chess_models import (
     ChessMove,
@@ -25,6 +26,7 @@ from app.models.chess_models import (
     PositionEval,
 )
 from app.services.chess_agent import chess_agent, ChessGameContext, build_user_prompt
+from app.services.elo_service import rating_key
 from app.services.move_classifier import (
     classify_move,
     MoveClassification,
@@ -52,8 +54,10 @@ class GameEngine:
         stockfish_player_black: StockfishPlayerService | None = None,
         opening_detector: OpeningDetector | None = None,
         human_move_queue: asyncio.Queue | None = None,
+        game_id: str = "",
     ):
         self.config = config
+        self.game_id = game_id
         self.board = chess.Board()
         self.move_history: list[MoveRecord] = []
         self.move_callbacks: list[Callable[[MoveRecord], Awaitable[None]]] = []
@@ -559,12 +563,31 @@ class GameEngine:
                 else self.config.black_reasoning_effort
             )
             settings: ModelSettings = {"max_tokens": LLM_MAX_TOKENS}
-            if temp is not None:
-                settings["temperature"] = temp
-            if reasoning:
-                settings["extra_body"] = {
-                    "reasoning": {"effort": reasoning},
-                }
+            reasoning_on = bool(reasoning) and reasoning != "none"
+            # Temperature: fall back to the rated default when unset. Reasoning
+            # models frequently reject a non-1.0 temperature (OpenAI o-series/GPT-5
+            # return a hard 400) or ignore it, so we omit it entirely whenever
+            # reasoning effort is active — the game stays rated regardless, since
+            # rated status tracks whether the user *left* temperature at the default,
+            # not whether the provider sampled at it.
+            if not reasoning_on:
+                settings["temperature"] = temp if temp is not None else DEFAULT_TEMPERATURE
+
+            # extra_body carries OpenRouter-specific options: reasoning effort,
+            # sticky-routing session id (keeps a game+color pinned to one provider
+            # so its cache stays warm), and an Anthropic cache breakpoint.
+            extra_body: dict = {}
+            if reasoning_on:
+                extra_body["reasoning"] = {"effort": reasoning}
+            if self.game_id:
+                extra_body["session_id"] = f"{self.game_id}:{color}"
+            # Anthropic needs an explicit cache_control breakpoint to cache the
+            # (static) system prompt; other providers cache automatically, so we
+            # only send it for Anthropic to avoid an unknown field elsewhere.
+            if model_name.startswith("anthropic/"):
+                extra_body["cache_control"] = {"type": "ephemeral"}
+            if extra_body:
+                settings["extra_body"] = extra_body
 
             logger.debug(
                 "LLM call: model=%s, color=%s, attempt=%d, show_legal=%s, temp=%s, reasoning=%s",
@@ -576,10 +599,13 @@ class GameEngine:
                 reasoning,
             )
             try:
+                # :nitro sorts providers by throughput (fastest); :floor sorts by
+                # price (cheapest). Default to cheapest unless the game opted into speed.
+                variant = "nitro" if self.config.use_nitro else "floor"
                 result = await chess_agent.run(
                     user_prompt,
                     deps=ctx,
-                    model=f"openrouter:{model_name}:nitro",
+                    model=f"openrouter:{model_name}:{variant}",
                     model_settings=settings,
                 )
             except Exception as e:
@@ -696,9 +722,24 @@ class GameEngine:
         self, *, color: str, model: str, attempted_move: str, reason: str, attempt: int
     ) -> None:
         """Notify all illegal move callbacks."""
+        # The DB counter lives on the composite leaderboard identity, so emit it
+        # alongside the raw label (which is used for display). Illegal moves only
+        # come from LLM/Human sides, never a strength-limited Stockfish.
+        is_human = (color == "white" and self.config.white_is_human) or (
+            color == "black" and self.config.black_is_human
+        )
+        is_stockfish = (color == "white" and self.config.white_is_stockfish) or (
+            color == "black" and self.config.black_is_stockfish
+        )
+        effort = (
+            self.config.white_reasoning_effort
+            if color == "white"
+            else self.config.black_reasoning_effort
+        )
         event = {
             "color": color,
             "model": model,
+            "rating_key": rating_key(model, effort, is_human, is_stockfish),
             "attempted_move": attempted_move,
             "reason": reason,
             "attempt": attempt,

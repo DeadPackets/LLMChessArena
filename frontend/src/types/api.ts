@@ -206,6 +206,7 @@ export interface CreateGameRequest {
   chaos_mode?: boolean;
   move_time_limit?: number | null;
   draw_adjudication?: boolean;
+  use_nitro?: boolean;
 }
 
 export interface GameCreatedResponse {

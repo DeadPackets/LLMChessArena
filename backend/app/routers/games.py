@@ -107,6 +107,7 @@ async def create_game(req: CreateGameRequest, request: Request):
         chaos_mode=req.chaos_mode,
         move_time_limit=req.move_time_limit,
         draw_adjudication=req.draw_adjudication,
+        use_nitro=req.use_nitro,
     )
     player_secret = secrets.token_urlsafe(32)
 
@@ -413,8 +414,9 @@ async def delete_game(
 ):
     """Admin: hard-delete a game and all its moves. Requires the X-Admin-Token header.
 
-    Cancels the game first if it is still running. ELO is left untouched.
-    Returns 404 (feature disabled) unless ADMIN_TOKEN is configured on the server.
+    Cancels the game first if it is still running. If the deleted game was rated,
+    ELO is recomputed from scratch (ratings are path-dependent). Returns 404
+    (feature disabled) unless ADMIN_TOKEN is configured on the server.
     """
     if not ADMIN_TOKEN:
         raise HTTPException(404, "Not found")
@@ -426,3 +428,25 @@ async def delete_game(
         raise HTTPException(404, "Game not found")
     logger.info("API: game deleted by admin — id=%s", game_id)
     return Response(status_code=204)
+
+
+@router.post("/recompute-elo")
+async def recompute_elo(
+    request: Request,
+    x_admin_token: str | None = Header(default=None),
+):
+    """Admin: rebuild every model's ELO and leaderboard identity from scratch.
+
+    Replays all eligible rated games under the current rules — including the
+    split-by-reasoning-effort identity and the temperature-must-be-default rated
+    rule — so existing data migrates to the new leaderboard convention. Idempotent.
+    Returns 404 (feature disabled) unless ADMIN_TOKEN is configured on the server.
+    """
+    if not ADMIN_TOKEN:
+        raise HTTPException(404, "Not found")
+    if not x_admin_token or not secrets.compare_digest(x_admin_token, ADMIN_TOKEN):
+        raise HTTPException(403, "Unauthorized")
+    manager = request.app.state.game_manager
+    await manager.recompute_all_elo()
+    logger.info("API: ELO recomputed by admin")
+    return {"status": "recomputed"}

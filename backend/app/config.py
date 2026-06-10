@@ -44,6 +44,22 @@ STOCKFISH_MAX_ELO = int(os.getenv("STOCKFISH_MAX_ELO", "3190"))
 DRAW_ADJUDICATION_CP = int(os.getenv("DRAW_ADJUDICATION_CP", "20"))
 DRAW_ADJUDICATION_MOVES = int(os.getenv("DRAW_ADJUDICATION_MOVES", "30"))
 
+# LLM sampling / prompting
+# Default sampling temperature applied when a side leaves temperature unset. 0.7
+# is the conventional "general intelligence" competitive default (between the
+# vendor raw default of 1.0 and the agentic-reliability lows of 0.2-0.3): coherent
+# enough for legal moves and structured output, varied enough for interesting
+# games. It is ALSO the rated baseline — a game counts toward ELO only when both
+# LLM sides leave temperature at this default (see GameManager skip_elo). Reasoning
+# models often reject/ignore an explicit temperature, so the engine omits it
+# entirely when reasoning effort is active; the game stays rated regardless.
+DEFAULT_TEMPERATURE = float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
+# Trim the move list / table-talk fed to the LLM each turn. The FEN already encodes
+# the full position; only recent plies matter for tactical continuity, and a bounded
+# prompt avoids unbounded token growth (and "lost in the middle") in long games.
+MOVE_HISTORY_PLIES = int(os.getenv("MOVE_HISTORY_PLIES", "16"))
+TABLE_TALK_HISTORY = int(os.getenv("TABLE_TALK_HISTORY", "10"))
+
 # LLM output limits
 NARRATION_CHAR_CAP = int(os.getenv("NARRATION_CHAR_CAP", "128"))
 # Cap on completion tokens per LLM move. Sent as max_tokens to OpenRouter.

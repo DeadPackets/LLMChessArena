@@ -14,6 +14,7 @@ from app.models.api_models import (
     ModelDetailStats,
     ModelStats,
 )
+from app.services.elo_service import raw_label_of, rating_key
 from app.services.stats_service import (
     compute_elo_history,
     compute_head_to_head,
@@ -21,6 +22,25 @@ from app.services.stats_service import (
 )
 
 router = APIRouter(prefix="/api/models", tags=["models"])
+
+
+def _white_key(g: Game) -> str:
+    """Composite leaderboard identity (model + reasoning tier) for a game's white side."""
+    return rating_key(
+        g.white_model,
+        g.white_reasoning_effort,
+        bool(g.white_is_human),
+        bool(g.white_is_stockfish),
+    )
+
+
+def _black_key(g: Game) -> str:
+    return rating_key(
+        g.black_model,
+        g.black_reasoning_effort,
+        bool(g.black_is_human),
+        bool(g.black_is_stockfish),
+    )
 
 
 @router.get("", response_model=list[ModelStats])
@@ -71,24 +91,31 @@ async def compare_models(
     if not ma or not mb:
         raise HTTPException(404, "One or both models not found")
 
-    # Get direct matchups
+    # Get direct matchups. Prefilter on raw labels (what the DB stores), then
+    # match the composite identities (model + reasoning tier) in Python.
+    raw_a = raw_label_of(model_a)
+    raw_b = raw_label_of(model_b)
     results = await session.exec(
         select(Game).where(
             Game.status == "completed",
             Game.chaos_mode != True,  # noqa: E712
             (
-                ((Game.white_model == model_a) & (Game.black_model == model_b))
-                | ((Game.white_model == model_b) & (Game.black_model == model_a))
+                ((Game.white_model == raw_a) & (Game.black_model == raw_b))
+                | ((Game.white_model == raw_b) & (Game.black_model == raw_a))
             ),
         ).order_by(Game.completed_at.desc())  # type: ignore[union-attr]
     )
-    games = results.all()
+    games = [
+        g
+        for g in results.all()
+        if {_white_key(g), _black_key(g)} == {model_a, model_b}
+    ]
 
     a_wins = 0
     b_wins = 0
     draws = 0
     for g in games:
-        if g.white_model == model_a:
+        if _white_key(g) == model_a:
             if g.outcome and "white" in g.outcome:
                 a_wins += 1
             elif g.outcome and "black" in g.outcome:
@@ -165,16 +192,19 @@ async def model_detail(model_id: str, session: AsyncSession = Depends(get_sessio
     h2h = await compute_head_to_head(session, model_id)
     gp = model.games_played or 1
 
-    # Recent games
+    # Recent games. Prefilter on the raw label, match the composite identity in
+    # Python, then take the latest 10 (the Python filter must precede the limit).
+    raw = raw_label_of(model_id)
     results = await session.exec(
         select(Game)
-        .where(
-            (Game.white_model == model_id) | (Game.black_model == model_id),
-        )
+        .where((Game.white_model == raw) | (Game.black_model == raw))
         .order_by(Game.started_at.desc())  # type: ignore[union-attr]
-        .limit(10)
     )
-    recent = results.all()
+    recent = [
+        g
+        for g in results.all()
+        if _white_key(g) == model_id or _black_key(g) == model_id
+    ][:10]
     recent_summaries = [
         GameSummary(
             id=g.id,
