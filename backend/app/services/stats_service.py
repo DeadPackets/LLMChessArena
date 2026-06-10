@@ -10,6 +10,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.database import Game, Move, LLMModel
 from sqlalchemy import func as sa_func
 
+from app.config import DEFAULT_MODEL_ELO
+from app.services.elo_service import calculate_elo_change, score_white_from_outcome
 from app.models.api_models import (
     CriticalMoment,
     EloHistoryPoint,
@@ -619,72 +621,48 @@ async def compute_opening_stats(session: AsyncSession) -> list[OpeningStats]:
 async def compute_elo_history(
     session: AsyncSession, model_id: str
 ) -> list[EloHistoryPoint]:
-    """Compute ELO history for a model by replaying all completed games chronologically."""
-    results = await session.exec(
+    """Compute a model's ELO history by replaying the rated games chronologically.
+
+    Uses the *same* game set (``Game.rated``), ordering (``completed_at`` then
+    ``id``) and scoring as ``GameManager._apply_elo`` / ``recompute_all_elo``, so
+    the running ratings here match the stored leaderboard exactly — the final
+    point for a model equals its leaderboard ELO. Keep this in lock-step with
+    ``recompute_all_elo`` if either changes.
+    """
+    result = await session.exec(
         select(Game)
-        .where(
-            Game.status == "completed",
-            (Game.white_model == model_id) | (Game.black_model == model_id),
-            Game.chaos_mode != True,  # noqa: E712
+        .where(Game.rated == True)  # noqa: E712
+        .order_by(
+            Game.completed_at.asc(),  # type: ignore[union-attr]
+            Game.id.asc(),  # type: ignore[union-attr]
         )
-        .order_by(Game.completed_at.asc())  # type: ignore[union-attr]
     )
-    games = results.all()
+    rated_games = result.all()
 
-    # Filter out games with limited Stockfish (those skip ELO)
-    eligible = [
-        g
-        for g in games
-        if g.white_stockfish_elo is None and g.black_stockfish_elo is None
-    ]
-
-    if not eligible:
+    eligible_ids = {
+        g.id
+        for g in rated_games
+        if g.white_model == model_id or g.black_model == model_id
+    }
+    if not eligible_ids:
         return []
 
-    # Replay ELO progression from 1500 start, tracking all models' ELOs
-    from app.services.elo_service import calculate_elo_change
-
-    # Collect all unique model IDs involved so we can track their running ELOs
-    all_models: set[str] = set()
-    for g in eligible:
-        all_models.add(g.white_model)
-        all_models.add(g.black_model)
-
-    # Initialize all models at default ELO
-    running_elos: dict[str, float] = {m: 1500.0 for m in all_models}
-
-    # Also replay ALL completed games (not just this model's) in chronological
-    # order to build accurate opponent ELOs at the time of each game.
-    all_games_result = await session.exec(
-        select(Game)
-        .where(Game.status == "completed")
-        .where(Game.outcome.isnot(None))  # type: ignore[arg-type]
-        .order_by(Game.completed_at.asc())  # type: ignore[union-attr]
-    )
-    all_games = all_games_result.all()
-
-    # Build set of eligible game IDs for this model
-    eligible_ids = {g.id for g in eligible}
+    running_elos: dict[str, float] = {}
     history: list[EloHistoryPoint] = []
 
-    for g in all_games:
+    for g in rated_games:
         w_id = g.white_model
         b_id = g.black_model
-        w_elo = running_elos.get(w_id, 1500.0)
-        b_elo = running_elos.get(b_id, 1500.0)
+        w_elo = running_elos.get(w_id, DEFAULT_MODEL_ELO)
+        b_elo = running_elos.get(b_id, DEFAULT_MODEL_ELO)
 
-        if g.outcome and "white" in g.outcome:
-            score_w = 1.0
-        elif g.outcome and "black" in g.outcome:
-            score_w = 0.0
-        else:
-            score_w = 0.5
+        score_w = score_white_from_outcome(g.outcome)
 
         new_w, new_b = calculate_elo_change(w_elo, b_elo, score_w)
         running_elos[w_id] = new_w
         running_elos[b_id] = new_b
 
-        # Record history point only for the target model
+        # Record a history point only for games the target model played in.
         if g.id in eligible_ids:
             is_white = w_id == model_id
             elo_now = new_w if is_white else new_b

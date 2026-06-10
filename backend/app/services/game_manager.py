@@ -19,7 +19,7 @@ from app.config import (
 )
 from app.database import Game, Move, LLMModel, get_session_factory
 from app.models.chess_models import GameConfig, GameResult, MoveRecord
-from app.services.elo_service import calculate_elo_change
+from app.services.elo_service import calculate_elo_change, score_white_from_outcome
 from app.services.game_engine import GameEngine
 from app.services.opening_detector import OpeningDetector
 from app.services.stockfish_service import StockfishService
@@ -817,12 +817,7 @@ class GameManager:
 
         Does not commit — the caller commits as part of the result transaction.
         """
-        if "white_wins" in result.outcome:
-            score_white = 1.0
-        elif "black_wins" in result.outcome:
-            score_white = 0.0
-        else:
-            score_white = 0.5
+        score_white = score_white_from_outcome(result.outcome)
 
         w = await session.get(LLMModel, result.white_model)
         b = await session.get(LLMModel, result.black_model)
@@ -886,13 +881,7 @@ class GameManager:
                 b = by_id.get(g.black_model)
                 if not w or not b:
                     continue
-                # Same outcome->score mapping as _apply_elo.
-                if g.outcome and "white_wins" in g.outcome:
-                    score_white = 1.0
-                elif g.outcome and "black_wins" in g.outcome:
-                    score_white = 0.0
-                else:
-                    score_white = 0.5
+                score_white = score_white_from_outcome(g.outcome)
 
                 new_w, new_b = calculate_elo_change(
                     w.elo_rating, b.elo_rating, score_white

@@ -3,6 +3,22 @@ from __future__ import annotations
 from app.config import ELO_K_FACTOR
 
 
+def score_white_from_outcome(outcome: str | None) -> float:
+    """Map a game outcome to White's score: 1.0 win, 0.5 draw, 0.0 loss.
+
+    Decisive outcomes are ``"white_wins"`` / ``"black_wins"`` (a forfeit is also
+    emitted as ``"{winner}_wins"``; the *reason* lives in ``termination``).
+    Anything else (``"draw"``, adjudication, unknown) counts as a draw. This is
+    the single source of truth shared by the live ELO path, the leaderboard
+    recompute, and the ELO-history chart so they can never disagree.
+    """
+    if outcome and "white_wins" in outcome:
+        return 1.0
+    if outcome and "black_wins" in outcome:
+        return 0.0
+    return 0.5
+
+
 def calculate_elo_change(
     rating_a: float, rating_b: float, score_a: float
 ) -> tuple[float, float]:
