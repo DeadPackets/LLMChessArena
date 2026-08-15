@@ -78,6 +78,9 @@ def game_eligible_for_elo(g: Game) -> bool:
         return False
     if g.outcome not in ("white_wins", "black_wins", "draw"):
         return False
+    # API-error forfeits are infra failures, not chess results.
+    if g.termination == "api_error":
+        return False
     if g.chaos_mode:
         return False
     if g.white_stockfish_elo is not None or g.black_stockfish_elo is not None:
@@ -703,8 +706,13 @@ class GameManager:
                 black_is_llm and not temperature_is_default(config.black_temperature)
             )
             self_play = white_key == black_key
+            api_error_forfeit = result.termination == "api_error"
             skip_elo = (
-                config.chaos_mode or has_limited_sf or custom_temp or self_play
+                config.chaos_mode
+                or has_limited_sf
+                or custom_temp
+                or self_play
+                or api_error_forfeit
             )
             reason = ""
             if skip_elo:
@@ -716,6 +724,8 @@ class GameManager:
                     else "custom temperature"
                     if custom_temp
                     else "self-play"
+                    if self_play
+                    else "API-error forfeit"
                 )
                 logger.info("Game %s: skipping ELO update (%s)", game_id, reason)
             wrote = await self._persist_result(

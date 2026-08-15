@@ -78,6 +78,7 @@ class GameEngine:
         self.human_move_queue = human_move_queue
         self._last_opening: dict[str, str] | None = None
         self._consecutive_illegal_moves = 0
+        self._forfeit_was_api_error = False
         self._prompted_output_colors: set[str] = set()
         self._last_move_was_chaos = False
         self._consecutive_draw_eval_count = 0
@@ -215,16 +216,22 @@ class GameEngine:
                         termination="error",
                     )
                 else:
+                    termination = (
+                        "api_error"
+                        if self._forfeit_was_api_error
+                        else "illegal_moves"
+                    )
                     logger.warning(
-                        "Move %d: %s (%s) forfeited after %d consecutive illegal moves",
+                        "Move %d: %s (%s) forfeited after %d consecutive %s",
                         self.board.fullmove_number,
                         model_name,
                         current_color,
                         self._consecutive_illegal_moves,
+                        "API errors" if termination == "api_error" else "illegal moves",
                     )
                     return self._build_result(
                         outcome=f"{winner}_wins",
-                        termination="illegal_moves",
+                        termination=termination,
                     )
 
             chess_move, narration, table_talk, elapsed_ms, usage_data = move_result
@@ -541,6 +548,8 @@ class GameEngine:
         """
         history_dicts = [r.model_dump() for r in self.move_history]
         error_context = ""
+        self._forfeit_was_api_error = False
+        api_errors = 0
 
         while self._consecutive_illegal_moves < MAX_CONSECUTIVE_ILLEGAL_MOVES:
             ctx = ChessGameContext(
@@ -640,6 +649,7 @@ class GameEngine:
                     )
                     continue
                 self._consecutive_illegal_moves += 1
+                api_errors += 1
                 error_context = f"API error: {e}"
                 logger.error(
                     "LLM call failed: model=%s, error=%s, elapsed=%dms, consecutive_failures=%d",
@@ -739,11 +749,15 @@ class GameEngine:
                     attempt=self._consecutive_illegal_moves,
                 )
 
+        # All failures were API errors: the model never produced a move at all,
+        # so this is an infra forfeit, not a chess one (never rated).
+        self._forfeit_was_api_error = api_errors >= MAX_CONSECUTIVE_ILLEGAL_MOVES
         logger.error(
-            "Forfeit: model=%s (%s) reached %d consecutive illegal moves",
+            "Forfeit: model=%s (%s) reached %d consecutive %s",
             model_name,
             color,
             MAX_CONSECUTIVE_ILLEGAL_MOVES,
+            "API errors" if self._forfeit_was_api_error else "illegal moves",
         )
         return None  # Forfeit after MAX_CONSECUTIVE_ILLEGAL_MOVES consecutive illegal moves
 
