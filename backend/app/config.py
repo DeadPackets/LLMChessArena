@@ -60,6 +60,15 @@ DEFAULT_TEMPERATURE = float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
 MOVE_HISTORY_PLIES = int(os.getenv("MOVE_HISTORY_PLIES", "16"))
 TABLE_TALK_HISTORY = int(os.getenv("TABLE_TALK_HISTORY", "10"))
 
+# Hard HTTP timeout per LLM request; a hung provider fails the attempt instead of
+# stalling the game (the engine's retry loop then counts it as a failure).
+LLM_REQUEST_TIMEOUT = float(os.getenv("LLM_REQUEST_TIMEOUT", "120"))
+# Default whole-move ceiling (incl. retries) for LLM/Stockfish sides when the game
+# has no explicit move_time_limit. Never applied to humans.
+LLM_MOVE_TIMEOUT_DEFAULT = float(os.getenv("LLM_MOVE_TIMEOUT_DEFAULT", "300"))
+# Heartbeat while a side is thinking, so a slow/hung provider is visible in the UI.
+MOVE_WATCHDOG_INTERVAL = float(os.getenv("MOVE_WATCHDOG_INTERVAL", "30"))
+
 # LLM output limits
 NARRATION_CHAR_CAP = int(os.getenv("NARRATION_CHAR_CAP", "128"))
 # Cap on completion tokens per LLM move. Sent as max_tokens to OpenRouter.

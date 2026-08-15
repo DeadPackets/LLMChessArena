@@ -8,6 +8,7 @@ from typing import Callable, Awaitable
 import chess
 import chess.pgn
 
+from pydantic_ai import PromptedOutput
 from pydantic_ai.settings import ModelSettings
 
 from app.config import (
@@ -17,6 +18,9 @@ from app.config import (
     DRAW_ADJUDICATION_MOVES,
     LLM_MAX_TOKENS,
     DEFAULT_TEMPERATURE,
+    LLM_REQUEST_TIMEOUT,
+    LLM_MOVE_TIMEOUT_DEFAULT,
+    MOVE_WATCHDOG_INTERVAL,
 )
 from app.models.chess_models import (
     ChessMove,
@@ -74,6 +78,8 @@ class GameEngine:
         self.human_move_queue = human_move_queue
         self._last_opening: dict[str, str] | None = None
         self._consecutive_illegal_moves = 0
+        self._forfeit_was_api_error = False
+        self._prompted_output_colors: set[str] = set()
         self._last_move_was_chaos = False
         self._consecutive_draw_eval_count = 0
         self.chaos_move_callbacks: list[Callable[[dict], Awaitable[None]]] = []
@@ -156,12 +162,22 @@ class GameEngine:
                 )
                 move_coro = self._get_llm_move(model_name, current_color)
 
-            # Apply per-move time limit if configured
+            # Apply per-move time limit if configured; non-human sides always get
+            # a ceiling so a hung provider can't stall the game forever.
+            effective_limit = self.config.move_time_limit
+            if effective_limit is None and not is_human:
+                effective_limit = LLM_MOVE_TIMEOUT_DEFAULT
+            heartbeat: asyncio.Task | None = None
+            if not is_human:
+                waiting_label = "Stockfish" if is_stockfish else model_name
+                heartbeat = asyncio.create_task(
+                    self._still_waiting_heartbeat(waiting_label, current_color)
+                )
             try:
-                if self.config.move_time_limit is not None:
+                if effective_limit is not None:
                     move_result = await asyncio.wait_for(
                         move_coro,
-                        timeout=self.config.move_time_limit,
+                        timeout=effective_limit,
                     )
                 else:
                     move_result = await move_coro
@@ -175,13 +191,16 @@ class GameEngine:
                     self.board.fullmove_number,
                     side_label,
                     current_color,
-                    self.config.move_time_limit,
+                    effective_limit,
                 )
                 await self._emit_status(f"{current_color.title()} timed out!")
                 return self._build_result(
                     outcome=f"{winner}_wins",
                     termination="timeout",
                 )
+            finally:
+                if heartbeat:
+                    heartbeat.cancel()
 
             if move_result is None:
                 winner = "black" if current_color == "white" else "white"
@@ -206,16 +225,22 @@ class GameEngine:
                         termination="error",
                     )
                 else:
+                    termination = (
+                        "api_error"
+                        if self._forfeit_was_api_error
+                        else "illegal_moves"
+                    )
                     logger.warning(
-                        "Move %d: %s (%s) forfeited after %d consecutive illegal moves",
+                        "Move %d: %s (%s) forfeited after %d consecutive %s",
                         self.board.fullmove_number,
                         model_name,
                         current_color,
                         self._consecutive_illegal_moves,
+                        "API errors" if termination == "api_error" else "illegal moves",
                     )
                     return self._build_result(
                         outcome=f"{winner}_wins",
-                        termination="illegal_moves",
+                        termination=termination,
                     )
 
             chess_move, narration, table_talk, elapsed_ms, usage_data = move_result
@@ -402,6 +427,16 @@ class GameEngine:
         )
         return result
 
+    async def _still_waiting_heartbeat(self, label: str, color: str) -> None:
+        """Emit periodic status while a side thinks, so slow providers stay visible."""
+        waited = 0.0
+        while True:
+            await asyncio.sleep(MOVE_WATCHDOG_INTERVAL)
+            waited += MOVE_WATCHDOG_INTERVAL
+            await self._emit_status(
+                f"Still waiting on {label} ({color}) — {waited:.0f}s..."
+            )
+
     async def _emit_status(self, message: str) -> None:
         if self.status_callback:
             await self.status_callback(message)
@@ -532,6 +567,8 @@ class GameEngine:
         """
         history_dicts = [r.model_dump() for r in self.move_history]
         error_context = ""
+        self._forfeit_was_api_error = False
+        api_errors = 0
 
         while self._consecutive_illegal_moves < MAX_CONSECUTIVE_ILLEGAL_MOVES:
             ctx = ChessGameContext(
@@ -562,7 +599,10 @@ class GameEngine:
                 if color == "white"
                 else self.config.black_reasoning_effort
             )
-            settings: ModelSettings = {"max_tokens": LLM_MAX_TOKENS}
+            settings: ModelSettings = {
+                "max_tokens": LLM_MAX_TOKENS,
+                "timeout": LLM_REQUEST_TIMEOUT,
+            }
             reasoning_on = bool(reasoning) and reasoning != "none"
             # Temperature: fall back to the rated default when unset. Reasoning
             # models frequently reject a non-1.0 temperature (OpenAI o-series/GPT-5
@@ -602,15 +642,33 @@ class GameEngine:
                 # :nitro sorts providers by throughput (fastest); :floor sorts by
                 # price (cheapest). Default to cheapest unless the game opted into speed.
                 variant = "nitro" if self.config.use_nitro else "floor"
+                run_kwargs: dict = {}
+                if color in self._prompted_output_colors:
+                    run_kwargs["output_type"] = PromptedOutput(ChessMove)
                 result = await chess_agent.run(
                     user_prompt,
                     deps=ctx,
                     model=f"openrouter:{model_name}:{variant}",
                     model_settings=settings,
+                    **run_kwargs,
                 )
             except Exception as e:
                 elapsed_ms = int((time.monotonic() - start) * 1000)
+                msg = str(e).lower()
+                if ("tool_choice" in msg or "tool choice" in msg) and (
+                    color not in self._prompted_output_colors
+                ):
+                    # Provider rejects forced tool_choice (thinking mode); fall back
+                    # to prompted JSON output for this side for the rest of the game.
+                    self._prompted_output_colors.add(color)
+                    logger.info(
+                        "Structured-output fallback: model=%s (%s) switched to PromptedOutput",
+                        model_name,
+                        color,
+                    )
+                    continue
                 self._consecutive_illegal_moves += 1
+                api_errors += 1
                 error_context = f"API error: {e}"
                 logger.error(
                     "LLM call failed: model=%s, error=%s, elapsed=%dms, consecutive_failures=%d",
@@ -631,7 +689,7 @@ class GameEngine:
             logger.debug("LLM response: model=%s, elapsed=%dms", model_name, elapsed_ms)
 
             # Extract token/cost data from pydantic-ai result
-            usage = result.usage()
+            usage = result.usage
             provider_details = result.response.provider_details or {}
             usage_data = {
                 "input_tokens": usage.input_tokens,
@@ -710,11 +768,15 @@ class GameEngine:
                     attempt=self._consecutive_illegal_moves,
                 )
 
+        # All failures were API errors: the model never produced a move at all,
+        # so this is an infra forfeit, not a chess one (never rated).
+        self._forfeit_was_api_error = api_errors >= MAX_CONSECUTIVE_ILLEGAL_MOVES
         logger.error(
-            "Forfeit: model=%s (%s) reached %d consecutive illegal moves",
+            "Forfeit: model=%s (%s) reached %d consecutive %s",
             model_name,
             color,
             MAX_CONSECUTIVE_ILLEGAL_MOVES,
+            "API errors" if self._forfeit_was_api_error else "illegal moves",
         )
         return None  # Forfeit after MAX_CONSECUTIVE_ILLEGAL_MOVES consecutive illegal moves
 

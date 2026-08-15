@@ -22,6 +22,7 @@ from app.models.api_models import (
     EloHistoryPoint,
     GameAnalysis,
     HeadToHeadRecord,
+    ModelBadge,
     ModelCostBreakdown,
     OpeningStats,
     PlatformOverview,
@@ -715,3 +716,161 @@ async def compute_elo_history(
             ))
 
     return history
+
+
+async def compute_elo_sparklines(
+    session: AsyncSession, last_n: int = 20
+) -> dict[str, list[float]]:
+    """Post-game rating series per model, one replay pass over all rated games.
+
+    Same game set, ordering and scoring as ``compute_elo_history`` — keep the
+    replays in lock-step with ``recompute_all_elo`` if either changes.
+    """
+    result = await session.exec(
+        select(Game)
+        .where(Game.rated == True)  # noqa: E712
+        .order_by(
+            Game.completed_at.asc(),  # type: ignore[union-attr]
+            Game.id.asc(),  # type: ignore[union-attr]
+        )
+    )
+    running: dict[str, float] = {}
+    series: dict[str, list[float]] = {}
+    for g in result.all():
+        w_id, b_id = _white_key(g), _black_key(g)
+        w_elo = running.get(w_id, DEFAULT_MODEL_ELO)
+        b_elo = running.get(b_id, DEFAULT_MODEL_ELO)
+        new_w, new_b = calculate_elo_change(
+            w_elo, b_elo, score_white_from_outcome(g.outcome)
+        )
+        running[w_id], running[b_id] = new_w, new_b
+        series.setdefault(w_id, []).append(round(new_w, 1))
+        series.setdefault(b_id, []).append(round(new_b, 1))
+    return {k: v[-last_n:] for k, v in series.items()}
+
+
+def compute_badges(
+    *,
+    games_played: int,
+    total_illegal_moves: int,
+    avg_accuracy: float | None,
+    outcomes_newest_first: list[str],
+    won_checkmate_min_plies: int | None,
+    won_max_plies: int | None,
+    upset_wins: int,
+) -> list[ModelBadge]:
+    """Achievement badges from pre-aggregated per-model inputs (pure, testable)."""
+    badges: list[ModelBadge] = []
+    if won_checkmate_min_plies is not None and won_checkmate_min_plies <= 40:
+        badges.append(ModelBadge(
+            id="speedrunner", label="Speedrunner", icon="⚡",
+            description="Won by checkmate in 20 moves or fewer",
+        ))
+    if won_max_plies is not None and won_max_plies >= 120:
+        badges.append(ModelBadge(
+            id="marathoner", label="Marathoner", icon="\U0001f3c3",
+            description="Won a game lasting 60+ moves",
+        ))
+    if upset_wins > 0:
+        badges.append(ModelBadge(
+            id="giant_slayer", label="Giant Slayer", icon="\U0001f5e1️",
+            description="Beat an opponent rated 150+ ELO higher",
+        ))
+    if games_played >= 3 and total_illegal_moves == 0:
+        badges.append(ModelBadge(
+            id="clean_sheet", label="Clean Sheet", icon="✨",
+            description="Never attempted an illegal move (3+ games)",
+        ))
+    streak = 0
+    for o in outcomes_newest_first:
+        if o != "win":
+            break
+        streak += 1
+    if streak >= 3:
+        badges.append(ModelBadge(
+            id="on_fire", label=f"On Fire ×{streak}", icon="\U0001f525",
+            description=f"Current win streak of {streak}",
+        ))
+    if avg_accuracy is not None and avg_accuracy >= 85 and games_played >= 3:
+        badges.append(ModelBadge(
+            id="sharpshooter", label="Sharpshooter", icon="\U0001f3af",
+            description="Average accuracy 85%+ (3+ games)",
+        ))
+    return badges
+
+
+async def compute_upset_wins(session: AsyncSession) -> dict[str, int]:
+    """Wins against an opponent rated >=150 higher at game time, per model.
+
+    Replays the same rated-game sequence as ``compute_elo_sparklines`` so the
+    "at game time" ratings match the leaderboard's history exactly.
+    """
+    result = await session.exec(
+        select(Game)
+        .where(Game.rated == True)  # noqa: E712
+        .order_by(
+            Game.completed_at.asc(),  # type: ignore[union-attr]
+            Game.id.asc(),  # type: ignore[union-attr]
+        )
+    )
+    running: dict[str, float] = {}
+    upsets: dict[str, int] = defaultdict(int)
+    for g in result.all():
+        w_id, b_id = _white_key(g), _black_key(g)
+        w_elo = running.get(w_id, DEFAULT_MODEL_ELO)
+        b_elo = running.get(b_id, DEFAULT_MODEL_ELO)
+        score_w = score_white_from_outcome(g.outcome)
+        if score_w == 1.0 and b_elo - w_elo >= 150:
+            upsets[w_id] += 1
+        elif score_w == 0.0 and w_elo - b_elo >= 150:
+            upsets[b_id] += 1
+        new_w, new_b = calculate_elo_change(w_elo, b_elo, score_w)
+        running[w_id], running[b_id] = new_w, new_b
+    return dict(upsets)
+
+
+async def compute_model_badge_inputs(
+    session: AsyncSession, model_id: str
+) -> dict:
+    """Per-model badge inputs from completed non-chaos games (newest first)."""
+    raw = raw_label_of(model_id)
+    results = await session.exec(
+        select(Game).where(
+            Game.status == "completed",
+            (Game.white_model == raw) | (Game.black_model == raw),
+            Game.chaos_mode != True,  # noqa: E712
+        ).order_by(Game.completed_at.desc())  # type: ignore[union-attr]
+    )
+    games = [
+        g
+        for g in results.all()
+        if _white_key(g) == model_id or _black_key(g) == model_id
+    ]
+
+    outcomes: list[str] = []
+    won_checkmate_min_plies: int | None = None
+    won_max_plies: int | None = None
+    for g in games:
+        as_white = _white_key(g) == model_id
+        if g.outcome == "draw":
+            outcomes.append("draw")
+            won = False
+        else:
+            won = bool(
+                g.outcome
+                and (("white" in g.outcome) if as_white else ("black" in g.outcome))
+            )
+            outcomes.append("win" if won else "loss")
+        if won:
+            plies = g.total_moves or 0
+            if g.termination == "checkmate" and plies > 0:
+                if won_checkmate_min_plies is None or plies < won_checkmate_min_plies:
+                    won_checkmate_min_plies = plies
+            if won_max_plies is None or plies > won_max_plies:
+                won_max_plies = plies
+
+    return {
+        "outcomes_newest_first": outcomes,
+        "won_checkmate_min_plies": won_checkmate_min_plies,
+        "won_max_plies": won_max_plies,
+    }

@@ -150,6 +150,13 @@ class GameDetail(GameSummary):
     analysis: GameAnalysis | None = None
 
 
+class ModelBadge(BaseModel):
+    id: str
+    label: str
+    icon: str
+    description: str
+
+
 class ModelStats(BaseModel):
     id: str
     display_name: str | None = None
@@ -168,6 +175,8 @@ class EnhancedModelStats(ModelStats):
     avg_cost_per_game: float = 0.0
     avg_response_ms: float = 0.0
     illegal_move_rate: float = 0.0
+    elo_history: list[float] = []
+    badges: list[ModelBadge] = []
 
 
 class HeadToHeadRecord(BaseModel):
@@ -225,6 +234,8 @@ class HeadToHeadComparison(BaseModel):
     model_b_avg_accuracy: float | None = None
     model_a_avg_acpl: float | None = None
     model_b_avg_acpl: float | None = None
+    streak_model: str | None = None
+    streak_count: int = 0
     recent_games: list[GameSummary] = []
 
 

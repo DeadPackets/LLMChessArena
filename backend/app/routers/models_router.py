@@ -16,9 +16,13 @@ from app.models.api_models import (
 )
 from app.services.elo_service import raw_label_of, rating_key
 from app.services.stats_service import (
+    compute_badges,
     compute_elo_history,
+    compute_elo_sparklines,
     compute_head_to_head,
     compute_model_aggregate_stats,
+    compute_model_badge_inputs,
+    compute_upset_wins,
 )
 
 router = APIRouter(prefix="/api/models", tags=["models"])
@@ -43,6 +47,19 @@ def _black_key(g: Game) -> str:
     )
 
 
+def compute_h2h_streak(outcomes: list[str]) -> tuple[str | None, int]:
+    """Current win streak in a matchup. ``outcomes`` newest-first as 'a'/'b'/'draw'."""
+    if not outcomes or outcomes[0] == "draw":
+        return None, 0
+    leader = outcomes[0]
+    count = 0
+    for o in outcomes:
+        if o != leader:
+            break
+        count += 1
+    return leader, count
+
+
 @router.get("", response_model=list[ModelStats])
 async def list_models(session: AsyncSession = Depends(get_session)):
     """List all models with their stats."""
@@ -63,10 +80,13 @@ async def leaderboard(session: AsyncSession = Depends(get_session)):
     )
     rows = results.all()
 
+    sparks = await compute_elo_sparklines(session)
+    upsets = await compute_upset_wins(session)
     enhanced = []
     for r in rows:
         base = _row_to_stats(r)
         agg = await compute_model_aggregate_stats(session, r.id)
+        badge_inputs = await compute_model_badge_inputs(session, r.id)
         gp = r.games_played or 1
         enhanced.append(EnhancedModelStats(
             **base.model_dump(),
@@ -75,6 +95,14 @@ async def leaderboard(session: AsyncSession = Depends(get_session)):
             avg_cost_per_game=agg["avg_cost_per_game"],
             avg_response_ms=agg["avg_response_ms"],
             illegal_move_rate=round((r.total_illegal_moves or 0) / gp, 2),
+            elo_history=sparks.get(r.id, []),
+            badges=compute_badges(
+                games_played=r.games_played or 0,
+                total_illegal_moves=r.total_illegal_moves or 0,
+                avg_accuracy=agg["avg_accuracy"],
+                upset_wins=upsets.get(r.id, 0),
+                **badge_inputs,
+            ),
         ))
     return enhanced
 
@@ -114,21 +142,32 @@ async def compare_models(
     a_wins = 0
     b_wins = 0
     draws = 0
+    outcomes: list[str] = []  # newest-first ('a'/'b'/'draw'), for the streak
     for g in games:
         if _white_key(g) == model_a:
             if g.outcome and "white" in g.outcome:
                 a_wins += 1
+                outcomes.append("a")
             elif g.outcome and "black" in g.outcome:
                 b_wins += 1
+                outcomes.append("b")
             else:
                 draws += 1
+                outcomes.append("draw")
         else:
             if g.outcome and "black" in g.outcome:
                 a_wins += 1
+                outcomes.append("a")
             elif g.outcome and "white" in g.outcome:
                 b_wins += 1
+                outcomes.append("b")
             else:
                 draws += 1
+                outcomes.append("draw")
+    streak_key, streak_count = compute_h2h_streak(outcomes)
+    streak_model = (
+        model_a if streak_key == "a" else model_b if streak_key == "b" else None
+    )
 
     # Aggregate stats
     agg_a = await compute_model_aggregate_stats(session, model_a)
@@ -158,6 +197,8 @@ async def compare_models(
         model_b_avg_accuracy=agg_b.get("avg_accuracy"),
         model_a_avg_acpl=agg_a.get("avg_acpl"),
         model_b_avg_acpl=agg_b.get("avg_acpl"),
+        streak_model=streak_model,
+        streak_count=streak_count,
         recent_games=recent,
     )
 
@@ -190,6 +231,8 @@ async def model_detail(model_id: str, session: AsyncSession = Depends(get_sessio
     base = _row_to_stats(model)
     agg = await compute_model_aggregate_stats(session, model_id)
     h2h = await compute_head_to_head(session, model_id)
+    badge_inputs = await compute_model_badge_inputs(session, model_id)
+    upsets = await compute_upset_wins(session)
     gp = model.games_played or 1
 
     # Recent games. Prefilter on the raw label, match the composite identity in
@@ -241,6 +284,13 @@ async def model_detail(model_id: str, session: AsyncSession = Depends(get_sessio
         wins_as_black=agg.get("wins_as_black", 0),
         head_to_head=h2h,
         recent_games=recent_summaries,
+        badges=compute_badges(
+            games_played=model.games_played or 0,
+            total_illegal_moves=model.total_illegal_moves or 0,
+            avg_accuracy=agg["avg_accuracy"],
+            upset_wins=upsets.get(model_id, 0),
+            **badge_inputs,
+        ),
     )
 
 

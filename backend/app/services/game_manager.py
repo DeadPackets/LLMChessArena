@@ -7,6 +7,8 @@ import secrets as secrets_mod
 from datetime import datetime, timezone
 from uuid import uuid4
 
+import chess
+import chess.pgn
 from sqlmodel import select
 from sqlalchemy import update as sa_update, delete as sa_delete
 from sqlalchemy.exc import OperationalError
@@ -66,6 +68,24 @@ def _game_rating_keys(g: Game) -> tuple[str, str]:
     return wk, bk
 
 
+def pgn_from_sans(white: str, black: str, sans: list[str]) -> str:
+    """Rebuild a partial PGN from persisted SANs (stopped/errored games)."""
+    game = chess.pgn.Game()
+    game.headers["Event"] = "LLM Chess Arena"
+    game.headers["White"] = white
+    game.headers["Black"] = black
+    game.headers["Result"] = "*"
+    node: chess.pgn.GameNode = game
+    board = chess.Board()
+    for san in sans:
+        try:
+            move = board.push_san(san)
+        except ValueError:
+            break  # chaos-mode SANs can be unreplayable; keep the valid prefix
+        node = node.add_variation(move)
+    return str(game)
+
+
 def game_eligible_for_elo(g: Game) -> bool:
     """Whether a stored game counts toward ELO under the current rules.
 
@@ -77,6 +97,9 @@ def game_eligible_for_elo(g: Game) -> bool:
     if g.status != "completed":
         return False
     if g.outcome not in ("white_wins", "black_wins", "draw"):
+        return False
+    # API-error forfeits are infra failures, not chess results.
+    if g.termination == "api_error":
         return False
     if g.chaos_mode:
         return False
@@ -292,6 +315,21 @@ class GameManager:
                         game.outcome = "*"
                         game.termination = "stopped"
                         game.completed_at = datetime.now(timezone.utc)
+                        # total_moves/pgn are only written at completion; count the
+                        # already-persisted moves so a stopped game keeps its record.
+                        moves_res = await session.exec(
+                            select(Move)
+                            .where(Move.game_id == game_id)
+                            .order_by(Move.id)  # type: ignore[arg-type]
+                        )
+                        move_rows = list(moves_res.all())
+                        game.total_moves = len(move_rows)
+                        if move_rows:
+                            game.pgn = pgn_from_sans(
+                                game.white_model,
+                                game.black_model,
+                                [m.san for m in move_rows],
+                            )
                         session.add(game)
                         await session.commit()
                     total_moves = game.total_moves or 0
@@ -703,8 +741,13 @@ class GameManager:
                 black_is_llm and not temperature_is_default(config.black_temperature)
             )
             self_play = white_key == black_key
+            api_error_forfeit = result.termination == "api_error"
             skip_elo = (
-                config.chaos_mode or has_limited_sf or custom_temp or self_play
+                config.chaos_mode
+                or has_limited_sf
+                or custom_temp
+                or self_play
+                or api_error_forfeit
             )
             reason = ""
             if skip_elo:
@@ -716,6 +759,8 @@ class GameManager:
                     else "custom temperature"
                     if custom_temp
                     else "self-play"
+                    if self_play
+                    else "API-error forfeit"
                 )
                 logger.info("Game %s: skipping ELO update (%s)", game_id, reason)
             wrote = await self._persist_result(
@@ -750,6 +795,7 @@ class GameManager:
             logger.info("Game %s cancelled", game_id)
         except Exception:
             logger.exception("Game %s failed", game_id)
+            crash_total_moves = 0
             async with get_session_factory()() as session:
                 game = await session.get(Game, game_id)
                 if game and game.status not in {"completed", "stopped"}:
@@ -757,6 +803,20 @@ class GameManager:
                     game.outcome = "*"
                     game.termination = "error"
                     game.completed_at = datetime.now(timezone.utc)
+                    moves_res = await session.exec(
+                        select(Move)
+                        .where(Move.game_id == game_id)
+                        .order_by(Move.id)  # type: ignore[arg-type]
+                    )
+                    move_rows = list(moves_res.all())
+                    game.total_moves = len(move_rows)
+                    crash_total_moves = len(move_rows)
+                    if move_rows:
+                        game.pgn = pgn_from_sans(
+                            game.white_model,
+                            game.black_model,
+                            [m.san for m in move_rows],
+                        )
                     session.add(game)
                     await session.commit()
             await self._broadcast(
@@ -766,7 +826,7 @@ class GameManager:
                     "data": {
                         "outcome": "*",
                         "termination": "error",
-                        "total_moves": 0,
+                        "total_moves": crash_total_moves,
                     },
                 },
             )

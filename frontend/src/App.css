@@ -1923,6 +1923,44 @@ a.app-header__live-stat:hover {
   opacity: 0.5;
 }
 
+.leaderboard__spark {
+  display: inline-block;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  line-height: 0;
+}
+
+.leaderboard__badges {
+  margin-left: 0.4rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+}
+
+.leaderboard__badge {
+  cursor: help;
+}
+
+.model-detail-page__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.model-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  cursor: help;
+}
+
 .leaderboard__record {
   font-family: var(--font-mono);
   font-size: 0.78rem;
@@ -3334,6 +3372,13 @@ button.table-talk-bubble {
   color: var(--text-muted);
 }
 
+.h2h-page__streak {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--amber-bright);
+}
+
 .h2h-page__stats {
   padding: 1rem;
 }
@@ -3739,8 +3784,9 @@ button.table-talk-bubble {
     display: none;
   }
 
-  /* Hide ELO bars on mobile to save space */
-  .leaderboard__elo-bar {
+  /* Hide ELO bars and sparklines on mobile to save space */
+  .leaderboard__elo-bar,
+  .leaderboard__spark {
     display: none;
   }
 

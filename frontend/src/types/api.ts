@@ -99,12 +99,21 @@ export interface ModelStats {
   total_illegal_moves: number;
 }
 
+export interface ModelBadge {
+  id: string;
+  label: string;
+  icon: string;
+  description: string;
+}
+
 export interface EnhancedModelStats extends ModelStats {
   avg_acpl: number | null;
   avg_accuracy: number | null;
   avg_cost_per_game: number;
   avg_response_ms: number;
   illegal_move_rate: number;
+  elo_history: number[];
+  badges: ModelBadge[];
 }
 
 export interface HeadToHeadRecord {
@@ -162,6 +171,8 @@ export interface HeadToHeadComparison {
   model_b_avg_accuracy: number | null;
   model_a_avg_acpl: number | null;
   model_b_avg_acpl: number | null;
+  streak_model: string | null;
+  streak_count: number;
   recent_games: GameSummary[];
 }
 
