@@ -631,7 +631,7 @@ class GameEngine:
             logger.debug("LLM response: model=%s, elapsed=%dms", model_name, elapsed_ms)
 
             # Extract token/cost data from pydantic-ai result
-            usage = result.usage()
+            usage = result.usage
             provider_details = result.response.provider_details or {}
             usage_data = {
                 "input_tokens": usage.input_tokens,

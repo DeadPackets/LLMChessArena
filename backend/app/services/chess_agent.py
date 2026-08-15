@@ -96,7 +96,7 @@ NOT valid: Nf3 (that's SAN), e2-e4 (no hyphens), E2E4 (lowercase only), 0-0 (use
 chess_agent = Agent(
     model=None,  # Set at call time per player
     output_type=ChessMove,
-    system_prompt=SYSTEM_PROMPT % {"narration_cap": NARRATION_CHAR_CAP},
+    instructions=SYSTEM_PROMPT % {"narration_cap": NARRATION_CHAR_CAP},
     deps_type=ChessGameContext,
 )
 
