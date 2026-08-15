@@ -17,6 +17,9 @@ from app.config import (
     DRAW_ADJUDICATION_MOVES,
     LLM_MAX_TOKENS,
     DEFAULT_TEMPERATURE,
+    LLM_REQUEST_TIMEOUT,
+    LLM_MOVE_TIMEOUT_DEFAULT,
+    MOVE_WATCHDOG_INTERVAL,
 )
 from app.models.chess_models import (
     ChessMove,
@@ -156,12 +159,16 @@ class GameEngine:
                 )
                 move_coro = self._get_llm_move(model_name, current_color)
 
-            # Apply per-move time limit if configured
+            # Apply per-move time limit if configured; non-human sides always get
+            # a ceiling so a hung provider can't stall the game forever.
+            effective_limit = self.config.move_time_limit
+            if effective_limit is None and not is_human:
+                effective_limit = LLM_MOVE_TIMEOUT_DEFAULT
             try:
-                if self.config.move_time_limit is not None:
+                if effective_limit is not None:
                     move_result = await asyncio.wait_for(
                         move_coro,
-                        timeout=self.config.move_time_limit,
+                        timeout=effective_limit,
                     )
                 else:
                     move_result = await move_coro
@@ -175,7 +182,7 @@ class GameEngine:
                     self.board.fullmove_number,
                     side_label,
                     current_color,
-                    self.config.move_time_limit,
+                    effective_limit,
                 )
                 await self._emit_status(f"{current_color.title()} timed out!")
                 return self._build_result(
@@ -562,7 +569,10 @@ class GameEngine:
                 if color == "white"
                 else self.config.black_reasoning_effort
             )
-            settings: ModelSettings = {"max_tokens": LLM_MAX_TOKENS}
+            settings: ModelSettings = {
+                "max_tokens": LLM_MAX_TOKENS,
+                "timeout": LLM_REQUEST_TIMEOUT,
+            }
             reasoning_on = bool(reasoning) and reasoning != "none"
             # Temperature: fall back to the rated default when unset. Reasoning
             # models frequently reject a non-1.0 temperature (OpenAI o-series/GPT-5
