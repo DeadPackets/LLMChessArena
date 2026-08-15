@@ -715,3 +715,34 @@ async def compute_elo_history(
             ))
 
     return history
+
+
+async def compute_elo_sparklines(
+    session: AsyncSession, last_n: int = 20
+) -> dict[str, list[float]]:
+    """Post-game rating series per model, one replay pass over all rated games.
+
+    Same game set, ordering and scoring as ``compute_elo_history`` — keep the
+    replays in lock-step with ``recompute_all_elo`` if either changes.
+    """
+    result = await session.exec(
+        select(Game)
+        .where(Game.rated == True)  # noqa: E712
+        .order_by(
+            Game.completed_at.asc(),  # type: ignore[union-attr]
+            Game.id.asc(),  # type: ignore[union-attr]
+        )
+    )
+    running: dict[str, float] = {}
+    series: dict[str, list[float]] = {}
+    for g in result.all():
+        w_id, b_id = _white_key(g), _black_key(g)
+        w_elo = running.get(w_id, DEFAULT_MODEL_ELO)
+        b_elo = running.get(b_id, DEFAULT_MODEL_ELO)
+        new_w, new_b = calculate_elo_change(
+            w_elo, b_elo, score_white_from_outcome(g.outcome)
+        )
+        running[w_id], running[b_id] = new_w, new_b
+        series.setdefault(w_id, []).append(round(new_w, 1))
+        series.setdefault(b_id, []).append(round(new_b, 1))
+    return {k: v[-last_n:] for k, v in series.items()}

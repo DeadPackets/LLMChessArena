@@ -1923,6 +1923,13 @@ a.app-header__live-stat:hover {
   opacity: 0.5;
 }
 
+.leaderboard__spark {
+  display: inline-block;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  line-height: 0;
+}
+
 .leaderboard__record {
   font-family: var(--font-mono);
   font-size: 0.78rem;
@@ -3746,8 +3753,9 @@ button.table-talk-bubble {
     display: none;
   }
 
-  /* Hide ELO bars on mobile to save space */
-  .leaderboard__elo-bar {
+  /* Hide ELO bars and sparklines on mobile to save space */
+  .leaderboard__elo-bar,
+  .leaderboard__spark {
     display: none;
   }
 

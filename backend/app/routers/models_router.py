@@ -17,6 +17,7 @@ from app.models.api_models import (
 from app.services.elo_service import raw_label_of, rating_key
 from app.services.stats_service import (
     compute_elo_history,
+    compute_elo_sparklines,
     compute_head_to_head,
     compute_model_aggregate_stats,
 )
@@ -76,6 +77,7 @@ async def leaderboard(session: AsyncSession = Depends(get_session)):
     )
     rows = results.all()
 
+    sparks = await compute_elo_sparklines(session)
     enhanced = []
     for r in rows:
         base = _row_to_stats(r)
@@ -88,6 +90,7 @@ async def leaderboard(session: AsyncSession = Depends(get_session)):
             avg_cost_per_game=agg["avg_cost_per_game"],
             avg_response_ms=agg["avg_response_ms"],
             illegal_move_rate=round((r.total_illegal_moves or 0) / gp, 2),
+            elo_history=sparks.get(r.id, []),
         ))
     return enhanced
 

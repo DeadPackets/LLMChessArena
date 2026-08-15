@@ -5,6 +5,7 @@ import type { EnhancedModelStats } from "../types/api";
 import { formatModelName } from "../utils/formatModel";
 import { useAsync } from "../hooks/useAsync";
 import AsyncBoundary from "../components/shared/AsyncBoundary";
+import Sparkline from "../components/shared/Sparkline";
 import InfoDot from "../components/shared/InfoDot";
 import { HELP } from "../components/shared/helpText";
 
@@ -168,6 +169,9 @@ export default function LeaderboardPage() {
                           <td>
                             <span className="leaderboard__elo">{Math.round(model.elo_rating)}</span>
                             <span className="leaderboard__elo-bar" style={{ width: `${barWidth}px` }} />
+                            <span className="leaderboard__spark">
+                              <Sparkline points={model.elo_history} />
+                            </span>
                           </td>
                           <td>
                             <span className="leaderboard__record">

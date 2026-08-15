@@ -168,6 +168,7 @@ class EnhancedModelStats(ModelStats):
     avg_cost_per_game: float = 0.0
     avg_response_ms: float = 0.0
     illegal_move_rate: float = 0.0
+    elo_history: list[float] = []
 
 
 class HeadToHeadRecord(BaseModel):

@@ -105,6 +105,7 @@ export interface EnhancedModelStats extends ModelStats {
   avg_cost_per_game: number;
   avg_response_ms: number;
   illegal_move_rate: number;
+  elo_history: number[];
 }
 
 export interface HeadToHeadRecord {
