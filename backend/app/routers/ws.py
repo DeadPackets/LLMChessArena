@@ -161,6 +161,13 @@ async def game_websocket(websocket: WebSocket, game_id: str):
             return_when=asyncio.FIRST_COMPLETED,
         )
 
+        # Retrieve exceptions from finished tasks so asyncio doesn't log
+        # "Task exception was never retrieved" for routine disconnects.
+        for t in done:
+            exc = t.exception()
+            if exc is not None and not isinstance(exc, WebSocketDisconnect):
+                logger.warning("WebSocket task error: game=%s", game_id, exc_info=exc)
+
         for t in pending:
             t.cancel()
             try:
