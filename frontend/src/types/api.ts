@@ -162,6 +162,8 @@ export interface HeadToHeadComparison {
   model_b_avg_accuracy: number | null;
   model_a_avg_acpl: number | null;
   model_b_avg_acpl: number | null;
+  streak_model: string | null;
+  streak_count: number;
   recent_games: GameSummary[];
 }
 

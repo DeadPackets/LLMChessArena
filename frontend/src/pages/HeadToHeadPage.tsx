@@ -127,6 +127,18 @@ export default function HeadToHeadPage() {
                       </div>
                     )}
                     <div className="h2h-page__score-total">{total} game{total !== 1 ? "s" : ""}</div>
+                    {comparison.streak_count >= 2 && comparison.streak_model && (
+                      <div className="h2h-page__streak">
+                        &#128293;{" "}
+                        {formatModelName(
+                          comparison.streak_model,
+                          comparison.streak_model === comparison.model_a
+                            ? comparison.model_a_display
+                            : comparison.model_b_display,
+                        )}{" "}
+                        has won {comparison.streak_count} in a row
+                      </div>
+                    )}
                   </div>
                   <div className="h2h-page__score-side">
                     <div className="h2h-page__score-name">{formatModelName(comparison.model_b, comparison.model_b_display)}</div>

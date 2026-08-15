@@ -225,6 +225,8 @@ class HeadToHeadComparison(BaseModel):
     model_b_avg_accuracy: float | None = None
     model_a_avg_acpl: float | None = None
     model_b_avg_acpl: float | None = None
+    streak_model: str | None = None
+    streak_count: int = 0
     recent_games: list[GameSummary] = []
 
 

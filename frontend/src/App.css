@@ -3334,6 +3334,13 @@ button.table-talk-bubble {
   color: var(--text-muted);
 }
 
+.h2h-page__streak {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--amber-bright);
+}
+
 .h2h-page__stats {
   padding: 1rem;
 }
