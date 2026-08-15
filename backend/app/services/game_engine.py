@@ -167,6 +167,12 @@ class GameEngine:
             effective_limit = self.config.move_time_limit
             if effective_limit is None and not is_human:
                 effective_limit = LLM_MOVE_TIMEOUT_DEFAULT
+            heartbeat: asyncio.Task | None = None
+            if not is_human:
+                waiting_label = "Stockfish" if is_stockfish else model_name
+                heartbeat = asyncio.create_task(
+                    self._still_waiting_heartbeat(waiting_label, current_color)
+                )
             try:
                 if effective_limit is not None:
                     move_result = await asyncio.wait_for(
@@ -192,6 +198,9 @@ class GameEngine:
                     outcome=f"{winner}_wins",
                     termination="timeout",
                 )
+            finally:
+                if heartbeat:
+                    heartbeat.cancel()
 
             if move_result is None:
                 winner = "black" if current_color == "white" else "white"
@@ -417,6 +426,16 @@ class GameEngine:
             result.total_moves,
         )
         return result
+
+    async def _still_waiting_heartbeat(self, label: str, color: str) -> None:
+        """Emit periodic status while a side thinks, so slow providers stay visible."""
+        waited = 0.0
+        while True:
+            await asyncio.sleep(MOVE_WATCHDOG_INTERVAL)
+            waited += MOVE_WATCHDOG_INTERVAL
+            await self._emit_status(
+                f"Still waiting on {label} ({color}) — {waited:.0f}s..."
+            )
 
     async def _emit_status(self, message: str) -> None:
         if self.status_callback:
