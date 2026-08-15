@@ -8,6 +8,7 @@ from typing import Callable, Awaitable
 import chess
 import chess.pgn
 
+from pydantic_ai import PromptedOutput
 from pydantic_ai.settings import ModelSettings
 
 from app.config import (
@@ -77,6 +78,7 @@ class GameEngine:
         self.human_move_queue = human_move_queue
         self._last_opening: dict[str, str] | None = None
         self._consecutive_illegal_moves = 0
+        self._prompted_output_colors: set[str] = set()
         self._last_move_was_chaos = False
         self._consecutive_draw_eval_count = 0
         self.chaos_move_callbacks: list[Callable[[dict], Awaitable[None]]] = []
@@ -612,14 +614,31 @@ class GameEngine:
                 # :nitro sorts providers by throughput (fastest); :floor sorts by
                 # price (cheapest). Default to cheapest unless the game opted into speed.
                 variant = "nitro" if self.config.use_nitro else "floor"
+                run_kwargs: dict = {}
+                if color in self._prompted_output_colors:
+                    run_kwargs["output_type"] = PromptedOutput(ChessMove)
                 result = await chess_agent.run(
                     user_prompt,
                     deps=ctx,
                     model=f"openrouter:{model_name}:{variant}",
                     model_settings=settings,
+                    **run_kwargs,
                 )
             except Exception as e:
                 elapsed_ms = int((time.monotonic() - start) * 1000)
+                msg = str(e).lower()
+                if ("tool_choice" in msg or "tool choice" in msg) and (
+                    color not in self._prompted_output_colors
+                ):
+                    # Provider rejects forced tool_choice (thinking mode); fall back
+                    # to prompted JSON output for this side for the rest of the game.
+                    self._prompted_output_colors.add(color)
+                    logger.info(
+                        "Structured-output fallback: model=%s (%s) switched to PromptedOutput",
+                        model_name,
+                        color,
+                    )
+                    continue
                 self._consecutive_illegal_moves += 1
                 error_context = f"API error: {e}"
                 logger.error(
