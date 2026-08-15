@@ -48,6 +48,15 @@ export default function ModelDetailPage() {
           <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: "0.78rem" }}>
             {model.id}
           </div>
+          {model.badges.length > 0 && (
+            <div className="model-detail-page__badges">
+              {model.badges.map((b) => (
+                <span key={b.id} className="model-badge" title={b.description}>
+                  <span aria-hidden="true">{b.icon}</span> {b.label}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <div className="model-detail-page__elo">
           {Math.round(model.elo_rating)} ELO

@@ -99,6 +99,13 @@ export interface ModelStats {
   total_illegal_moves: number;
 }
 
+export interface ModelBadge {
+  id: string;
+  label: string;
+  icon: string;
+  description: string;
+}
+
 export interface EnhancedModelStats extends ModelStats {
   avg_acpl: number | null;
   avg_accuracy: number | null;
@@ -106,6 +113,7 @@ export interface EnhancedModelStats extends ModelStats {
   avg_response_ms: number;
   illegal_move_rate: number;
   elo_history: number[];
+  badges: ModelBadge[];
 }
 
 export interface HeadToHeadRecord {

@@ -150,6 +150,13 @@ class GameDetail(GameSummary):
     analysis: GameAnalysis | None = None
 
 
+class ModelBadge(BaseModel):
+    id: str
+    label: str
+    icon: str
+    description: str
+
+
 class ModelStats(BaseModel):
     id: str
     display_name: str | None = None
@@ -169,6 +176,7 @@ class EnhancedModelStats(ModelStats):
     avg_response_ms: float = 0.0
     illegal_move_rate: float = 0.0
     elo_history: list[float] = []
+    badges: list[ModelBadge] = []
 
 
 class HeadToHeadRecord(BaseModel):

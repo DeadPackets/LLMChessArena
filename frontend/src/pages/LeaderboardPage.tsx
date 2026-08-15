@@ -165,6 +165,19 @@ export default function LeaderboardPage() {
                             <Link to={`/model/${model.id}`} className="leaderboard__model-link">
                               {formatModelName(model.id, model.display_name)}
                             </Link>
+                            {model.badges.length > 0 && (
+                              <span className="leaderboard__badges">
+                                {model.badges.map((b) => (
+                                  <span
+                                    key={b.id}
+                                    className="leaderboard__badge"
+                                    title={`${b.label} — ${b.description}`}
+                                  >
+                                    {b.icon}
+                                  </span>
+                                ))}
+                              </span>
+                            )}
                           </td>
                           <td>
                             <span className="leaderboard__elo">{Math.round(model.elo_rating)}</span>
