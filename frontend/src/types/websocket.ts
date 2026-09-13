@@ -1,3 +1,5 @@
+import type { RoutingMode } from "./api";
+
 export interface EngineLine {
   rank: number;
   move_uci: string;
@@ -43,9 +45,12 @@ export interface GameOverData {
   outcome: string;
   termination: string;
   totalMoves: number;
-  totalCostUsd: number;
-  totalInputTokens: number;
-  totalOutputTokens: number;
+  totalCostUsd: number | null;
+  totalInputTokens: number | null;
+  totalOutputTokens: number | null;
+  knownCostUsd: number | null;
+  knownInputTokens: number | null;
+  knownOutputTokens: number | null;
   pgn: string;
 }
 
@@ -93,6 +98,8 @@ export interface GameState {
   blackStockfishElo: number | null;
   moveTimeLimit: number | null;
   drawAdjudication: boolean;
+  routingMode: RoutingMode | null;
+  useNitro: boolean;
   spectatorCount: number;
   currentFen: string;
   selectedIndex: number;
@@ -108,7 +115,7 @@ export type GameAction =
   | { type: "MOVE_PLAYED"; payload: Record<string, unknown> }
   | { type: "QUEUED"; payload: { position: number; active: number; max: number } }
   | { type: "STATUS_UPDATE"; payload: { message: string } }
-  | { type: "GAME_STARTED"; payload: { game_id: string; white_model: string; black_model: string; white_is_human?: boolean; black_is_human?: boolean; white_is_stockfish?: boolean; black_is_stockfish?: boolean; chaos_mode?: boolean } }
+  | { type: "GAME_STARTED"; payload: { game_id: string; white_model: string; black_model: string; white_is_human?: boolean; black_is_human?: boolean; white_is_stockfish?: boolean; black_is_stockfish?: boolean; chaos_mode?: boolean; routing_mode?: RoutingMode | null; use_nitro?: boolean } }
   | { type: "GAME_OVER"; payload: Record<string, unknown> }
   | { type: "SET_SELECTED_INDEX"; payload: number }
   | { type: "NAVIGATE"; payload: "first" | "prev" | "next" | "last" }

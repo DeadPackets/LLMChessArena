@@ -10,17 +10,19 @@ from uuid import uuid4
 import chess
 import chess.pgn
 from sqlmodel import select
-from sqlalchemy import update as sa_update, delete as sa_delete
+from sqlalchemy import update as sa_update, delete as sa_delete, func
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from app.config import (
     MAX_CONCURRENT_GAMES,
     DEFAULT_MODEL_ELO,
     MAX_QUEUED_GAMES,
     MAX_WS_EVENT_QUEUE_SIZE,
+    HARNESS_VERSION,
 )
-from app.database import Game, Move, LLMModel, get_session_factory
-from app.models.chess_models import GameConfig, GameResult, MoveRecord
+from app.database import Game, Move, LLMModel, LLMRequest, get_session_factory
+from app.models.chess_models import GameConfig, GameResult, MoveRecord, LLMRequestRecord
 from app.services.elo_service import (
     calculate_elo_change,
     rating_display,
@@ -29,6 +31,7 @@ from app.services.elo_service import (
     temperature_is_default,
 )
 from app.services.game_engine import GameEngine
+from app.services.request_stats import get_game_usage
 from app.services.opening_detector import OpeningDetector
 from app.services.stockfish_service import StockfishService
 from app.services.stockfish_player_service import StockfishPlayerService
@@ -192,6 +195,11 @@ class GameManager:
         if is_queued and not self.can_accept_new_game():
             raise ValueError("Game queue is full. Please try again later.")
 
+        for color in ("white", "black"):
+            if not (getattr(config, f"{color}_is_human") or getattr(config, f"{color}_is_stockfish")):
+                if getattr(config, f"{color}_reasoning_effort") is None:
+                    setattr(config, f"{color}_reasoning_effort", "provider_default")
+
         white_label = side_label(
             config.white_is_human,
             config.white_is_stockfish,
@@ -251,6 +259,9 @@ class GameManager:
                 chaos_mode=config.chaos_mode,
                 move_time_limit=config.move_time_limit,
                 draw_adjudication=config.draw_adjudication,
+                routing_mode=config.routing_mode or (None if config.use_nitro else "economy"),
+                use_nitro=config.use_nitro if config.routing_mode is None else False,
+                harness_version=HARNESS_VERSION,
             )
             session.add(game)
             await session.commit()
@@ -300,6 +311,7 @@ class GameManager:
         if task and not task.done():
             logger.info("Game %s: stop requested, cancelling task", game_id)
             total_moves = 0
+            usage = {}
             async with get_session_factory()() as session:
                 game = await session.get(Game, game_id)
                 if game:
@@ -333,6 +345,15 @@ class GameManager:
                         session.add(game)
                         await session.commit()
                     total_moves = game.total_moves or 0
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            async with get_session_factory()() as session:
+                game = await session.get(Game, game_id)
+                if game:
+                    usage = await get_game_usage(session, game)
             # Broadcast game_over so WS clients update cleanly
             await self._broadcast(
                 game_id,
@@ -342,10 +363,10 @@ class GameManager:
                         "outcome": "*",
                         "termination": "stopped",
                         "total_moves": total_moves,
+                        **usage,
                     },
                 },
             )
-            task.cancel()
             return True
         return False
 
@@ -404,6 +425,7 @@ class GameManager:
 
         # Hard-delete: moves first (FK-free, but keeps the row count honest), then the game.
         async with get_session_factory()() as session:
+            await session.exec(sa_delete(LLMRequest).where(LLMRequest.game_id == game_id))
             await session.exec(sa_delete(Move).where(Move.game_id == game_id))  # type: ignore[call-overload]
             game = await session.get(Game, game_id)
             if game:
@@ -468,6 +490,7 @@ class GameManager:
                 select(Move).where(Move.game_id == game_id).order_by(Move.id)  # type: ignore[arg-type]
             )
             move_rows = results.all()
+            usage = await get_game_usage(session, game)
 
         moves = []
         last_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -512,6 +535,10 @@ class GameManager:
                 "black_temperature": game.black_temperature,
                 "white_reasoning_effort": game.white_reasoning_effort,
                 "black_reasoning_effort": game.black_reasoning_effort,
+                "routing_mode": game.routing_mode,
+                "use_nitro": game.use_nitro,
+                "harness_version": game.harness_version,
+                **usage,
                 "white_is_human": bool(game.white_is_human),
                 "black_is_human": bool(game.black_is_human),
                 "white_is_stockfish": bool(game.white_is_stockfish),
@@ -614,6 +641,12 @@ class GameManager:
             game_id=game_id,
         )
 
+        persisted_requests: set[str] = set()
+
+        async def on_request(record: LLMRequestRecord) -> None:
+            if await self._persist_request(game_id, record):
+                persisted_requests.add(record.id)
+
         async def on_move(record: MoveRecord) -> None:
             self._awaiting_human_move.pop(game_id, None)
             await self._persist_move(game_id, record)
@@ -657,6 +690,7 @@ class GameManager:
             )
 
         engine.move_callbacks.append(on_move)
+        engine.request_callbacks.append(on_request)
         engine.illegal_move_callbacks.append(on_illegal_move)
         engine.chaos_move_callbacks.append(on_chaos_move)
         engine.status_callback = on_status
@@ -692,19 +726,25 @@ class GameManager:
                     "chaos_mode": config.chaos_mode,
                     "move_time_limit": config.move_time_limit,
                     "draw_adjudication": config.draw_adjudication,
+                    "routing_mode": config.routing_mode or (None if config.use_nitro else "economy"),
+                    "use_nitro": config.use_nitro if config.routing_mode is None else False,
+                    "harness_version": HARNESS_VERSION,
                 },
             },
         )
 
         try:
             result = await engine.play_game()
+            for record in engine.request_records:
+                if record.id not in persisted_requests:
+                    await on_request(record)
             logger.info(
                 "Game %s: completed — %s by %s, %d moves, cost $%.4f",
                 game_id,
                 result.outcome,
                 result.termination,
                 result.total_moves,
-                result.total_cost_usd,
+                result.known_cost_usd,
             )
             # Leaderboard identities (model + reasoning tier for LLMs; plain label
             # for Human/Stockfish). Game.white_model keeps the raw label for
@@ -787,6 +827,9 @@ class GameManager:
                         "total_cost_usd": result.total_cost_usd,
                         "total_input_tokens": result.total_input_tokens,
                         "total_output_tokens": result.total_output_tokens,
+                        "known_cost_usd": result.known_cost_usd,
+                        "known_input_tokens": result.known_input_tokens,
+                        "known_output_tokens": result.known_output_tokens,
                         "pgn": result.pgn,
                     },
                 },
@@ -795,9 +838,15 @@ class GameManager:
             logger.info("Game %s cancelled", game_id)
         except Exception:
             logger.exception("Game %s failed", game_id)
+            for record in engine.request_records:
+                if record.id not in persisted_requests:
+                    await on_request(record)
             crash_total_moves = 0
+            usage = {}
             async with get_session_factory()() as session:
                 game = await session.get(Game, game_id)
+                if game:
+                    usage = await get_game_usage(session, game)
                 if game and game.status not in {"completed", "stopped"}:
                     game.status = "completed"
                     game.outcome = "*"
@@ -827,10 +876,26 @@ class GameManager:
                         "outcome": "*",
                         "termination": "error",
                         "total_moves": crash_total_moves,
+                        **usage,
                     },
                 },
             )
         finally:
+            for record in engine.request_records:
+                if record.id not in persisted_requests:
+                    await on_request(record)
+            async with get_session_factory()() as session:
+                game = await session.get(Game, game_id)
+                if game and game.status == "stopped":
+                    await self._broadcast(game_id, {
+                        "type": "game_over",
+                        "data": {
+                            "outcome": game.outcome,
+                            "termination": game.termination,
+                            "total_moves": game.total_moves,
+                            **await get_game_usage(session, game),
+                        },
+                    })
             if stockfish_player_white:
                 await stockfish_player_white.stop()
             if stockfish_player_black and stockfish_player_black is not stockfish_player_white:
@@ -883,6 +948,39 @@ class GameManager:
                 await session.commit()
         except Exception:
             logger.warning("Failed to update illegal move counters", exc_info=True)
+
+    async def _persist_request(self, game_id: str, record: LLMRequestRecord) -> bool:
+        for attempt in range(1, 4):
+            try:
+                async with get_session_factory()() as session:
+                    if not await session.get(Game, game_id):
+                        return False
+                    inserted = await session.exec(
+                        sqlite_insert(LLMRequest)
+                        .values(game_id=game_id, **record.model_dump())
+                        .on_conflict_do_nothing(index_elements=["id"])
+                        .returning(LLMRequest.id)
+                    )
+                    if inserted.scalar_one_or_none() is not None and record.cost_usd is not None:
+                        known_cost = select(func.coalesce(func.sum(LLMRequest.cost_usd), 0.0)).where(
+                            LLMRequest.game_id == game_id
+                        ).scalar_subquery()
+                        await session.exec(
+                            sa_update(Game).where(Game.id == game_id)
+                            .values(total_cost_usd=func.max(Game.total_cost_usd, known_cost))
+                        )
+                    await session.commit()
+                return True
+            except OperationalError as exc:
+                if "database is locked" in str(exc).lower() and attempt < 3:
+                    await asyncio.sleep(0.1 * attempt)
+                    continue
+                logger.exception("Game %s: request persist failed", game_id)
+                return False
+            except Exception:
+                logger.exception("Game %s: request persist failed", game_id)
+                return False
+        return False
 
     async def _persist_move(self, game_id: str, record: MoveRecord) -> None:
         """Persist a move, retrying transient SQLite write-lock contention.
@@ -980,7 +1078,11 @@ class GameManager:
             game.opening_name = result.opening_name
             game.pgn = result.pgn
             game.total_moves = result.total_moves
-            game.total_cost_usd = result.total_cost_usd
+            game.total_cost_usd = (
+                result.known_cost_usd if game.harness_version is not None
+                else result.total_cost_usd if result.total_cost_usd is not None
+                else result.known_cost_usd
+            )
             game.completed_at = now
             session.add(game)
 

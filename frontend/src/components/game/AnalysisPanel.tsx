@@ -139,7 +139,7 @@ const AnalysisPanel = forwardRef<HTMLDivElement, Props>(function AnalysisPanel(
         </div>
         <div className="analysis-panel__stat-row">
           <span className="analysis-panel__stat-val">${analysis.white_total_cost.toFixed(4)}</span>
-          <span className="analysis-panel__stat-label">Cost</span>
+          <span className="analysis-panel__stat-label" title="Accepted moves only. Request usage includes all attempts.">Move cost</span>
           <span className="analysis-panel__stat-val">${analysis.black_total_cost.toFixed(4)}</span>
         </div>
       </div>

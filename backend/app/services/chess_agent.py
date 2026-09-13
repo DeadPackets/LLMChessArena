@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import asyncio
+import logging
+import time
+from typing import Awaitable, Callable
 
 import chess
-from pydantic_ai import Agent
+from pydantic_ai import Agent, ModelRetry, PartStartEvent, RunContext
+from pydantic_ai.capabilities import Hooks
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 
-from app.config import NARRATION_CHAR_CAP, MOVE_HISTORY_PLIES, TABLE_TALK_HISTORY
-from app.models.chess_models import ChessMove
+from app.config import NARRATION_CHAR_CAP, MOVE_HISTORY_PLIES, TABLE_TALK_HISTORY, MAX_CONSECUTIVE_ILLEGAL_MOVES, HARNESS_VERSION
+from app.models.chess_models import ChessMove, LLMRequestRecord
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -16,6 +24,86 @@ class ChessGameContext:
     board: chess.Board
     color: str  # "white" or "black"
     move_history: list[dict] = field(default_factory=list)
+    model_name: str = ""
+    reasoning_effort: str | None = None
+    routing_mode: str = "economy"
+    chaos_mode: bool = False
+    output_mode: str = "tool"
+    records: list[LLMRequestRecord] = field(default_factory=list)
+    current: LLMRequestRecord | None = None
+    request_started: float = 0.0
+    invalid_count: int = 0
+    rejected_ids: set[str] = field(default_factory=set)
+    response_received: bool = False
+    status_callback: Callable[[str], Awaitable[None]] | None = None
+    illegal_callback: Callable[..., Awaitable[None]] | None = None
+
+    async def status(self, message: str) -> None:
+        if self.status_callback:
+            try:
+                await asyncio.wait_for(self.status_callback(message), timeout=0.2)
+            except Exception:
+                logger.warning("LLM progress callback failed", exc_info=True)
+
+    async def reject(self, move: str, reason: str) -> None:
+        if self.current and self.current.id in self.rejected_ids:
+            return
+        if self.current:
+            self.rejected_ids.add(self.current.id)
+        self.invalid_count += 1
+        if self.illegal_callback:
+            await self.illegal_callback(
+                color=self.color, model=self.model_name, attempted_move=move,
+                reason=reason, attempt=self.invalid_count,
+            )
+
+
+request_hooks = Hooks()
+
+
+@request_hooks.on.before_model_request
+async def before_request(ctx, request_context):
+    deps = ctx.deps
+    if deps.current and deps.current.status == "invalid_output":
+        await deps.reject("(invalid output)", "Response did not match the move format")
+    if deps.invalid_count >= MAX_CONSECUTIVE_ILLEGAL_MOVES:
+        raise UnexpectedModelBehavior("Illegal move allowance exhausted")
+    deps.request_started = time.monotonic()
+    deps.response_received = False
+    deps.current = LLMRequestRecord(
+        move_number=deps.board.fullmove_number, color=deps.color, model=deps.model_name,
+        attempt=len(deps.records) + 1, output_mode=deps.output_mode,
+        reasoning_effort=deps.reasoning_effort, routing_mode=deps.routing_mode,
+        harness_version=HARNESS_VERSION, status="invalid_output", elapsed_ms=0,
+    )
+    deps.records.append(deps.current)
+    await deps.status(f"{deps.color.title()}: requesting move (attempt {deps.current.attempt})…")
+    return request_context
+
+
+@request_hooks.on.after_model_request
+async def after_request(ctx, *, request_context, response):
+    deps = ctx.deps
+    record = deps.current
+    deps.response_received = True
+    record.elapsed_ms = int((time.monotonic() - deps.request_started) * 1000)
+    record.request_id = response.provider_response_id
+    details = response.provider_details or {}
+    record.provider = details.get("downstream_provider")
+    reported = details.get("arena_usage")
+    if reported is not None:
+        for name, value in reported.items():
+            setattr(record, name, value)
+    else:
+        usage = response.usage
+        if usage.has_values():
+            record.input_tokens = usage.input_tokens
+            record.output_tokens = usage.output_tokens
+        record.cost_usd = details.get("cost")
+        if usage.cache_read_tokens or usage.cache_write_tokens:
+            record.cache_read_tokens = usage.cache_read_tokens
+            record.cache_write_tokens = usage.cache_write_tokens
+    return response
 
 
 SYSTEM_PROMPT = """\
@@ -98,7 +186,42 @@ chess_agent = Agent(
     output_type=ChessMove,
     instructions=SYSTEM_PROMPT % {"narration_cap": NARRATION_CHAR_CAP},
     deps_type=ChessGameContext,
+    retries=MAX_CONSECUTIVE_ILLEGAL_MOVES - 1,
+    capabilities=[request_hooks],
 )
+
+
+@chess_agent.on_event(PartStartEvent)
+async def response_started(ctx: RunContext[ChessGameContext], event: PartStartEvent):
+    deps = ctx.deps
+    if deps.current and deps.current.first_token_ms is None:
+        deps.current.first_token_ms = int((time.monotonic() - deps.request_started) * 1000)
+        await deps.status(f"{deps.color.title()}: receiving response…")
+
+
+@request_hooks.on.after_output_validate
+async def validate_chess_move(ctx: RunContext[ChessGameContext], *, output_context, output: ChessMove) -> ChessMove:
+    if ctx.partial_output:
+        return output
+    deps = ctx.deps
+    try:
+        move = chess.Move.from_uci(output.move.strip())
+        piece = deps.board.piece_at(move.from_square)
+        chaos_valid = deps.chaos_mode and bool(move) and piece is not None and piece.color == deps.board.turn
+        if move in deps.board.legal_moves or chaos_valid:
+            if deps.current:
+                deps.current.status = "accepted"
+            return output
+        reason = "Move is not legal in this position"
+    except ValueError:
+        reason = "Use lowercase UCI notation such as e2e4 or e7e8q"
+    if deps.current:
+        deps.current.status = "illegal_move"
+    await deps.reject(output.move, reason)
+    feedback = reason
+    if deps.invalid_count >= 3:
+        feedback += ". Legal moves: " + ", ".join(m.uci() for m in deps.board.legal_moves)
+    raise ModelRetry(feedback)
 
 
 def _material_balance(board: chess.Board) -> str:

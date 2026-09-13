@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createGame } from "../../api/client";
 import { useOpenRouterModels } from "../../hooks/useOpenRouterModels";
-import type { CreateGameRequest } from "../../types/api";
+import type { CreateGameRequest, OpenRouterModel, RoutingMode } from "../../types/api";
+import { normalizeReasoningEffort, supportedReasoningEfforts, temperatureApplies } from "../../utils/reasoning";
 import ModelSelector from "./ModelSelector";
 import { useModal } from "../../hooks/useModal";
 import InfoDot from "../shared/InfoDot";
@@ -10,9 +11,12 @@ import { HELP } from "../shared/helpText";
 
 export type PlayerType = "llm" | "human" | "stockfish";
 
-export interface RematchSettings extends Partial<CreateGameRequest> {
+export interface RematchSettings extends Partial<Omit<CreateGameRequest, "routing_mode" | "white_reasoning_effort" | "black_reasoning_effort">> {
   whiteType?: PlayerType;
   blackType?: PlayerType;
+  routing_mode?: RoutingMode | null;
+  white_reasoning_effort?: string | null;
+  black_reasoning_effort?: string | null;
 }
 
 interface Props {
@@ -20,15 +24,6 @@ interface Props {
   onClose: () => void;
   initialSettings?: RematchSettings;
 }
-
-// No "Default" entry: effort is part of the leaderboard identity, so every game
-// declares one explicitly. New games default to "high"; "none" is non-reasoning.
-const REASONING_OPTIONS = [
-  { value: "none", label: "None" },
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-];
 
 const STOCKFISH_PRESETS = [
   { label: "Maximum (no limit)", value: "" },
@@ -137,16 +132,19 @@ function StockfishEloSelector({
 function ModelSettingsPanel({
   label,
   icon,
+  model,
   settings,
   onChange,
 }: {
   label: string;
   icon: string;
+  model?: OpenRouterModel;
   settings: ModelSettings;
   onChange: (s: ModelSettings) => void;
 }) {
-  const tempDisplay =
-    settings.temperature !== ""
+  const canSetTemperature = temperatureApplies(settings.reasoningEffort, model);
+  const tempDisplay = !canSetTemperature ? "provider controlled"
+    : settings.temperature !== ""
       ? parseFloat(settings.temperature).toFixed(1)
       : "default";
 
@@ -168,6 +166,7 @@ function ModelSettingsPanel({
           <input
             className="new-game-dialog__range"
             type="range"
+            disabled={!canSetTemperature}
             min="0"
             max="2"
             step="0.1"
@@ -177,13 +176,16 @@ function ModelSettingsPanel({
             }
             aria-label={`${label} temperature`}
             aria-valuetext={
-              settings.temperature !== ""
+              !canSetTemperature ? "provider controlled" : settings.temperature !== ""
                 ? parseFloat(settings.temperature).toFixed(1)
                 : "default (0.7)"
             }
           />
           <span className="new-game-dialog__range-label">2</span>
         </div>
+        {!canSetTemperature && (
+          <p className="new-game-dialog__setting-help">Temperature is controlled by the provider for this reasoning setting.</p>
+        )}
         <button
           type="button"
           className="new-game-dialog__reset-btn"
@@ -197,23 +199,34 @@ function ModelSettingsPanel({
       </div>
 
       <div className="new-game-dialog__field">
-        <label className="new-game-dialog__label">
+        <label className="new-game-dialog__label" htmlFor={`${label}-reasoning`}>
           Reasoning Effort
           <InfoDot label={HELP.reasoning} />
         </label>
         <select
+          id={`${label}-reasoning`}
           className="new-game-dialog__input new-game-dialog__select"
-          value={settings.reasoningEffort}
+          value={normalizeReasoningEffort(settings.reasoningEffort, model) ?? ""}
           onChange={(e) =>
-            onChange({ ...settings, reasoningEffort: e.target.value })
+            onChange({
+              ...settings,
+              reasoningEffort: e.target.value,
+              temperature: temperatureApplies(e.target.value, model) ? settings.temperature : "",
+            })
           }
         >
-          {REASONING_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
+          <option value="">Provider default</option>
+          {supportedReasoningEfforts(model).map((effort) => (
+            <option key={effort} value={effort}>
+              {effort === "xhigh" ? "Extra high" : effort.charAt(0).toUpperCase() + effort.slice(1)}
             </option>
           ))}
         </select>
+        <p className="new-game-dialog__setting-help">
+          {!model?.reasoning ? "Reasoning options are not reported for this model."
+            : model.reasoning.mandatory ? "This model requires reasoning."
+              : "Only efforts reported by this model are available."}
+        </p>
       </div>
     </div>
   );
@@ -231,16 +244,16 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [whiteSettings, setWhiteSettings] = useState<ModelSettings>({
     temperature: "",
-    reasoningEffort: "high",
+    reasoningEffort: "",
   });
   const [blackSettings, setBlackSettings] = useState<ModelSettings>({
     temperature: "",
-    reasoningEffort: "high",
+    reasoningEffort: "",
   });
   const [whiteStockfishElo, setWhiteStockfishElo] = useState("");
   const [blackStockfishElo, setBlackStockfishElo] = useState("");
   const [chaosMode, setChaosMode] = useState(false);
-  const [useNitro, setUseNitro] = useState(false);
+  const [routingMode, setRoutingMode] = useState<RoutingMode | "legacy">("economy");
   const [drawAdjudication, setDrawAdjudication] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
@@ -257,7 +270,7 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
       setMaxMoves(String(initialSettings.max_moves ?? 200));
       setMoveTimeLimit(initialSettings.move_time_limit ? String(initialSettings.move_time_limit) : "");
       setChaosMode(initialSettings.chaos_mode ?? false);
-      setUseNitro(initialSettings.use_nitro ?? false);
+      setRoutingMode(initialSettings.routing_mode ?? (initialSettings.use_nitro ? "legacy" : "economy"));
       setDrawAdjudication(initialSettings.draw_adjudication ?? true);
       setWhiteStockfishElo(initialSettings.white_stockfish_elo ? String(initialSettings.white_stockfish_elo) : "");
       setBlackStockfishElo(initialSettings.black_stockfish_elo ? String(initialSettings.black_stockfish_elo) : "");
@@ -275,6 +288,23 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
       }
     }
   }, [open, initialSettings]);
+
+  const whiteMetadata = openRouterModels.find((model) => model.id === whiteModel);
+  const blackMetadata = openRouterModels.find((model) => model.id === blackModel);
+
+  useEffect(() => {
+    if (modelsLoading) return;
+    setWhiteSettings((settings) => ({
+      ...settings,
+      reasoningEffort: normalizeReasoningEffort(settings.reasoningEffort, whiteMetadata) ?? "",
+      temperature: temperatureApplies(settings.reasoningEffort, whiteMetadata) ? settings.temperature : "",
+    }));
+    setBlackSettings((settings) => ({
+      ...settings,
+      reasoningEffort: normalizeReasoningEffort(settings.reasoningEffort, blackMetadata) ?? "",
+      temperature: temperatureApplies(settings.reasoningEffort, blackMetadata) ? settings.temperature : "",
+    }));
+  }, [whiteMetadata, blackMetadata, modelsLoading, whiteSettings.reasoningEffort, blackSettings.reasoningEffort]);
 
   if (!open) return null;
 
@@ -324,11 +354,11 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
 
     try {
       const wTemp =
-        whiteIsLLM && whiteSettings.temperature !== ""
+        whiteIsLLM && temperatureApplies(whiteSettings.reasoningEffort, whiteMetadata) && whiteSettings.temperature !== ""
           ? parseFloat(whiteSettings.temperature)
           : null;
       const bTemp =
-        blackIsLLM && blackSettings.temperature !== ""
+        blackIsLLM && temperatureApplies(blackSettings.reasoningEffort, blackMetadata) && blackSettings.temperature !== ""
           ? parseFloat(blackSettings.temperature)
           : null;
 
@@ -338,8 +368,8 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
         max_moves: maxMoves ? parseInt(maxMoves, 10) : undefined,
         white_temperature: wTemp,
         black_temperature: bTemp,
-        white_reasoning_effort: whiteIsLLM && whiteSettings.reasoningEffort ? whiteSettings.reasoningEffort : null,
-        black_reasoning_effort: blackIsLLM && blackSettings.reasoningEffort ? blackSettings.reasoningEffort : null,
+        white_reasoning_effort: whiteIsLLM ? normalizeReasoningEffort(whiteSettings.reasoningEffort, whiteMetadata) : null,
+        black_reasoning_effort: blackIsLLM ? normalizeReasoningEffort(blackSettings.reasoningEffort, blackMetadata) : null,
         white_is_human: whiteType === "human",
         black_is_human: blackType === "human",
         white_is_stockfish: whiteType === "stockfish",
@@ -349,7 +379,7 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
         chaos_mode: chaosMode,
         move_time_limit: moveTimeLimit ? parseInt(moveTimeLimit, 10) : null,
         draw_adjudication: drawAdjudication,
-        use_nitro: useNitro,
+        ...(routingMode === "legacy" ? { use_nitro: true } : { routing_mode: routingMode }),
       });
       if (resp.player_secret) {
         localStorage.setItem(`chess_player_secret_${resp.id}`, resp.player_secret);
@@ -507,17 +537,29 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
         </div>
 
         {hasLLMSide && (
-          <div className="new-game-dialog__checkbox-row">
-            <label className="new-game-dialog__checkbox-label">
-              <input
-                type="checkbox"
-                className="new-game-dialog__checkbox"
-                checked={useNitro}
-                onChange={(e) => setUseNitro(e.target.checked)}
-              />
-              Speed (Nitro) &mdash; Fastest provider instead of cheapest
+          <div className="new-game-dialog__field">
+            <label className="new-game-dialog__label" htmlFor="routing-mode">
+              Provider routing
+              <InfoDot label={HELP.routing} />
             </label>
-            <InfoDot label={HELP.nitro} />
+            <select
+              id="routing-mode"
+              className="new-game-dialog__input new-game-dialog__select"
+              value={routingMode}
+              onChange={(e) => setRoutingMode(e.target.value as RoutingMode)}
+              aria-describedby="routing-help"
+            >
+              <option value="economy">Economy</option>
+              <option value="responsive">Responsive</option>
+              {routingMode === "legacy" && <option value="legacy">Legacy Nitro</option>}
+            </select>
+            <p id="routing-help" className="new-game-dialog__setting-help">
+              {routingMode === "legacy"
+                ? "Keeps this game's Nitro routing. Choose Economy or Responsive to change it."
+                : routingMode === "economy"
+                ? "Prioritizes price and includes flex providers."
+                : "Prioritizes provider latency for the selected model."}
+            </p>
           </div>
         )}
 
@@ -543,6 +585,7 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
                 <ModelSettingsPanel
                   label="White"
                   icon="&#9812;"
+                  model={whiteMetadata}
                   settings={whiteSettings}
                   onChange={setWhiteSettings}
                 />
@@ -551,6 +594,7 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
                 <ModelSettingsPanel
                   label="Black"
                   icon="&#9818;"
+                  model={blackMetadata}
                   settings={blackSettings}
                   onChange={setBlackSettings}
                 />

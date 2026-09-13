@@ -217,9 +217,9 @@ def render_game_over(data: dict, white_model: str, black_model: str) -> list[Pan
     outcome = data.get("outcome", "unknown")
     termination = data.get("termination", "unknown")
     total_moves = data.get("total_moves", 0)
-    total_cost = data.get("total_cost_usd", 0.0)
-    total_input = data.get("total_input_tokens", 0)
-    total_output = data.get("total_output_tokens", 0)
+    total_cost = data.get("total_cost_usd")
+    total_input = data.get("total_input_tokens")
+    total_output = data.get("total_output_tokens")
 
     outcome_text = outcome.replace("_", " ").title()
     if "white_wins" in outcome:
@@ -236,12 +236,17 @@ def render_game_over(data: dict, white_model: str, black_model: str) -> list[Pan
     result_table.add_row("Termination", termination.replace("_", " ").title())
     result_table.add_row("Total Moves", str(total_moves))
 
-    if total_input or total_output:
+    if total_input is None or total_output is None:
+        result_table.add_row("Tokens", "Unknown")
+    else:
         result_table.add_row(
             "Tokens",
             f"{total_input:,} in / {total_output:,} out / {total_input + total_output:,} total",
         )
-    if total_cost:
+    if total_cost is None:
+        known_cost = data.get("known_cost_usd", 0.0)
+        result_table.add_row("Total Cost", f"Unknown (${known_cost:.6f} known)")
+    else:
         result_table.add_row("Total Cost", f"${total_cost:.6f}")
 
     pgn = data.get("pgn")

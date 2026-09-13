@@ -3,16 +3,15 @@ import { formatModelLabel } from "../../utils/formatModel";
 
 interface Props {
   state: GameState;
+  requestCost: string | null;
+  usageError: boolean;
+  usageExpanded: boolean;
+  onToggleUsage: () => void;
 }
 
-function totalCost(state: GameState): number {
-  return state.moves.reduce((sum, m) => sum + (m.costUsd ?? 0), 0);
-}
-
-export default function GameInfoHeader({ state }: Props) {
+export default function GameInfoHeader({ state, requestCost, usageError, usageExpanded, onToggleUsage }: Props) {
   const isLive = state.status === "active";
   const isQueued = state.status === "queued";
-  const cost = state.gameOverData?.totalCostUsd ?? totalCost(state);
 
   const whiteLabel = state.whiteIsHuman
     ? "Human"
@@ -26,7 +25,7 @@ export default function GameInfoHeader({ state }: Props) {
     : formatModelLabel(state.blackModel, state.blackReasoningEffort, state.blackTemperature);
 
   return (
-    <div className="game-info panel">
+    <div className="game-info">
       <div className="game-info__players">
         <div className="game-info__player">
           <span className="game-info__player-icon game-info__player-icon--white" aria-hidden="true">&#9812;</span>
@@ -82,9 +81,23 @@ export default function GameInfoHeader({ state }: Props) {
         {state.spectatorCount > 0 && (
           <span className="game-info__meta-badge">{state.spectatorCount} watching</span>
         )}
-        {cost > 0 && (
-          <span className="game-info__cost">${cost.toFixed(4)}</span>
-        )}
+        <button
+          id="game-usage-toggle"
+          type="button"
+          className="game-info__usage"
+          aria-expanded={usageExpanded}
+          aria-controls="game-usage-details"
+          title={usageError ? "Usage could not refresh. Open to retry." : undefined}
+          onClick={onToggleUsage}
+        >
+          <span>Usage</span>
+          {(requestCost !== null || usageError) && (
+            <span className="game-info__cost">
+              {requestCost ?? "Unavailable"}{usageError && requestCost !== null ? " · stale" : ""}
+            </span>
+          )}
+          <span className="game-info__usage-chevron" aria-hidden="true">⌄</span>
+        </button>
       </div>
     </div>
   );

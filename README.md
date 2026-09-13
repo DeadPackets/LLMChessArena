@@ -255,6 +255,9 @@ All settings are configurable via environment variables with sensible defaults.
 | `DRAW_ADJUDICATION_CP` | `20` | Centipawn threshold for draw adjudication |
 | `DRAW_ADJUDICATION_MOVES` | `30` | Consecutive moves within threshold to declare draw |
 | `NARRATION_CHAR_CAP` | `128` | Maximum characters for LLM narration/table talk |
+| `LLM_TRANSPORT_ATTEMPTS` | `3` | Maximum attempts for temporary provider failures per move |
+| `LLM_RETRY_BASE_DELAY` | `1` | Initial retry delay in seconds; doubles on subsequent retries unless Retry-After is supplied |
+| `LLM_CACHE_TTL` | `5m` | Instruction-cache TTL: `5m` or `1h`, where supported by the provider |
 | `RATE_LIMIT_GAME_CREATE` | `5` | Game creation requests per minute per IP |
 | `RATE_LIMIT_API_READ` | `60` | API read requests per minute per IP |
 | `RATE_LIMIT_GAME_STOP` | `10` | Game stop requests per minute per IP |
@@ -272,6 +275,7 @@ All settings are configurable via environment variables with sensible defaults.
 | `POST` | `/api/games` | Create a new game |
 | `GET` | `/api/games/queue-status` | Active/queued game counts |
 | `GET` | `/api/games/:id` | Game detail with moves and analysis |
+| `GET` | `/api/games/:id/efficiency` | All-attempt spend, retry cost, cache coverage, and accepted-move latency |
 | `GET` | `/api/games/:id/pgn` | Download PGN |
 | `POST` | `/api/games/:id/stop` | Stop an active game (requires player secret) |
 | `GET` | `/api/models` | List all models |
@@ -287,6 +291,32 @@ All settings are configurable via environment variables with sensible defaults.
 | `WS` | `/ws/game/:id` | Real-time game stream (moves, eval, table talk, spectators) |
 
 All API responses include `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers.
+
+### LLM request reliability and usage
+
+The harness pins Pydantic AI 2.43.0. Output validation retries stay within the move allowance; temporary provider failures use a separate bounded retry budget. Default infrastructure timeouts and exhausted API requests end unrated. Live status shows request and response activity without publishing partial moves.
+
+New games offer Economy (price-first routing) and Responsive (latency-first routing). Existing Nitro games retain their routing on rematch. Reasoning choices follow the selected model's advertised capabilities; unavailable metadata permits provider default only. Provider-default play has its own rating tier when the effective effort is unknown.
+
+The viewer's Usage control shows spend in the game header; click it for request, retry, cache, and move-time details. It includes rejected attempts. Missing provider cost/cache data is shown as unknown, and historical games without request records show “not recorded.” Reported zero-dollar costs remain zero. Retry spend means the cost of additional requests after the first request for a ply. The cache percentage covers requests with reported cache data; input tokens already include cached tokens.
+
+Usage refreshes every 10 seconds during active or queued games and pauses in hidden tabs. Refreshes keep the last values visible; failed updates show “stale” with a retry control in the details. Enter or Space toggles the details, and Escape closes them.
+
+Static instruction caching and sticky sessions are enabled where supported. Cache hits still depend on provider, prompt length, and elapsed time. No live cost or latency improvement is asserted by the upgrade; compare measured games before changing prompt or reasoning budgets. New request and routing records are added by the existing idempotent database initializer.
+
+### Verification
+
+```bash
+cd backend
+python -m pip install -r requirements.txt -r requirements-dev.txt
+python -m pytest -q
+```
+
+```bash
+cd frontend
+node --test tests/sdk-efficiency.test.mjs
+npm run build
+```
 
 ---
 

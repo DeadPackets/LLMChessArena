@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
+from typing import Any, get_args
 
 import httpx
 from fastapi import APIRouter
+
+from app.models.chess_models import ReasoningEffort
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +24,14 @@ async def _fetch_models() -> list[dict]:
     if _cache["data"] is not None and (now - _cache["fetched_at"]) < _CACHE_TTL:
         return _cache["data"]
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.get("https://openrouter.ai/api/v1/models")
-        resp.raise_for_status()
-        raw = resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get("https://openrouter.ai/api/v1/models")
+            resp.raise_for_status()
+            raw = resp.json()
+    except (httpx.HTTPError, ValueError):
+        logger.warning("Model catalog unavailable; using cached capabilities", exc_info=True)
+        return _cache["data"] if _cache["data"] is not None else []
 
     models = raw.get("data", [])
 
@@ -47,6 +53,7 @@ async def _fetch_models() -> list[dict]:
             "context_length": m.get("context_length", 0),
             "pricing_prompt": pricing.get("prompt", "0"),
             "pricing_completion": pricing.get("completion", "0"),
+            "reasoning": m.get("reasoning") if isinstance(m.get("reasoning"), dict) else None,
         })
 
     filtered.sort(key=lambda x: x["id"].lower())
@@ -57,13 +64,28 @@ async def _fetch_models() -> list[dict]:
     return filtered
 
 
+def normalize_reasoning_effort(model: dict | None, effort: str | None) -> str:
+    metadata = (model or {}).get("reasoning")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    supported = metadata.get("supported_efforts")
+    supported = supported if isinstance(supported, list) else []
+    mandatory = metadata.get("mandatory") is True
+    if effort is None:
+        if metadata.get("default_enabled") is False:
+            return "none" if not mandatory and "none" in supported else "provider_default"
+        default = metadata.get("default_effort")
+        if (default in get_args(ReasoningEffort)
+                and (not supported or default in supported)
+                and not (default == "none" and (mandatory or metadata.get("default_enabled") is True))):
+            return default
+        return "provider_default"
+    if effort not in supported or (effort == "none" and mandatory):
+        detail = "Reasoning is mandatory" if effort == "none" and mandatory else "Unsupported reasoning effort"
+        raise ValueError(f"{detail}: {effort}. Choose provider default or a supported effort.")
+    return effort
+
+
 @router.get("/models")
 async def list_openrouter_models():
     """Return filtered, slimmed model list from OpenRouter."""
-    try:
-        return await _fetch_models()
-    except httpx.HTTPError as e:
-        logger.error("Failed to fetch OpenRouter models: %s", e)
-        if _cache["data"] is not None:
-            return _cache["data"]
-        return []
+    return await _fetch_models()

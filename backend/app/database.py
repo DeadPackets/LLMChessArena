@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlmodel import SQLModel, Field
@@ -50,6 +51,9 @@ class Game(SQLModel, table=True):
     chaos_mode: Optional[bool] = Field(default=False)
     move_time_limit: Optional[float] = None
     draw_adjudication: Optional[bool] = Field(default=True)
+    routing_mode: Optional[str] = None
+    use_nitro: Optional[bool] = None
+    harness_version: Optional[str] = None
 
 
 class Move(SQLModel, table=True):
@@ -80,6 +84,31 @@ class Move(SQLModel, table=True):
     cost_usd: Optional[float] = None
     timestamp: Optional[datetime] = None
     is_chaos_move: Optional[bool] = Field(default=False)
+
+
+class LLMRequest(SQLModel, table=True):
+    __tablename__ = "llm_requests"
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    game_id: str = Field(foreign_key="games.id", index=True)
+    move_number: int
+    color: str
+    model: str
+    provider: Optional[str] = None
+    request_id: Optional[str] = None
+    attempt: int
+    output_mode: str
+    reasoning_effort: Optional[str] = None
+    routing_mode: str
+    harness_version: str
+    status: str = "invalid_output"
+    elapsed_ms: int
+    first_token_ms: Optional[int] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    cache_read_tokens: Optional[int] = None
+    cache_write_tokens: Optional[int] = None
+    cost_usd: Optional[float] = None
 
 
 class LLMModel(SQLModel, table=True):
@@ -156,6 +185,9 @@ async def _migrate_add_columns(conn) -> None:
         ("moves", "mate_in_before", "INTEGER"),
         ("moves", "win_probability_before", "FLOAT"),
         ("games", "rated", "BOOLEAN DEFAULT 0"),
+        ("games", "routing_mode", "VARCHAR"),
+        ("games", "use_nitro", "BOOLEAN"),
+        ("games", "harness_version", "VARCHAR"),
     ]
     logger = logging.getLogger(__name__)
 

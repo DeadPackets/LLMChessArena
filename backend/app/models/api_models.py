@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Annotated, Literal
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
+
+from app.models.chess_models import ReasoningEffort, RoutingMode
 
 
 def _serialize_utc(dt: datetime) -> str:
@@ -24,9 +26,6 @@ def _serialize_utc(dt: datetime) -> str:
 UTCDateTime = Annotated[
     datetime, PlainSerializer(_serialize_utc, return_type=str, when_used="json")
 ]
-
-
-ReasoningEffort = Literal["none", "low", "medium", "high"]
 
 
 # --- Requests ---
@@ -51,7 +50,8 @@ class CreateGameRequest(BaseModel):
     chaos_mode: bool = False
     move_time_limit: float | None = Field(default=None, gt=0)
     draw_adjudication: bool = True
-    use_nitro: bool = False  # True = fastest provider (:nitro); False = cheapest (:floor)
+    routing_mode: RoutingMode | None = None
+    use_nitro: bool = False
 
 
 # --- Responses ---
@@ -85,6 +85,26 @@ class GameSummary(BaseModel):
     chaos_mode: bool = False
     move_time_limit: float | None = None
     draw_adjudication: bool = True
+    routing_mode: RoutingMode | None = None
+    harness_version: str | None = None
+    use_nitro: bool | None = None
+
+
+class GameEfficiency(BaseModel):
+    request_count: int
+    retry_count: int
+    input_tokens: int | None
+    output_tokens: int | None
+    cache_read_tokens: int | None
+    cache_write_tokens: int | None
+    cache_hit_ratio: float | None
+    known_cost_usd: float
+    total_cost_usd: float | None
+    retry_cost_usd: float | None
+    cost_known_requests: int
+    cache_known_requests: int
+    avg_move_ms: float | None
+    providers: list[str]
 
 
 class MoveDetail(BaseModel):
@@ -146,7 +166,12 @@ class GameDetail(GameSummary):
 
     pgn: str | None = None
     moves: list[MoveDetail] = []
-    total_cost_usd: float = 0.0
+    total_cost_usd: float | None = None
+    total_input_tokens: int | None = None
+    total_output_tokens: int | None = None
+    known_cost_usd: float = 0.0
+    known_input_tokens: int = 0
+    known_output_tokens: int = 0
     analysis: GameAnalysis | None = None
 
 

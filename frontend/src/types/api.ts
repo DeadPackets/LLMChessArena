@@ -1,3 +1,6 @@
+export type RoutingMode = "economy" | "responsive";
+export type ReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
+
 export interface GameSummary {
   id: string;
   white_model: string;
@@ -26,6 +29,8 @@ export interface GameSummary {
   chaos_mode: boolean;
   move_time_limit: number | null;
   draw_adjudication: boolean;
+  routing_mode: RoutingMode | null;
+  use_nitro: boolean | null;
 }
 
 export interface MoveDetail {
@@ -83,7 +88,8 @@ export interface GameAnalysis {
 export interface GameDetail extends GameSummary {
   pgn: string | null;
   moves: MoveDetail[];
-  total_cost_usd: number;
+  total_cost_usd: number | null;
+  known_cost_usd: number;
   analysis: GameAnalysis | null;
 }
 
@@ -206,8 +212,8 @@ export interface CreateGameRequest {
   max_moves?: number;
   white_temperature?: number | null;
   black_temperature?: number | null;
-  white_reasoning_effort?: string | null;
-  black_reasoning_effort?: string | null;
+  white_reasoning_effort?: ReasoningEffort | null;
+  black_reasoning_effort?: ReasoningEffort | null;
   white_is_human?: boolean;
   black_is_human?: boolean;
   white_is_stockfish?: boolean;
@@ -218,6 +224,7 @@ export interface CreateGameRequest {
   move_time_limit?: number | null;
   draw_adjudication?: boolean;
   use_nitro?: boolean;
+  routing_mode?: RoutingMode;
 }
 
 export interface GameCreatedResponse {
@@ -232,6 +239,30 @@ export interface OpenRouterModel {
   context_length: number;
   pricing_prompt: string;
   pricing_completion: string;
+  reasoning?: {
+    supported_efforts?: string[];
+    default_effort?: string | null;
+    mandatory?: boolean;
+    default_enabled?: boolean;
+    supports_max_tokens?: boolean;
+  };
+}
+
+export interface GameEfficiency {
+  request_count: number;
+  retry_count: number;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cache_read_tokens: number | null;
+  cache_write_tokens: number | null;
+  cache_hit_ratio: number | null;
+  known_cost_usd: number;
+  total_cost_usd: number | null;
+  retry_cost_usd: number | null;
+  cost_known_requests: number;
+  cache_known_requests: number;
+  avg_move_ms: number | null;
+  providers: string[];
 }
 
 export type Classification =

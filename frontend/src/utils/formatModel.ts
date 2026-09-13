@@ -21,7 +21,7 @@ export function formatModelLabel(
 ): string {
   let label = formatModelName(modelId, displayName);
   const suffixes: string[] = [];
-  if (reasoningEffort) suffixes.push(`${reasoningEffort}`);
+  if (reasoningEffort) suffixes.push(reasoningEffort === "provider_default" ? "Provider default" : reasoningEffort);
   if (temperature !== null) suffixes.push(`temp: ${temperature.toFixed(1)}`);
   if (suffixes.length > 0) label += ` (${suffixes.join(", ")})`;
   return label;

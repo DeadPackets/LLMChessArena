@@ -144,6 +144,7 @@ export default function CostDashboardPage() {
   return (
     <div className="cost-dashboard">
       <h1 className="cost-dashboard__title">Cost & Performance</h1>
+      <p>Reported spend and averages exclude unreported charges. Token totals include reported usage only.</p>
 
       {/* Summary cards */}
       <div className="cost-dashboard__summary">
@@ -153,15 +154,15 @@ export default function CostDashboardPage() {
         </div>
         <div className="cost-dashboard__card">
           <div className="cost-dashboard__card-value">${data.total_cost_usd.toFixed(4)}</div>
-          <div className="cost-dashboard__card-label">Total Cost</div>
+          <div className="cost-dashboard__card-label">Reported Spend</div>
         </div>
         <div className="cost-dashboard__card">
           <div className="cost-dashboard__card-value">{formatTokens(data.total_input_tokens + data.total_output_tokens)}</div>
-          <div className="cost-dashboard__card-label">Total Tokens</div>
+          <div className="cost-dashboard__card-label">Reported Tokens</div>
         </div>
         <div className="cost-dashboard__card">
           <div className="cost-dashboard__card-value">${data.avg_game_cost.toFixed(4)}</div>
-          <div className="cost-dashboard__card-label">Avg Cost / Game</div>
+          <div className="cost-dashboard__card-label">Reported Average / Game</div>
         </div>
       </div>
 
@@ -170,7 +171,7 @@ export default function CostDashboardPage() {
         {/* Cost per model */}
         {costChartData.length > 0 && (
           <div className="cost-dashboard__chart panel">
-            <div className="cost-dashboard__chart-title">Cost per Model</div>
+            <div className="cost-dashboard__chart-title">Reported Spend per Model</div>
             <ResponsiveContainer width="100%" height={Math.max(200, costChartData.length * 36)}>
               <BarChart data={costChartData} layout="vertical" margin={{ top: 4, right: 40, bottom: 4, left: 10 }}>
                 <XAxis type="number" tick={{ fill: "#908e87", fontSize: 11 }} tickFormatter={(v: number) => `$${v.toFixed(3)}`} />
@@ -179,7 +180,7 @@ export default function CostDashboardPage() {
                   contentStyle={ChartTooltipStyle}
                   labelStyle={ChartTooltipLabelStyle}
                   itemStyle={ChartTooltipItemStyle}
-                  formatter={(value: number | undefined) => [`$${(value ?? 0).toFixed(6)}`, "Cost"]}
+                  formatter={(value: number | undefined) => [`$${(value ?? 0).toFixed(6)}`, "Reported spend"]}
                 />
                 <Bar dataKey="cost" radius={[0, 4, 4, 0]} maxBarSize={24}>
                   {costChartData.map((_, i) => (
@@ -253,13 +254,13 @@ export default function CostDashboardPage() {
                 </th>
                 <th aria-sort={ariaSort("cost")}>
                   <button type="button" className="sortable-header" onClick={() => handleSort("cost")}>
-                    Total Cost{sortIndicator("cost")}
+                    Reported Spend{sortIndicator("cost")}
                   </button>
                 </th>
-                <th>Avg Cost/Game</th>
+                <th>Reported Average/Game</th>
                 <th aria-sort={ariaSort("tokens")}>
                   <button type="button" className="sortable-header" onClick={() => handleSort("tokens")}>
-                    Total Tokens{sortIndicator("tokens")}
+                    Reported Tokens{sortIndicator("tokens")}
                   </button>
                 </th>
                 <th>Input / Output</th>

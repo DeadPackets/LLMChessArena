@@ -60,9 +60,14 @@ DEFAULT_TEMPERATURE = float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
 MOVE_HISTORY_PLIES = int(os.getenv("MOVE_HISTORY_PLIES", "16"))
 TABLE_TALK_HISTORY = int(os.getenv("TABLE_TALK_HISTORY", "10"))
 
-# Hard HTTP timeout per LLM request; a hung provider fails the attempt instead of
-# stalling the game (the engine's retry loop then counts it as a failure).
+# HTTP failures use a separate transport retry budget from invalid chess moves.
 LLM_REQUEST_TIMEOUT = float(os.getenv("LLM_REQUEST_TIMEOUT", "120"))
+LLM_TRANSPORT_ATTEMPTS = max(1, int(os.getenv("LLM_TRANSPORT_ATTEMPTS", "3")))
+LLM_RETRY_BASE_DELAY = max(0.0, float(os.getenv("LLM_RETRY_BASE_DELAY", "1")))
+LLM_CACHE_TTL = os.getenv("LLM_CACHE_TTL", "5m")
+if LLM_CACHE_TTL not in ("5m", "1h"):
+    raise ValueError("LLM_CACHE_TTL must be 5m or 1h")
+HARNESS_VERSION = "pydantic-ai-2.43-v1"
 # Default whole-move ceiling (incl. retries) for LLM/Stockfish sides when the game
 # has no explicit move_time_limit. Never applied to humans.
 LLM_MOVE_TIMEOUT_DEFAULT = float(os.getenv("LLM_MOVE_TIMEOUT_DEFAULT", "300"))

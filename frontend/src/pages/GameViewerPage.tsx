@@ -2,7 +2,11 @@ import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { useGameWebSocket } from "../hooks/useGameWebSocket";
 import { useReplayControls } from "../hooks/useReplayControls";
-import { getGame, stopGame, createGame, deleteGame } from "../api/client";
+import { getGame, stopGame, createGame, deleteGame, fetchOpenRouterModels } from "../api/client";
+import { useGameEfficiency } from "../hooks/useGameEfficiency";
+import { formatRequestCost, formatRequestTokens } from "../utils/efficiency";
+import { rematchRequest } from "../utils/rematch";
+import GameEfficiencyPanel from "../components/game/GameEfficiencyPanel";
 import { getAdminToken } from "../utils/admin";
 import type { GameDetail } from "../types/api";
 import ChessboardPanel from "../components/game/ChessboardPanel";
@@ -126,6 +130,9 @@ export default function GameViewerPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { state, selectMove, navigate, toggleAutoFollow, submitMove, resign, isPlayer, playerSecret, reconnectExhausted, reconnect } = useGameWebSocket(gameId!);
   const announce = useAnnounce();
+  const efficiency = useGameEfficiency(gameId!, state.status);
+  const [usageExpanded, setUsageExpanded] = useState(false);
+  const requestCost = efficiency.data ? formatRequestCost(efficiency.data) : null;
 
   // Board theme
   const { boardColorPreset, customPieces, theme, setBoardColor, setPieceStyle } = useBoardTheme();
@@ -285,35 +292,21 @@ export default function GameViewerPage() {
   }, [state.status, gameId]);
 
   const [rematchPending, setRematchPending] = useState(false);
+  const [rematchError, setRematchError] = useState<string | null>(null);
   const handleRematch = useCallback(async () => {
     if (rematchPending) return;
     if (!state.whiteModel || !state.blackModel) return;
     setRematchPending(true);
+    setRematchError(null);
     try {
-      // Swap white <-> black: previous black plays white next, and vice versa.
-      const resp = await createGame({
-        white_model: state.blackModel,
-        black_model: state.whiteModel,
-        max_moves: 200,
-        white_temperature: state.blackTemperature,
-        black_temperature: state.whiteTemperature,
-        white_reasoning_effort: state.blackReasoningEffort,
-        black_reasoning_effort: state.whiteReasoningEffort,
-        white_is_human: state.blackIsHuman,
-        black_is_human: state.whiteIsHuman,
-        white_is_stockfish: state.blackIsStockfish,
-        black_is_stockfish: state.whiteIsStockfish,
-        white_stockfish_elo: state.blackStockfishElo,
-        black_stockfish_elo: state.whiteStockfishElo,
-        chaos_mode: state.chaosMode,
-        move_time_limit: state.moveTimeLimit,
-        draw_adjudication: state.drawAdjudication,
-      });
+      const models = await fetchOpenRouterModels();
+      const resp = await createGame(rematchRequest(state, models));
       if (resp.player_secret) {
         localStorage.setItem(`chess_player_secret_${resp.id}`, resp.player_secret);
       }
       navigateRoute(`/game/${resp.id}`);
     } catch {
+      setRematchError("Could not start the rematch. Please try again.");
       setRematchPending(false);
     }
   }, [rematchPending, state, navigateRoute]);
@@ -415,7 +408,24 @@ export default function GameViewerPage() {
 
   return (
     <div className="game-viewer">
-      <GameInfoHeader state={state} />
+      <div className="game-summary panel" onKeyDown={(event) => {
+        if (event.key === "Escape" && usageExpanded) {
+          setUsageExpanded(false);
+          document.getElementById("game-usage-toggle")?.focus();
+        }
+      }}>
+        <GameInfoHeader state={state} requestCost={requestCost}
+          usageError={efficiency.error !== null}
+          usageExpanded={usageExpanded} onToggleUsage={() => setUsageExpanded((open) => !open)} />
+        <GameEfficiencyPanel
+          data={efficiency.data}
+          error={efficiency.error}
+          onRetry={efficiency.retry}
+          active={state.status === "active" || state.status === "queued"}
+          expanded={usageExpanded}
+          refreshing={efficiency.refreshing}
+        />
+      </div>
 
       {adminToken && (
         <div className="admin-strip" role="group" aria-label="Admin controls">
@@ -482,8 +492,12 @@ export default function GameViewerPage() {
           blackModel={state.blackModel}
           onRematch={isCompleted ? handleRematch : undefined}
           rematchPending={rematchPending}
+          requestCost={requestCost}
+          requestTokens={efficiency.data ? formatRequestTokens(efficiency.data) : null}
         />
       )}
+
+      {rematchError && <div className="move-rejected" role="alert">{rematchError}</div>}
 
       <div className="game-viewer__main">
         {/* Column 1: Board + eval bar + merged controls bar */}

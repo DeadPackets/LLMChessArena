@@ -17,16 +17,19 @@ from app.config import (
     MIN_MOVE_TIME_LIMIT,
     MAX_MOVE_TIME_LIMIT,
 )
-from app.database import Game, Move, get_session, get_session_factory
+from app.database import Game, Move, LLMRequest, get_session, get_session_factory
 from app.models.api_models import (
     CreateGameRequest,
     GameCreatedResponse,
     GameDetail,
+    GameEfficiency,
     GameSummary,
     MoveDetail,
     PaginatedGamesResponse,
 )
 from app.models.chess_models import GameConfig
+from app.routers import openrouter_proxy
+from app.services.request_stats import get_game_usage, summarize_requests
 from app.services.board_image_service import generate_board_png, generate_board_og_png
 from app.services.stats_service import compute_game_analysis
 
@@ -90,14 +93,24 @@ async def create_game(req: CreateGameRequest, request: Request):
         and queue_state["active"] >= queue_state["max"]
     ):
         raise HTTPException(429, "Game queue is full. Please try again later.")
+    catalog = {m["id"]: m for m in await openrouter_proxy._fetch_models()}
+    efforts = {}
+    for color, is_llm in (("white", white_is_llm), ("black", black_is_llm)):
+        try:
+            efforts[color] = openrouter_proxy.normalize_reasoning_effort(
+                catalog.get(getattr(req, f"{color}_model")),
+                getattr(req, f"{color}_reasoning_effort"),
+            ) if is_llm else None
+        except ValueError as exc:
+            raise HTTPException(400, f"{color.capitalize()}: {exc}") from exc
     config = GameConfig(
         white_model=req.white_model,
         black_model=req.black_model,
         max_moves=req.max_moves,
         white_temperature=req.white_temperature,
         black_temperature=req.black_temperature,
-        white_reasoning_effort=req.white_reasoning_effort,
-        black_reasoning_effort=req.black_reasoning_effort,
+        white_reasoning_effort=efforts["white"],
+        black_reasoning_effort=efforts["black"],
         white_is_human=req.white_is_human,
         black_is_human=req.black_is_human,
         white_is_stockfish=req.white_is_stockfish,
@@ -108,6 +121,7 @@ async def create_game(req: CreateGameRequest, request: Request):
         move_time_limit=req.move_time_limit,
         draw_adjudication=req.draw_adjudication,
         use_nitro=req.use_nitro,
+        routing_mode=req.routing_mode,
     )
     player_secret = secrets.token_urlsafe(32)
 
@@ -189,6 +203,9 @@ async def list_games(
             black_temperature=r.black_temperature,
             white_reasoning_effort=r.white_reasoning_effort,
             black_reasoning_effort=r.black_reasoning_effort,
+            routing_mode=r.routing_mode,
+            use_nitro=r.use_nitro,
+            harness_version=r.harness_version,
             white_is_human=bool(r.white_is_human),
             black_is_human=bool(r.black_is_human),
             white_is_stockfish=bool(r.white_is_stockfish),
@@ -292,6 +309,15 @@ async def get_board_image(
     )
 
 
+@router.get("/{game_id}/efficiency", response_model=GameEfficiency)
+async def get_game_efficiency(game_id: str, session: AsyncSession = Depends(get_session)):
+    if not await session.get(Game, game_id):
+        raise HTTPException(404, "Game not found")
+    records = (await session.exec(select(LLMRequest).where(LLMRequest.game_id == game_id))).all()
+    moves = (await session.exec(select(Move).where(Move.game_id == game_id))).all()
+    return summarize_requests(records, moves)
+
+
 @router.get("/{game_id}", response_model=GameDetail)
 async def get_game(game_id: str, session: AsyncSession = Depends(get_session)):
     """Get full game details including all moves and evaluations."""
@@ -324,6 +350,9 @@ async def get_game(game_id: str, session: AsyncSession = Depends(get_session)):
         black_temperature=game.black_temperature,
         white_reasoning_effort=game.white_reasoning_effort,
         black_reasoning_effort=game.black_reasoning_effort,
+        routing_mode=game.routing_mode,
+        use_nitro=game.use_nitro,
+        harness_version=game.harness_version,
         white_is_human=bool(game.white_is_human),
         black_is_human=bool(game.black_is_human),
         white_is_stockfish=bool(game.white_is_stockfish),
@@ -363,7 +392,7 @@ async def get_game(game_id: str, session: AsyncSession = Depends(get_session)):
             )
             for m in move_rows
         ],
-        total_cost_usd=game.total_cost_usd or 0.0,
+        **await get_game_usage(session, game),
         analysis=analysis,
     )
 

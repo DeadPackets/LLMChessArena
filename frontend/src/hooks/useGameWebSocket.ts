@@ -31,6 +31,8 @@ const initialState: GameState = {
   blackStockfishElo: null,
   moveTimeLimit: null,
   drawAdjudication: true,
+  routingMode: null,
+  useNitro: false,
   spectatorCount: 0,
   currentFen: STARTING_FEN,
   selectedIndex: -1,
@@ -155,19 +157,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       // Build gameOverData for completed games so the banner + rematch show
       let gameOverData: GameOverData | null = null;
       if (status === "completed" && d.outcome) {
-        let totalInput = 0, totalOutput = 0, totalCost = 0;
-        for (const m of moves) {
-          totalInput += m.inputTokens ?? 0;
-          totalOutput += m.outputTokens ?? 0;
-          totalCost += m.costUsd ?? 0;
-        }
         gameOverData = {
           outcome: d.outcome as string,
           termination: (d.termination as string) ?? "",
           totalMoves: moves.length,
-          totalCostUsd: totalCost,
-          totalInputTokens: totalInput,
-          totalOutputTokens: totalOutput,
+          totalCostUsd: (d.total_cost_usd as number | null) ?? null,
+          totalInputTokens: (d.total_input_tokens as number | null) ?? null,
+          totalOutputTokens: (d.total_output_tokens as number | null) ?? null,
+          knownCostUsd: (d.known_cost_usd as number | null) ?? null,
+          knownInputTokens: (d.known_input_tokens as number | null) ?? null,
+          knownOutputTokens: (d.known_output_tokens as number | null) ?? null,
           pgn: "",
         };
       }
@@ -200,6 +199,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         blackStockfishElo: (d.black_stockfish_elo as number | null) ?? null,
         moveTimeLimit: (d.move_time_limit as number | null) ?? null,
         drawAdjudication: (d.draw_adjudication as boolean) ?? true,
+        routingMode: d.routing_mode === "responsive" || d.routing_mode === "economy" ? d.routing_mode : null,
+        useNitro: d.use_nitro === true,
         spectatorCount: (d.spectator_count as number) ?? 0,
         statusMessage: null,
         gameOverData,
@@ -256,6 +257,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         whiteIsStockfish: action.payload.white_is_stockfish ?? false,
         blackIsStockfish: action.payload.black_is_stockfish ?? false,
         chaosMode: action.payload.chaos_mode ?? false,
+        routingMode: action.payload.routing_mode === undefined ? state.routingMode : action.payload.routing_mode,
+        useNitro: action.payload.use_nitro ?? state.useNitro,
         status: "active",
       };
 
@@ -265,9 +268,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         outcome: d.outcome as string,
         termination: d.termination as string,
         totalMoves: (d.total_moves as number) ?? 0,
-        totalCostUsd: (d.total_cost_usd as number) ?? 0,
-        totalInputTokens: (d.total_input_tokens as number) ?? 0,
-        totalOutputTokens: (d.total_output_tokens as number) ?? 0,
+        totalCostUsd: (d.total_cost_usd as number | null) ?? null,
+        totalInputTokens: (d.total_input_tokens as number | null) ?? null,
+        totalOutputTokens: (d.total_output_tokens as number | null) ?? null,
+        knownCostUsd: (d.known_cost_usd as number | null) ?? null,
+        knownInputTokens: (d.known_input_tokens as number | null) ?? null,
+        knownOutputTokens: (d.known_output_tokens as number | null) ?? null,
         pgn: (d.pgn as string) ?? "",
       };
       const newStatus = gameOverData.termination === "stopped" ? "stopped" : "completed";

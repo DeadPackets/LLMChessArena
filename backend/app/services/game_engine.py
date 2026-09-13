@@ -9,7 +9,10 @@ import chess
 import chess.pgn
 
 from pydantic_ai import PromptedOutput
-from pydantic_ai.settings import ModelSettings
+from pydantic_ai.models.openrouter import OpenRouterModelSettings
+from pydantic_ai.exceptions import UnexpectedModelBehavior
+from openai import APIConnectionError
+import httpx
 
 from app.config import (
     MAX_MOVES_PER_SIDE,
@@ -21,15 +24,23 @@ from app.config import (
     LLM_REQUEST_TIMEOUT,
     LLM_MOVE_TIMEOUT_DEFAULT,
     MOVE_WATCHDOG_INTERVAL,
+    LLM_TRANSPORT_ATTEMPTS,
+    LLM_RETRY_BASE_DELAY,
+    LLM_CACHE_TTL,
+    MOVE_HISTORY_PLIES,
+    TABLE_TALK_HISTORY,
+    HARNESS_VERSION,
 )
 from app.models.chess_models import (
     ChessMove,
+    LLMRequestRecord,
     GameConfig,
     GameResult,
     MoveRecord,
     PositionEval,
 )
 from app.services.chess_agent import chess_agent, ChessGameContext, build_user_prompt
+from app.services.openrouter_model import arena_model
 from app.services.elo_service import rating_key
 from app.services.move_classifier import (
     classify_move,
@@ -65,6 +76,9 @@ class GameEngine:
         self.board = chess.Board()
         self.move_history: list[MoveRecord] = []
         self.move_callbacks: list[Callable[[MoveRecord], Awaitable[None]]] = []
+        self.request_records: list[LLMRequestRecord] = []
+        self.request_callbacks: list[Callable[[LLMRequestRecord], Awaitable[None]]] = []
+        self._move_had_transport_error = False
         self.illegal_move_callbacks: list[Callable[[dict], Awaitable[None]]] = []
         self.status_callback: Callable[[str], Awaitable[None]] | None = None
         self.awaiting_human_move_callback: Callable[[str], Awaitable[None]] | None = (
@@ -196,7 +210,7 @@ class GameEngine:
                 await self._emit_status(f"{current_color.title()} timed out!")
                 return self._build_result(
                     outcome=f"{winner}_wins",
-                    termination="timeout",
+                    termination="api_error" if not is_human and not is_stockfish and (self.config.move_time_limit is None or self._move_had_transport_error) else "timeout",
                 )
             finally:
                 if heartbeat:
@@ -231,12 +245,11 @@ class GameEngine:
                         else "illegal_moves"
                     )
                     logger.warning(
-                        "Move %d: %s (%s) forfeited after %d consecutive %s",
+                        "Move %d: %s (%s) forfeited: %s",
                         self.board.fullmove_number,
                         model_name,
                         current_color,
-                        self._consecutive_illegal_moves,
-                        "API errors" if termination == "api_error" else "illegal moves",
+                        termination,
                     )
                     return self._build_result(
                         outcome=f"{winner}_wins",
@@ -565,220 +578,132 @@ class GameEngine:
         Returns (move, narration, table_talk, elapsed_ms, usage_data) or None on forfeit.
         usage_data contains input_tokens, output_tokens, cost_usd.
         """
-        history_dicts = [r.model_dump() for r in self.move_history]
-        error_context = ""
+        started = time.monotonic()
         self._forfeit_was_api_error = False
-        api_errors = 0
-
-        while self._consecutive_illegal_moves < MAX_CONSECUTIVE_ILLEGAL_MOVES:
-            ctx = ChessGameContext(
-                board=self.board.copy(),
-                color=color,
-                move_history=history_dicts,
-            )
-
-            # After 3 consecutive illegal moves, inject legal moves as a lifeline
-            show_legal = self._consecutive_illegal_moves >= 3
-            user_prompt = build_user_prompt(
-                self.board,
-                color,
-                history_dicts,
-                error_context,
-                include_legal_moves=show_legal,
-            )
-
-            start = time.monotonic()
-            # Build per-color model settings from config
-            temp = (
-                self.config.white_temperature
-                if color == "white"
-                else self.config.black_temperature
-            )
-            reasoning = (
-                self.config.white_reasoning_effort
-                if color == "white"
-                else self.config.black_reasoning_effort
-            )
-            settings: ModelSettings = {
-                "max_tokens": LLM_MAX_TOKENS,
-                "timeout": LLM_REQUEST_TIMEOUT,
-            }
-            reasoning_on = bool(reasoning) and reasoning != "none"
-            # Temperature: fall back to the rated default when unset. Reasoning
-            # models frequently reject a non-1.0 temperature (OpenAI o-series/GPT-5
-            # return a hard 400) or ignore it, so we omit it entirely whenever
-            # reasoning effort is active — the game stays rated regardless, since
-            # rated status tracks whether the user *left* temperature at the default,
-            # not whether the provider sampled at it.
-            if not reasoning_on:
-                settings["temperature"] = temp if temp is not None else DEFAULT_TEMPERATURE
-
-            # extra_body carries OpenRouter-specific options: reasoning effort,
-            # sticky-routing session id (keeps a game+color pinned to one provider
-            # so its cache stays warm), and an Anthropic cache breakpoint.
-            extra_body: dict = {}
-            if reasoning_on:
-                extra_body["reasoning"] = {"effort": reasoning}
-            if self.game_id:
-                extra_body["session_id"] = f"{self.game_id}:{color}"
-            # Anthropic needs an explicit cache_control breakpoint to cache the
-            # (static) system prompt; other providers cache automatically, so we
-            # only send it for Anthropic to avoid an unknown field elsewhere.
-            if model_name.startswith("anthropic/"):
-                extra_body["cache_control"] = {"type": "ephemeral"}
-            if extra_body:
-                settings["extra_body"] = extra_body
-
-            logger.debug(
-                "LLM call: model=%s, color=%s, attempt=%d, show_legal=%s, temp=%s, reasoning=%s",
-                model_name,
-                color,
-                self._consecutive_illegal_moves + 1,
-                show_legal,
-                temp,
-                reasoning,
-            )
+        self._move_had_transport_error = False
+        self._consecutive_illegal_moves = 0
+        history = [r.model_dump() for r in self.move_history[-max(MOVE_HISTORY_PLIES, TABLE_TALK_HISTORY):]]
+        effort = getattr(self.config, f"{color}_reasoning_effort")
+        routing = self.config.routing_mode or ("nitro" if self.config.use_nitro else "economy")
+        settings: OpenRouterModelSettings = {
+            "max_tokens": LLM_MAX_TOKENS,
+            "timeout": LLM_REQUEST_TIMEOUT,
+            "openrouter_usage": {"include": True},
+            "openrouter_cache_instructions": LLM_CACHE_TTL,
+        }
+        if effort and effort != "provider_default":
+            settings["openrouter_reasoning"] = {"effort": effort}
+        if effort == "none":
+            temp = getattr(self.config, f"{color}_temperature")
+            settings["temperature"] = temp if temp is not None else DEFAULT_TEMPERATURE
+        if self.game_id:
+            settings["extra_body"] = {"session_id": f"{self.game_id}:{color}"}
+        if routing == "responsive":
+            routed_model = model_name
+            settings["openrouter_provider"] = {"sort": "latency"}
+        else:
+            routed_model = f"{model_name}:{'nitro' if routing == 'nitro' else 'floor'}"
+        deps = ChessGameContext(
+            board=self.board.copy(), color=color, move_history=history,
+            model_name=model_name, reasoning_effort=effort, routing_mode=routing,
+            chaos_mode=self.config.chaos_mode, status_callback=self._emit_status,
+            illegal_callback=self._emit_illegal_move,
+        )
+        prompt = build_user_prompt(self.board, color, history)
+        transport_errors = 0
+        persisted = 0
+        while True:
+            deps.output_mode = "prompted" if color in self._prompted_output_colors else "tool"
+            kwargs = {"output_type": PromptedOutput(ChessMove)} if deps.output_mode == "prompted" else {}
+            retry_delay = None
+            fallback = False
             try:
-                # :nitro sorts providers by throughput (fastest); :floor sorts by
-                # price (cheapest). Default to cheapest unless the game opted into speed.
-                variant = "nitro" if self.config.use_nitro else "floor"
-                run_kwargs: dict = {}
-                if color in self._prompted_output_colors:
-                    run_kwargs["output_type"] = PromptedOutput(ChessMove)
                 result = await chess_agent.run(
-                    user_prompt,
-                    deps=ctx,
-                    model=f"openrouter:{model_name}:{variant}",
-                    model_settings=settings,
-                    **run_kwargs,
+                    prompt, deps=deps, model=arena_model(routed_model),
+                    model_settings=settings, **kwargs,
                 )
-            except Exception as e:
-                elapsed_ms = int((time.monotonic() - start) * 1000)
-                msg = str(e).lower()
-                if ("tool_choice" in msg or "tool choice" in msg) and (
-                    color not in self._prompted_output_colors
-                ):
-                    # Provider rejects forced tool_choice (thinking mode); fall back
-                    # to prompted JSON output for this side for the rest of the game.
+            except asyncio.CancelledError:
+                if deps.current:
+                    deps.current.status = "cancelled"
+                    deps.current.elapsed_ms = int((time.monotonic() - deps.request_started) * 1000)
+                raise
+            except UnexpectedModelBehavior:
+                if not deps.response_received:
+                    self._forfeit_was_api_error = True
+                    if deps.current:
+                        deps.current.status = "provider_error"
+                        deps.current.elapsed_ms = int((time.monotonic() - deps.request_started) * 1000)
+                    return None
+                if deps.current and deps.current.status == "invalid_output":
+                    await deps.reject("(invalid output)", "Response did not match the move format")
+                self._consecutive_illegal_moves = deps.invalid_count
+                return None
+            except Exception as exc:
+                code = getattr(exc, "status_code", None)
+                transient = code in (408, 429) or (isinstance(code, int) and code >= 500) or isinstance(exc, (httpx.TransportError, APIConnectionError, TimeoutError))
+                # Forced tool output is unsupported by some reasoning routes.
+                fallback = code == 400 and any(term in str(exc).lower() for term in ("tool_choice", "tool choice")) and deps.output_mode == "tool"
+                if deps.current is None or deps.current in deps.records[:persisted]:
+                    deps.request_started = time.monotonic()
+                    deps.current = LLMRequestRecord(
+                        move_number=self.board.fullmove_number, color=color, model=model_name,
+                        attempt=len(deps.records) + 1, output_mode=deps.output_mode,
+                        reasoning_effort=effort, routing_mode=routing,
+                        harness_version=HARNESS_VERSION, status="provider_error", elapsed_ms=0,
+                    )
+                    deps.records.append(deps.current)
+                deps.current.status = "transport_error" if transient else "provider_error"
+                deps.current.elapsed_ms = int((time.monotonic() - deps.request_started) * 1000)
+                logger.warning("LLM request failed: game=%s color=%s status=%s code=%s", self.game_id, color, deps.current.status, code)
+                if fallback:
                     self._prompted_output_colors.add(color)
-                    logger.info(
-                        "Structured-output fallback: model=%s (%s) switched to PromptedOutput",
-                        model_name,
-                        color,
-                    )
-                    continue
-                self._consecutive_illegal_moves += 1
-                api_errors += 1
-                error_context = f"API error: {e}"
-                logger.error(
-                    "LLM call failed: model=%s, error=%s, elapsed=%dms, consecutive_failures=%d",
-                    model_name,
-                    e,
-                    elapsed_ms,
-                    self._consecutive_illegal_moves,
-                )
-                await self._emit_illegal_move(
-                    color=color,
-                    model=model_name,
-                    attempted_move="(API error)",
-                    reason=str(e),
-                    attempt=self._consecutive_illegal_moves,
-                )
-                continue
-            elapsed_ms = int((time.monotonic() - start) * 1000)
-            logger.debug("LLM response: model=%s, elapsed=%dms", model_name, elapsed_ms)
-
-            # Extract token/cost data from pydantic-ai result
-            usage = result.usage
-            provider_details = result.response.provider_details or {}
-            usage_data = {
-                "input_tokens": usage.input_tokens,
-                "output_tokens": usage.output_tokens,
-                "cost_usd": provider_details.get("cost"),
-            }
-
-            uci_str = result.output.move.strip()
-            narration = result.output.narration
-            table_talk = result.output.table_talk
-
-            try:
-                move = chess.Move.from_uci(uci_str)
-                if move in self.board.legal_moves:
-                    self._consecutive_illegal_moves = 0  # Reset on legal move
-                    self._last_move_was_chaos = False
-                    logger.debug("LLM move accepted: %s (%s)", uci_str, model_name)
-                    return move, narration, table_talk, elapsed_ms, usage_data
-                elif self.config.chaos_mode and self._is_valid_chaos_move(move, color):
-                    # Chaos mode: illegal but structurally valid — force it
-                    self._consecutive_illegal_moves = 0
-                    self._last_move_was_chaos = True
-                    logger.info(
-                        "Chaos move accepted: model=%s, uci=%s (illegal but own piece on source)",
-                        model_name,
-                        uci_str,
-                    )
+                elif transient:
+                    self._move_had_transport_error = True
+                    transport_errors += 1
+                    if transport_errors < LLM_TRANSPORT_ATTEMPTS:
+                        retry_after = getattr(exc, "retry_after", None)
+                        retry_delay = max(0.0, retry_after) if retry_after is not None else LLM_RETRY_BASE_DELAY * 2 ** (transport_errors - 1)
+                if not fallback and retry_delay is None:
+                    self._forfeit_was_api_error = True
+                    return None
+            else:
+                move = chess.Move.from_uci(result.output.move.strip())
+                self._consecutive_illegal_moves = 0
+                self._last_move_was_chaos = move not in self.board.legal_moves
+                if self._last_move_was_chaos:
                     await self._emit_chaos_move(
-                        color=color,
-                        model=model_name,
-                        attempted_move=uci_str,
+                        color=color, model=model_name, attempted_move=move.uci(),
                         move_number=self.board.fullmove_number,
                     )
-                    return move, narration, table_talk, elapsed_ms, usage_data
-                else:
-                    self._consecutive_illegal_moves += 1
-                    logger.warning(
-                        "Illegal move: model=%s, attempted=%s, consecutive=%d/%d",
-                        model_name,
-                        uci_str,
-                        self._consecutive_illegal_moves,
-                        MAX_CONSECUTIVE_ILLEGAL_MOVES,
-                    )
-                    error_context = (
-                        f"ILLEGAL MOVE: '{uci_str}' is valid UCI notation but is not a "
-                        f"legal move in this position. The piece cannot move there. "
-                        f"Re-read the board and pick a different move."
-                    )
-                    await self._emit_illegal_move(
-                        color=color,
-                        model=model_name,
-                        attempted_move=uci_str,
-                        reason="Illegal move",
-                        attempt=self._consecutive_illegal_moves,
-                    )
-            except (ValueError, chess.InvalidMoveError):
-                self._consecutive_illegal_moves += 1
-                logger.warning(
-                    "Invalid UCI: model=%s, attempted='%s', consecutive=%d/%d",
-                    model_name,
-                    uci_str,
-                    self._consecutive_illegal_moves,
-                    MAX_CONSECUTIVE_ILLEGAL_MOVES,
+                await deps.status(f"{color.title()}: move accepted")
+                usage = {
+                    name: sum(getattr(r, name) for r in deps.records)
+                    if all(getattr(r, name) is not None for r in deps.records) else None
+                    for name in ("input_tokens", "output_tokens", "cost_usd")
+                }
+                return move, result.output.narration, result.output.table_talk, int((time.monotonic() - started) * 1000), usage
+            finally:
+                pending = deps.records[persisted:]
+                self.request_records.extend(pending)
+                for record in pending:
+                    logger.info("llm_request game=%s record=%s", self.game_id, record.model_dump_json())
+                    for callback in self.request_callbacks:
+                        try:
+                            await callback(record)
+                        except Exception:
+                            logger.exception("Request persistence callback failed: game=%s request=%s", self.game_id, record.id)
+                persisted = len(deps.records)
+            if fallback:
+                await deps.status(f"{color.title()}: retrying with compatible move format…")
+            elif retry_delay is not None:
+                await deps.status(f"{color.title()}: provider unavailable; retrying in {retry_delay:g}s…")
+                await asyncio.sleep(retry_delay)
+            if deps.invalid_count:
+                prompt = build_user_prompt(
+                    self.board, color, history,
+                    "Previous responses did not produce a legal move. Check the position and move format.",
+                    include_legal_moves=deps.invalid_count >= 3,
                 )
-                error_context = (
-                    f"INVALID UCI: '{uci_str}' is not valid UCI notation. "
-                    f"UCI moves must be 4-5 lowercase characters: source square + "
-                    f"destination square (e.g. 'e2e4', 'g1f3', 'e7e8q'). "
-                    f"Do NOT use SAN notation like 'Nf3' or 'O-O'."
-                )
-                await self._emit_illegal_move(
-                    color=color,
-                    model=model_name,
-                    attempted_move=uci_str,
-                    reason="Invalid UCI notation",
-                    attempt=self._consecutive_illegal_moves,
-                )
-
-        # All failures were API errors: the model never produced a move at all,
-        # so this is an infra forfeit, not a chess one (never rated).
-        self._forfeit_was_api_error = api_errors >= MAX_CONSECUTIVE_ILLEGAL_MOVES
-        logger.error(
-            "Forfeit: model=%s (%s) reached %d consecutive %s",
-            model_name,
-            color,
-            MAX_CONSECUTIVE_ILLEGAL_MOVES,
-            "API errors" if self._forfeit_was_api_error else "illegal moves",
-        )
-        return None  # Forfeit after MAX_CONSECUTIVE_ILLEGAL_MOVES consecutive illegal moves
 
     async def _emit_illegal_move(
         self, *, color: str, model: str, attempted_move: str, reason: str, attempt: int
@@ -883,9 +808,9 @@ class GameEngine:
     def _build_result(self, outcome: str, termination: str) -> GameResult:
         """Build the final GameResult with PGN and aggregated cost data."""
         pgn = self._generate_pgn()
-        total_input = sum(m.input_tokens or 0 for m in self.move_history)
-        total_output = sum(m.output_tokens or 0 for m in self.move_history)
-        total_cost = sum(m.cost_usd or 0.0 for m in self.move_history)
+        total_input = sum(r.input_tokens or 0 for r in self.request_records)
+        total_output = sum(r.output_tokens or 0 for r in self.request_records)
+        total_cost = sum(r.cost_usd or 0.0 for r in self.request_records)
         return GameResult(
             outcome=outcome,
             termination=termination,
@@ -896,9 +821,12 @@ class GameEngine:
             black_model=self.config.black_model,
             opening_eco=self._last_opening["eco"] if self._last_opening else None,
             opening_name=self._last_opening["name"] if self._last_opening else None,
-            total_input_tokens=total_input,
-            total_output_tokens=total_output,
-            total_cost_usd=total_cost,
+            total_input_tokens=total_input if all(r.input_tokens is not None for r in self.request_records) else None,
+            total_output_tokens=total_output if all(r.output_tokens is not None for r in self.request_records) else None,
+            total_cost_usd=total_cost if all(r.cost_usd is not None for r in self.request_records) else None,
+            known_input_tokens=total_input,
+            known_output_tokens=total_output,
+            known_cost_usd=total_cost,
         )
 
     def _generate_pgn(self) -> str:

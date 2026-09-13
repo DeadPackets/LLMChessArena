@@ -7,7 +7,7 @@ from collections import defaultdict
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.database import Game, Move, LLMModel
+from app.database import Game, Move, LLMModel, LLMRequest
 from sqlalchemy import func as sa_func
 
 from app.config import DEFAULT_MODEL_ELO
@@ -492,10 +492,7 @@ async def compute_head_to_head(
 
 
 async def compute_platform_overview(session: AsyncSession) -> PlatformOverview:
-    """Compute platform-wide cost/token/performance stats with per-model breakdowns.
-
-    Uses a single bulk query for all moves (avoids N+1 per-game queries).
-    """
+    """Compute known cost/token subtotals and accepted-move latency by model."""
     # Get all completed games
     results = await session.exec(
         select(Game).where(
@@ -509,7 +506,7 @@ async def compute_platform_overview(session: AsyncSession) -> PlatformOverview:
     if total_games == 0:
         return PlatformOverview()
 
-    total_cost = sum(g.total_cost_usd or 0.0 for g in games)
+    total_cost = 0.0
 
     # Collect all leaderboard identities (model + reasoning tier) that participated
     model_ids: set[str] = set()
@@ -544,21 +541,32 @@ async def compute_platform_overview(session: AsyncSession) -> PlatformOverview:
         select(Move).where(Move.game_id.in_(game_ids))  # type: ignore[union-attr]
     )
     all_moves = move_results.all()
+    request_results = await session.exec(
+        select(LLMRequest).where(LLMRequest.game_id.in_(game_ids))
+    )
+    all_requests = request_results.all()
+    tracked_games = {r.game_id for r in all_requests} | {
+        g.id for g in games if g.harness_version is not None
+    }
 
     for move in all_moves:
-        game = game_map.get(move.game_id)
-        if not game:
-            continue
+        game = game_map[move.game_id]
         mid = _white_key(game) if move.color == "white" else _black_key(game)
-        inp = move.input_tokens or 0
-        out = move.output_tokens or 0
-        cost = move.cost_usd or 0.0
+        breakdowns[mid]["response_times"].append(move.response_time_ms or 0)
+
+    legacy_moves = [m for m in all_moves if m.game_id not in tracked_games]
+    for usage in [*all_requests, *legacy_moves]:
+        game = game_map[usage.game_id]
+        mid = _white_key(game) if usage.color == "white" else _black_key(game)
+        inp = usage.input_tokens or 0
+        out = usage.output_tokens or 0
+        cost = usage.cost_usd or 0.0
 
         breakdowns[mid]["cost"] += cost
         breakdowns[mid]["input_tokens"] += inp
         breakdowns[mid]["output_tokens"] += out
-        breakdowns[mid]["response_times"].append(move.response_time_ms or 0)
 
+        total_cost += cost
         total_input_tokens += inp
         total_output_tokens += out
 

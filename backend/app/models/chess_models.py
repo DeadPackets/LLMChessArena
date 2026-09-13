@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from typing import Literal
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-ReasoningEffort = Literal["none", "low", "medium", "high"]
+ReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
+ConfiguredReasoningEffort = ReasoningEffort | Literal["provider_default"]
+RoutingMode = Literal["economy", "responsive"]
 
 
 class ChessMove(BaseModel):
@@ -31,8 +34,8 @@ class GameConfig(BaseModel):
     max_moves: int = Field(default=200, ge=1)  # per side
     white_temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     black_temperature: float | None = Field(default=None, ge=0.0, le=2.0)
-    white_reasoning_effort: ReasoningEffort | None = None
-    black_reasoning_effort: ReasoningEffort | None = None
+    white_reasoning_effort: ConfiguredReasoningEffort | None = None
+    black_reasoning_effort: ConfiguredReasoningEffort | None = None
     white_is_human: bool = False
     black_is_human: bool = False
     white_is_stockfish: bool = False
@@ -42,9 +45,7 @@ class GameConfig(BaseModel):
     chaos_mode: bool = False
     move_time_limit: float | None = Field(default=None, gt=0)
     draw_adjudication: bool = True  # Auto-draw if eval within ±20cp for 30+ moves
-    # Routing preference: False (default) sorts OpenRouter providers by price
-    # (cheapest, the ":floor" variant); True sorts by throughput (":nitro").
-    # Speed vs cost — does not affect results, so it is not persisted or rated.
+    routing_mode: RoutingMode | None = None
     use_nitro: bool = False
 
 
@@ -96,6 +97,31 @@ class MoveRecord(BaseModel):
     is_chaos_move: bool = False
 
 
+class LLMRequestRecord(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    move_number: int
+    color: str
+    model: str
+    provider: str | None = None
+    request_id: str | None = None
+    attempt: int
+    output_mode: str
+    reasoning_effort: str | None = None
+    routing_mode: str
+    harness_version: str
+    status: Literal[
+        "accepted", "illegal_move", "invalid_output", "transport_error",
+        "provider_error", "cancelled",
+    ] = "invalid_output"
+    elapsed_ms: int
+    first_token_ms: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    cache_read_tokens: int | None = None
+    cache_write_tokens: int | None = None
+    cost_usd: float | None = None
+
+
 class GameResult(BaseModel):
     outcome: str  # "white_wins", "black_wins", "draw", "forfeit_white", "forfeit_black"
     termination: str  # "checkmate", "stalemate", "insufficient_material", "repetition", "fifty_moves", "max_moves", "illegal_moves"
@@ -107,6 +133,9 @@ class GameResult(BaseModel):
     opening_eco: str | None = None
     opening_name: str | None = None
     # Aggregated token & cost tracking
-    total_input_tokens: int = 0
-    total_output_tokens: int = 0
-    total_cost_usd: float = 0.0
+    total_input_tokens: int | None = None
+    total_output_tokens: int | None = None
+    total_cost_usd: float | None = None
+    known_input_tokens: int = 0
+    known_output_tokens: int = 0
+    known_cost_usd: float = 0.0

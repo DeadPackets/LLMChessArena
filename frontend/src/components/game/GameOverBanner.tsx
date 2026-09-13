@@ -10,6 +10,8 @@ interface Props {
   blackModel: string | null;
   onRematch?: () => void;
   rematchPending?: boolean;
+  requestCost: string | null;
+  requestTokens: string | null;
 }
 
 function outcomeDisplay(outcome: string, whiteModel: string | null, blackModel: string | null) {
@@ -72,7 +74,7 @@ function SeriesScore({ whiteModel, blackModel }: { whiteModel: string; blackMode
   );
 }
 
-export default function GameOverBanner({ data, whiteModel, blackModel, onRematch, rematchPending }: Props) {
+export default function GameOverBanner({ data, whiteModel, blackModel, onRematch, rematchPending, requestCost, requestTokens }: Props) {
   const { title, cls } = outcomeDisplay(data.outcome, whiteModel, blackModel);
   const titleId = useId();
 
@@ -95,18 +97,18 @@ export default function GameOverBanner({ data, whiteModel, blackModel, onRematch
           <span className="game-over-banner__stat-value">{data.totalMoves}</span>{" "}
           moves
         </div>
-        <div>
-          <span className="game-over-banner__stat-value">
-            {(data.totalInputTokens + data.totalOutputTokens).toLocaleString()}
-          </span>{" "}
-          tokens
-        </div>
-        {data.totalCostUsd > 0 && (
+        {requestTokens !== null && (
+          <div>
+            <span className="game-over-banner__stat-value">{requestTokens}</span>{" "}
+            request tokens
+          </div>
+        )}
+        {requestCost !== null && (
           <div>
             <span className="game-over-banner__stat-value">
-              ${data.totalCostUsd.toFixed(4)}
+              {requestCost}
             </span>{" "}
-            cost
+            · all attempts
           </div>
         )}
       </div>

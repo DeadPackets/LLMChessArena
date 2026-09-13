@@ -1,4 +1,4 @@
-import type { GameDetail, ModelStats, EnhancedModelStats, ModelDetailStats, HeadToHeadRecord, HeadToHeadComparison, OpeningStats, EloHistoryPoint, CreateGameRequest, GameCreatedResponse, PlatformOverview, OpenRouterModel, PaginatedGamesResponse, QueueStatus } from "../types/api";
+import type { GameDetail, GameEfficiency, ModelStats, EnhancedModelStats, ModelDetailStats, HeadToHeadRecord, HeadToHeadComparison, OpeningStats, EloHistoryPoint, CreateGameRequest, GameCreatedResponse, PlatformOverview, OpenRouterModel, PaginatedGamesResponse, QueueStatus } from "../types/api";
 
 const BASE = "/api";
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -19,6 +19,9 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (init?.signal?.aborted) abort();
+  else init?.signal?.addEventListener("abort", abort, { once: true });
   const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
 
   try {
@@ -57,6 +60,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw err;
   } finally {
     clearTimeout(timeoutId);
+    init?.signal?.removeEventListener("abort", abort);
   }
 }
 
@@ -83,6 +87,10 @@ export async function listGames(params?: {
 
 export async function getGame(gameId: string): Promise<GameDetail> {
   return request<GameDetail>(`/games/${gameId}`);
+}
+
+export async function getGameEfficiency(gameId: string, signal?: AbortSignal): Promise<GameEfficiency> {
+  return request<GameEfficiency>(`/games/${gameId}/efficiency`, { signal });
 }
 
 export async function createGame(req: CreateGameRequest): Promise<GameCreatedResponse> {

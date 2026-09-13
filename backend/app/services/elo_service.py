@@ -10,13 +10,15 @@ RATING_KEY_SEP = "::"
 
 
 def _effort_norm(effort: str | None) -> str:
-    """Normalize a reasoning effort to one of low/medium/high/none."""
-    return effort if effort in ("low", "medium", "high") else "none"
+    """Keep legacy unset tiers as none; new games store provider_default explicitly."""
+    return effort if effort in ("none", "minimal", "low", "medium", "high", "xhigh", "provider_default") else "none"
 
 
 def reasoning_suffix(effort: str | None) -> str:
     """Human-readable reasoning tier, e.g. ``Reasoning, High`` / ``Non-reasoning``."""
     e = _effort_norm(effort)
+    if e == "provider_default":
+        return "Provider default"
     return "Non-reasoning" if e == "none" else f"Reasoning, {e.capitalize()}"
 
 
