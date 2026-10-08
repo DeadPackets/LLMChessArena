@@ -5,6 +5,7 @@ import hashlib
 import ipaddress
 import logging
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -67,11 +68,21 @@ def _creator_hash(ip: str) -> str:
 
 
 TURNSTILE_ACTION = "create_game"
+# siteverify accepted the same real token twice in testing, so enforce single use here.
+_used_turnstile_tokens: dict[str, float] = {}
 
 
 async def _verify_turnstile(token: str | None, ip: str) -> bool:
     if not token or len(token) > 2048:
         return False
+    now = time.monotonic()
+    for key, expires in list(_used_turnstile_tokens.items()):
+        if expires < now:
+            del _used_turnstile_tokens[key]
+    key = hashlib.sha256(token.encode()).hexdigest()
+    if key in _used_turnstile_tokens:
+        return False
+    _used_turnstile_tokens[key] = now + 300  # Turnstile tokens live 5 minutes
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
