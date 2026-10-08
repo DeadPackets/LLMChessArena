@@ -182,7 +182,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         moves,
         currentFen: lastFen,
         selectedIndex: lastIdx,
-        autoFollow: status === "active",
+        autoFollow: status === "active" || status === "queued",
         openingEco: opening?.eco ?? null,
         openingName: opening?.name ?? null,
         whiteTemperature: (d.white_temperature as number | null) ?? null,
@@ -260,6 +260,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         routingMode: action.payload.routing_mode === undefined ? state.routingMode : action.payload.routing_mode,
         useNitro: action.payload.use_nitro ?? state.useNitro,
         status: "active",
+        autoFollow: true,
       };
 
     case "GAME_OVER": {
@@ -295,7 +296,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         selectedIndex: idx,
         currentFen: fen,
-        autoFollow: false,
+        autoFollow: idx === state.moves.length - 1 && (state.status === "active" || state.status === "queued"),
       };
     }
 
@@ -322,7 +323,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         selectedIndex: newIdx,
         currentFen: fen,
-        autoFollow: isAtLast && state.status === "active",
+        autoFollow: isAtLast && (state.status === "active" || state.status === "queued"),
       };
     }
 
@@ -343,13 +344,19 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case "CONNECTION_STATUS":
       return { ...state, connectionStatus: action.payload };
 
-    case "AWAITING_HUMAN_MOVE":
+    case "AWAITING_HUMAN_MOVE": {
+      // Snap to the live position: a stale board would make every move illegal.
+      const last = state.moves.length - 1;
       return {
         ...state,
         awaitingHumanMove: action.payload.color,
         statusMessage: null,
         moveError: null,
+        autoFollow: true,
+        selectedIndex: last,
+        currentFen: last >= 0 ? state.moves[last].fenAfter : STARTING_FEN,
       };
+    }
 
     case "ILLEGAL_MOVE_ATTEMPT":
       return {
@@ -523,9 +530,12 @@ export function useGameWebSocket(gameId: string) {
     dispatch({ type: "TOGGLE_AUTO_FOLLOW" });
   }, []);
 
-  const playerSecret = typeof window !== "undefined"
-    ? localStorage.getItem(`chess_player_secret_${gameId}`)
-    : null;
+  let playerSecret: string | null = null;
+  try {
+    playerSecret = localStorage.getItem(`chess_player_secret_${gameId}`);
+  } catch {
+    // Storage blocked (e.g. Safari "Block all cookies"): treat as spectator.
+  }
   const isPlayer = !!playerSecret && state.status !== "completed" && state.status !== "stopped";
 
   const submitMove = useCallback((uci: string) => {

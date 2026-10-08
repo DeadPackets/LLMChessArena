@@ -558,6 +558,8 @@ export default function ChessboardPanel({
       onKeyDown={handleBoardKeyDown}
     >
       <Chessboard
+        // react-chessboard memoizes each piece's canDrag on position only; remount when the turn flips.
+        key={`${humanColor}-${isHumanTurn}`}
         id="game-board"
         position={displayFen}
         arePiecesDraggable={isHumanTurn}

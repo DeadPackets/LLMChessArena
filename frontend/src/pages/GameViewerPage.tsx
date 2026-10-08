@@ -2,7 +2,8 @@ import { Suspense, useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { useGameWebSocket } from "../hooks/useGameWebSocket";
 import { useReplayControls } from "../hooks/useReplayControls";
-import { getGame, stopGame, createGame, deleteGame, fetchOpenRouterModels } from "../api/client";
+import { getGame, stopGame, deleteGame, fetchOpenRouterModels } from "../api/client";
+import NewGameDialog, { type PlayerType, type RematchSettings } from "../components/gamelist/NewGameDialog";
 import { useGameEfficiency } from "../hooks/useGameEfficiency";
 import { formatRequestCost, formatRequestTokens } from "../utils/efficiency";
 import { rematchRequest } from "../utils/rematch";
@@ -110,11 +111,14 @@ function MoveTimer({ timeLimit, active }: { timeLimit: number; active: boolean }
       </div>
       <div className="move-timer__text">
         <span className="move-timer__time">{display}</span>
-        <span className="move-timer__label">Your turn — drag a piece to move</span>
+        <span className="move-timer__label">Your turn — tap or drag a piece to move</span>
       </div>
     </div>
   );
 }
+
+// Mirrors the backend HUMAN_MOVE_TIMEOUT_DEFAULT (idle humans forfeit on time).
+const HUMAN_MOVE_TIMEOUT_S = 900;
 
 function detectSoundType(san: string): SoundType {
   if (san.endsWith("#")) return "checkmate";
@@ -293,23 +297,27 @@ export default function GameViewerPage() {
 
   const [rematchPending, setRematchPending] = useState(false);
   const [rematchError, setRematchError] = useState<string | null>(null);
+  const [rematchSettings, setRematchSettings] = useState<RematchSettings | null>(null);
   const handleRematch = useCallback(async () => {
     if (rematchPending) return;
     if (!state.whiteModel || !state.blackModel) return;
     setRematchPending(true);
     setRematchError(null);
     try {
-      const models = await fetchOpenRouterModels();
-      const resp = await createGame(rematchRequest(state, models));
-      if (resp.player_secret) {
-        localStorage.setItem(`chess_player_secret_${resp.id}`, resp.player_secret);
-      }
-      navigateRoute(`/game/${resp.id}`);
+      // Rematch goes through the dialog so it passes Turnstile and shows quota errors.
+      const req = rematchRequest(state, await fetchOpenRouterModels());
+      const sideType = (human?: boolean, stockfish?: boolean): PlayerType => (human ? "human" : stockfish ? "stockfish" : "llm");
+      setRematchSettings({
+        ...req,
+        whiteType: sideType(req.white_is_human, req.white_is_stockfish),
+        blackType: sideType(req.black_is_human, req.black_is_stockfish),
+      });
     } catch {
-      setRematchError("Could not start the rematch. Please try again.");
+      setRematchError("Could not load the rematch settings. Please try again.");
+    } finally {
       setRematchPending(false);
     }
-  }, [rematchPending, state, navigateRoute]);
+  }, [rematchPending, state]);
 
   const [stopping, setStopping] = useState(false);
   const handleStopGame = useCallback(async () => {
@@ -498,6 +506,7 @@ export default function GameViewerPage() {
       )}
 
       {rematchError && <div className="move-rejected" role="alert">{rematchError}</div>}
+      <NewGameDialog open={rematchSettings !== null} onClose={() => setRematchSettings(null)} initialSettings={rematchSettings ?? undefined} />
 
       <div className="game-viewer__main">
         {/* Column 1: Board + eval bar + merged controls bar */}
@@ -601,13 +610,15 @@ export default function GameViewerPage() {
             </div>
           )}
 
-          {isHumanTurn && state.moveTimeLimit != null ? (
-            <MoveTimer timeLimit={state.moveTimeLimit} active={isHumanTurn} />
-          ) : isHumanTurn ? (
-            <div className="human-turn-indicator">
-              Your turn — drag a piece to move
+          {isHumanTurn && (
+            <MoveTimer timeLimit={state.moveTimeLimit ?? HUMAN_MOVE_TIMEOUT_S} active={isHumanTurn} />
+          )}
+
+          {isLive && (state.whiteIsHuman || state.blackIsHuman) && !playerSecret && (
+            <div className="status-message" role="status">
+              You are spectating. Moves can only be made from the browser that created this game.
             </div>
-          ) : null}
+          )}
 
           {humanColor && isLive && !isHumanTurn && state.awaitingHumanMove === null && (
             <div className="status-message" role="status">

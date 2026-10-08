@@ -62,7 +62,11 @@ function loadTheme(): { boardColor: string; pieceStyle: string } {
 }
 
 function saveTheme(boardColor: string, pieceStyle: string) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ boardColor, pieceStyle }));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ boardColor, pieceStyle }));
+  } catch {
+    // Storage blocked: theme just won't persist.
+  }
 }
 
 export function getCustomPieces(

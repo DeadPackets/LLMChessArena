@@ -1732,21 +1732,6 @@ a.app-header__live-stat:hover {
   cursor: not-allowed;
 }
 
-/* --- Human Turn Indicator --- */
-
-.human-turn-indicator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.6rem 1rem;
-  border-radius: var(--radius);
-  background: var(--amber-glow-strong);
-  border: 1px solid var(--amber-dim);
-  color: var(--amber-bright);
-  font-size: 0.82rem;
-  font-weight: 600;
-  animation: pulse-glow 2s ease-in-out infinite;
-}
 
 @keyframes pulse-glow {
   0%, 100% { box-shadow: 0 0 8px rgba(212, 168, 67, 0.2); }
@@ -4314,4 +4299,9 @@ button.table-talk-bubble {
   .game-card__admin {
     opacity: 1;
   }
+}
+
+.new-game-dialog__turnstile {
+  margin-top: 0.75rem;
+  min-height: 65px;
 }

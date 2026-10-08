@@ -52,6 +52,7 @@ class CreateGameRequest(BaseModel):
     draw_adjudication: bool = True
     routing_mode: RoutingMode | None = None
     use_nitro: bool = False
+    turnstile_token: str | None = None
 
 
 # --- Responses ---

@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import ipaddress
 import logging
 import secrets
+from datetime import datetime, timedelta, timezone
+
+import httpx
 
 import chess
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -13,7 +19,11 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import (
     ADMIN_TOKEN,
+    GAMES_PER_DAY,
     MAX_MOVES_PER_SIDE,
+    TURNSTILE_HOSTNAMES,
+    TURNSTILE_SECRET_KEY,
+    TURNSTILE_SITE_KEY,
     MIN_MOVE_TIME_LIMIT,
     MAX_MOVE_TIME_LIMIT,
 )
@@ -27,7 +37,9 @@ from app.models.api_models import (
     MoveDetail,
     PaginatedGamesResponse,
 )
+from app.middleware.rate_limiter import _get_client_ip
 from app.models.chess_models import GameConfig
+from app.services import openrouter_key
 from app.routers import openrouter_proxy
 from app.services.request_stats import get_game_usage, summarize_requests
 from app.services.board_image_service import generate_board_png, generate_board_og_png
@@ -37,9 +49,70 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/games", tags=["games"])
 
+# Serializes quota check + insert so parallel POSTs cannot both pass.
+_create_lock = asyncio.Lock()
+# Games that ended through our fault do not use up the creator's quota.
+_QUOTA_EXEMPT_TERMINATIONS = ("llm_unavailable", "server_restart", "error")
+
+
+def _creator_hash(ip: str) -> str:
+    try:
+        addr = ipaddress.ip_address(ip)
+        # One IPv6 subscriber usually owns a whole /64.
+        if addr.version == 6:
+            ip = str(ipaddress.ip_network(f"{ip}/64", strict=False).network_address)
+    except ValueError:
+        pass
+    return hashlib.sha256(f"llmchessarena:{ip}".encode()).hexdigest()
+
+
+TURNSTILE_ACTION = "create_game"
+
+
+async def _verify_turnstile(token: str | None, ip: str) -> bool:
+    if not token or len(token) > 2048:
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+                data={"secret": TURNSTILE_SECRET_KEY, "response": token, "remoteip": ip},
+            )
+        if not resp.is_success:
+            return False
+        data = resp.json()
+        # Cloudflare's test keys return no action; real widgets must echo ours.
+        action_ok = data.get("action") == TURNSTILE_ACTION or data.get("metadata", {}).get("result_with_testing_key")
+        return data.get("success") is True and bool(action_ok) and data.get("hostname") in TURNSTILE_HOSTNAMES
+    except (httpx.HTTPError, ValueError):
+        logger.warning("Turnstile verification request failed", exc_info=True)
+        return False
+
+
+async def _quota_retry_after(creator_hash: str) -> int | None:
+    """Seconds until this creator may start another game, or None if allowed now."""
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    async with get_session_factory()() as session:
+        rows = (await session.exec(
+            select(Game.started_at)
+            .where(Game.creator_ip_hash == creator_hash, Game.started_at >= since)
+            .where((Game.termination == None) | (Game.termination.notin_(_QUOTA_EXEMPT_TERMINATIONS)))  # type: ignore[union-attr]  # noqa: E711
+            .order_by(Game.started_at)  # type: ignore[arg-type]
+        )).all()
+    if len(rows) < GAMES_PER_DAY:
+        return None
+    oldest = rows[-GAMES_PER_DAY]
+    if oldest.tzinfo is None:
+        oldest = oldest.replace(tzinfo=timezone.utc)
+    return max(1, int((oldest + timedelta(hours=24) - datetime.now(timezone.utc)).total_seconds()))
+
 
 @router.post("", response_model=GameCreatedResponse)
-async def create_game(req: CreateGameRequest, request: Request):
+async def create_game(
+    req: CreateGameRequest,
+    request: Request,
+    x_admin_token: str | None = Header(default=None),
+):
     """Start a new game. At least one side must be an LLM."""
     white_is_llm = not req.white_is_human and not req.white_is_stockfish
     black_is_llm = not req.black_is_human and not req.black_is_stockfish
@@ -53,6 +126,8 @@ async def create_game(req: CreateGameRequest, request: Request):
         raise HTTPException(400, "White model is required for LLM side")
     if black_is_llm and not req.black_model.strip():
         raise HTTPException(400, "Black model is required for LLM side")
+    if any(m.endswith(":batch") for m in (req.white_model, req.black_model)):
+        raise HTTPException(400, "Batch model variants cannot play live games")
     if req.max_moves > MAX_MOVES_PER_SIDE:
         raise HTTPException(
             400,
@@ -123,14 +198,33 @@ async def create_game(req: CreateGameRequest, request: Request):
         use_nitro=req.use_nitro,
         routing_mode=req.routing_mode,
     )
-    player_secret = secrets.token_urlsafe(32)
+    is_admin = bool(ADMIN_TOKEN) and secrets.compare_digest(ADMIN_TOKEN, x_admin_token or "")
+    ip = _get_client_ip(request)
+    if TURNSTILE_SECRET_KEY and not is_admin and not await _verify_turnstile(req.turnstile_token, ip):
+        raise HTTPException(403, "Human verification failed. Please complete the check and try again.")
+    unavailable = await openrouter_key.unavailable_reason()
+    if unavailable:
+        raise HTTPException(503, unavailable)
 
-    try:
-        game_id, game_status = await manager.start_game(
-            config, player_secret=player_secret
-        )
-    except ValueError as exc:
-        raise HTTPException(429, str(exc)) from exc
+    player_secret = secrets.token_urlsafe(32)
+    creator_hash = _creator_hash(ip)
+    async with _create_lock:
+        if GAMES_PER_DAY > 0 and not is_admin:
+            retry_after = await _quota_retry_after(creator_hash)
+            if retry_after is not None:
+                hours, minutes = divmod(retry_after // 60, 60)
+                raise HTTPException(
+                    429,
+                    f"You can start {GAMES_PER_DAY} game{'s' if GAMES_PER_DAY != 1 else ''} every 24 hours. "
+                    f"Your next game is available in {hours}h {minutes}m.",
+                    headers={"Retry-After": str(retry_after)},
+                )
+        try:
+            game_id, game_status = await manager.start_game(
+                config, player_secret=player_secret, creator_ip_hash=creator_hash
+            )
+        except ValueError as exc:
+            raise HTTPException(429, str(exc)) from exc
     logger.info("API: game created — id=%s status=%s", game_id, game_status)
     return GameCreatedResponse(
         id=game_id,
@@ -265,6 +359,9 @@ async def queue_status(
     ).one()
     state["total_spectators"] = manager.total_spectators()
     state["total_games"] = int(total_games)
+    state["llm_unavailable"] = await openrouter_key.unavailable_reason()
+    state["turnstile_site_key"] = TURNSTILE_SITE_KEY or None
+    state["games_per_day"] = GAMES_PER_DAY
     return state
 
 

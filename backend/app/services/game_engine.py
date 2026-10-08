@@ -23,6 +23,7 @@ from app.config import (
     DEFAULT_TEMPERATURE,
     LLM_REQUEST_TIMEOUT,
     LLM_MOVE_TIMEOUT_DEFAULT,
+    HUMAN_MOVE_TIMEOUT_DEFAULT,
     MOVE_WATCHDOG_INTERVAL,
     LLM_TRANSPORT_ATTEMPTS,
     LLM_RETRY_BASE_DELAY,
@@ -41,6 +42,7 @@ from app.models.chess_models import (
 )
 from app.services.chess_agent import chess_agent, ChessGameContext, build_user_prompt
 from app.services.openrouter_model import arena_model
+from app.services.openrouter_key import mark_unavailable
 from app.services.elo_service import rating_key
 from app.services.move_classifier import (
     classify_move,
@@ -93,6 +95,7 @@ class GameEngine:
         self._last_opening: dict[str, str] | None = None
         self._consecutive_illegal_moves = 0
         self._forfeit_was_api_error = False
+        self._llm_unavailable = False
         self._prompted_output_colors: set[str] = set()
         self._last_move_was_chaos = False
         self._consecutive_draw_eval_count = 0
@@ -179,8 +182,8 @@ class GameEngine:
             # Apply per-move time limit if configured; non-human sides always get
             # a ceiling so a hung provider can't stall the game forever.
             effective_limit = self.config.move_time_limit
-            if effective_limit is None and not is_human:
-                effective_limit = LLM_MOVE_TIMEOUT_DEFAULT
+            if effective_limit is None:
+                effective_limit = HUMAN_MOVE_TIMEOUT_DEFAULT if is_human else LLM_MOVE_TIMEOUT_DEFAULT
             heartbeat: asyncio.Task | None = None
             if not is_human:
                 waiting_label = "Stockfish" if is_stockfish else model_name
@@ -238,6 +241,9 @@ class GameEngine:
                         outcome="draw",
                         termination="error",
                     )
+                elif self._llm_unavailable:
+                    await self._emit_status("Game halted: the LLM provider refused the request (budget or key).")
+                    return self._build_result(outcome="*", termination="llm_unavailable")
                 else:
                     termination = (
                         "api_error"
@@ -640,7 +646,8 @@ class GameEngine:
                 return None
             except Exception as exc:
                 code = getattr(exc, "status_code", None)
-                transient = code in (408, 429) or (isinstance(code, int) and code >= 500) or isinstance(exc, (httpx.TransportError, APIConnectionError, TimeoutError))
+                # A 402 with Retry-After is OpenRouter's in-flight budget; it clears on its own.
+                transient = code in (408, 429) or (code == 402 and getattr(exc, "retry_after", None) is not None) or (isinstance(code, int) and code >= 500) or isinstance(exc, (httpx.TransportError, APIConnectionError, TimeoutError))
                 # Forced tool output is unsupported by some reasoning routes.
                 fallback = code == 400 and any(term in str(exc).lower() for term in ("tool_choice", "tool choice")) and deps.output_mode == "tool"
                 if deps.current is None or deps.current in deps.records[:persisted]:
@@ -663,6 +670,9 @@ class GameEngine:
                     if transport_errors < LLM_TRANSPORT_ATTEMPTS:
                         retry_after = getattr(exc, "retry_after", None)
                         retry_delay = max(0.0, retry_after) if retry_after is not None else LLM_RETRY_BASE_DELAY * 2 ** (transport_errors - 1)
+                if code in (401, 402) and not transient:
+                    self._llm_unavailable = True
+                    mark_unavailable(code)
                 if not fallback and retry_delay is None:
                     self._forfeit_was_api_error = True
                     return None

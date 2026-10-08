@@ -28,12 +28,13 @@ function outcomeDisplay(outcome: string, whiteModel: string | null, blackModel: 
     };
   }
   return {
-    title: "Draw",
+    title: outcome === "*" ? "No result" : "Draw",
     cls: "game-over-banner__title--draw",
   };
 }
 
 function formatTermination(t: string): string {
+  if (t === "llm_unavailable") return "Halted: LLM budget used up or key paused";
   return t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 

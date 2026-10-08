@@ -46,6 +46,9 @@ async def _fetch_models() -> list[dict]:
             continue
         if "tools" not in params or "reasoning" not in params:
             continue
+        # Batch variants only work on the async batch API, never chat/completions.
+        if m.get("id", "").endswith(":batch"):
+            continue
         pricing = m.get("pricing") or {}
         filtered.append({
             "id": m["id"],

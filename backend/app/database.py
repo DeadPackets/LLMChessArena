@@ -54,6 +54,7 @@ class Game(SQLModel, table=True):
     routing_mode: Optional[str] = None
     use_nitro: Optional[bool] = None
     harness_version: Optional[str] = None
+    creator_ip_hash: Optional[str] = None
 
 
 class Move(SQLModel, table=True):
@@ -188,6 +189,7 @@ async def _migrate_add_columns(conn) -> None:
         ("games", "routing_mode", "VARCHAR"),
         ("games", "use_nitro", "BOOLEAN"),
         ("games", "harness_version", "VARCHAR"),
+        ("games", "creator_ip_hash", "VARCHAR"),
     ]
     logger = logging.getLogger(__name__)
 

@@ -114,15 +114,8 @@ def _aggregate_accuracy(
 
 
 def _move_eval_before(move: Move) -> tuple[int | None, float | None]:
-    cp_before = move.centipawns_before
-    wp_before = move.win_probability_before
-
-    if cp_before is None and move.centipawns is not None:
-        cp_before = 0
-    if wp_before is None and move.win_probability is not None:
-        wp_before = 0.5
-
-    return cp_before, wp_before
+    # None lets callers fall back to the previous move's eval (pre-migration rows).
+    return move.centipawns_before, move.win_probability_before
 
 
 async def compute_game_analysis(session: AsyncSession, game_id: str) -> GameAnalysis:

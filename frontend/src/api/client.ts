@@ -32,19 +32,26 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
+      let detail: string | undefined;
+      try {
+        const parsed = JSON.parse(body).detail;
+        if (typeof parsed === "string") detail = parsed;
+      } catch {
+        // Non-JSON error body.
+      }
       if (res.status === 429) {
         const header = res.headers.get("Retry-After");
         const retryAfter = header && !Number.isNaN(Number(header)) ? Number(header) : undefined;
         throw new ApiError(
-          retryAfter != null
+          detail ?? (retryAfter != null
             ? `Rate limited — retrying in ${retryAfter}s`
-            : "Rate limited — please wait a moment and try again",
+            : "Rate limited — please wait a moment and try again"),
           res.status,
           { retryAfter, body },
         );
       }
       throw new ApiError(
-        `Request failed (${res.status})`,
+        detail ?? `Request failed (${res.status})`,
         res.status,
         { body },
       );
@@ -93,9 +100,10 @@ export async function getGameEfficiency(gameId: string, signal?: AbortSignal): P
   return request<GameEfficiency>(`/games/${gameId}/efficiency`, { signal });
 }
 
-export async function createGame(req: CreateGameRequest): Promise<GameCreatedResponse> {
+export async function createGame(req: CreateGameRequest, adminToken?: string | null): Promise<GameCreatedResponse> {
   return request<GameCreatedResponse>("/games", {
     method: "POST",
+    headers: { "Content-Type": "application/json", ...(adminToken ? { "X-Admin-Token": adminToken } : {}) },
     body: JSON.stringify(req),
   });
 }

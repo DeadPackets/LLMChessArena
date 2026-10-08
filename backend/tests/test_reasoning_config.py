@@ -42,6 +42,8 @@ def test_create_validates_and_normalizes(monkeypatch, requested, metadata, statu
                               can_accept_new_game=lambda: True,
                               start_game=AsyncMock(return_value=("test", "active")))
     monkeypatch.setattr(openrouter_proxy, "_fetch_models", AsyncMock(return_value=[{"id": "m", "reasoning": metadata}]))
+    monkeypatch.setattr(games, "_quota_retry_after", AsyncMock(return_value=None))
+    monkeypatch.setattr(games.openrouter_key, "unavailable_reason", AsyncMock(return_value=None))
     app = FastAPI()
     app.include_router(games.router)
     app.state.game_manager = manager

@@ -47,6 +47,8 @@ async def _receive_messages(websocket: WebSocket, game_id: str) -> None:
             logger.warning("WebSocket invalid JSON from client: game=%s", game_id)
             continue
 
+        if not isinstance(msg, dict):
+            continue
         msg_type = msg.get("type")
         if msg_type == "human_move":
             player_secret = msg.get("player_secret")
@@ -61,7 +63,7 @@ async def _receive_messages(websocket: WebSocket, game_id: str) -> None:
                     )
                 )
                 continue
-            uci = msg.get("uci", "").strip()
+            uci = str(msg.get("uci") or "").strip()
             if uci:
                 logger.info(
                     "WebSocket human move received: game=%s, uci=%s", game_id, uci
@@ -123,9 +125,12 @@ async def game_websocket(websocket: WebSocket, game_id: str):
 
     manager = websocket.app.state.game_manager
 
-    # Send catch-up state (all moves played so far)
+    # Subscribe before reading catch-up so no event (e.g. awaiting_human_move)
+    # falls between the snapshot and the live stream; the client de-dupes moves.
+    queue = manager.subscribe(game_id)
     catch_up = await manager.get_catch_up_state(game_id)
     if catch_up is None:
+        manager.unsubscribe(game_id, queue)
         logger.warning("WebSocket game not found: %s", game_id)
         await websocket.send_json(
             {"type": "error", "data": {"message": "Game not found"}}
@@ -143,14 +148,13 @@ async def game_websocket(websocket: WebSocket, game_id: str):
     )
     await websocket.send_text(json.dumps(catch_up, default=_json_default))
 
-    # If game is already completed, close after sending catch-up
-    if status == "completed":
-        logger.info("WebSocket closing (game completed): game=%s", game_id)
+    # Finished games get no further events, so close after catch-up.
+    if status in ("completed", "stopped"):
+        manager.unsubscribe(game_id, queue)
+        logger.info("WebSocket closing (game %s): game=%s", status, game_id)
         await websocket.close()
         return
 
-    # Subscribe to live events
-    queue = manager.subscribe(game_id)
     try:
         # Run send and receive concurrently
         send_task = asyncio.create_task(_send_events(websocket, queue, game_id))

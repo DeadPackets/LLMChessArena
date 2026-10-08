@@ -8,6 +8,13 @@ services:
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - STOCKFISH_PATH=/usr/games/stockfish
+      - GAMES_PER_DAY=${GAMES_PER_DAY:-1}
+      - MIN_KEY_BALANCE_USD=${MIN_KEY_BALANCE_USD:-2}
+      - DAILY_BUDGET_USD=${DAILY_BUDGET_USD:-0}
+      - TURNSTILE_SITE_KEY=${TURNSTILE_SITE_KEY:-}
+      - TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET_KEY:-}
+      - TURNSTILE_HOSTNAMES=${TURNSTILE_HOSTNAMES:-llmchess.deadpackets.pw}
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]

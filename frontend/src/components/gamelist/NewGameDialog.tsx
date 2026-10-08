@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { createGame } from "../../api/client";
+import { createGame, getQueueStatus } from "../../api/client";
+import { getAdminToken } from "../../utils/admin";
+import Turnstile from "./Turnstile";
 import { useOpenRouterModels } from "../../hooks/useOpenRouterModels";
-import type { CreateGameRequest, OpenRouterModel, RoutingMode } from "../../types/api";
+import type { CreateGameRequest, OpenRouterModel, QueueStatus, RoutingMode } from "../../types/api";
 import { normalizeReasoningEffort, supportedReasoningEfforts, temperatureApplies } from "../../utils/reasoning";
 import ModelSelector from "./ModelSelector";
 import { useModal } from "../../hooks/useModal";
@@ -258,7 +260,16 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [serverInfo, setServerInfo] = useState<QueueStatus | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileKey, setTurnstileKey] = useState(0);
   const { ref: dialogRef, titleId } = useModal(open, onClose);
+  const adminToken = getAdminToken();
+
+  useEffect(() => {
+    if (!open) return;
+    getQueueStatus().then(setServerInfo).catch(() => setServerInfo(null));
+  }, [open]);
 
   // Pre-fill from initialSettings (rematch)
   useEffect(() => {
@@ -314,21 +325,29 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
   const whiteNonLLMDisabled = !blackIsLLM;
   const blackNonLLMDisabled = !whiteIsLLM;
 
+  const siteKey = adminToken ? null : serverInfo?.turnstile_site_key ?? null;
+  const llmUnavailable = serverInfo?.llm_unavailable ?? null;
   const canSubmit =
     (whiteIsLLM ? whiteModel.trim() !== "" : true) &&
     (blackIsLLM ? blackModel.trim() !== "" : true) &&
+    (!siteKey || turnstileToken !== null) &&
+    !llmUnavailable &&
     !submitting;
 
   const disabledReason =
     submitting
       ? null
+      : llmUnavailable
+        ? llmUnavailable
       : whiteIsLLM && whiteModel.trim() === "" && blackIsLLM && blackModel.trim() === ""
         ? "Select a model for both LLM sides to start."
         : whiteIsLLM && whiteModel.trim() === ""
           ? "Select a model for White to start."
           : blackIsLLM && blackModel.trim() === ""
             ? "Select a model for Black to start."
-            : null;
+            : siteKey && turnstileToken === null
+              ? "Complete the human check to start."
+              : null;
 
   function handleWhiteTypeChange(t: PlayerType) {
     setWhiteType(t);
@@ -380,14 +399,22 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
         move_time_limit: moveTimeLimit ? parseInt(moveTimeLimit, 10) : null,
         draw_adjudication: drawAdjudication,
         ...(routingMode === "legacy" ? { use_nitro: true } : { routing_mode: routingMode }),
-      });
+        turnstile_token: siteKey ? turnstileToken : null,
+      }, adminToken);
       if (resp.player_secret) {
-        localStorage.setItem(`chess_player_secret_${resp.id}`, resp.player_secret);
+        try {
+          localStorage.setItem(`chess_player_secret_${resp.id}`, resp.player_secret);
+        } catch {
+          // Storage blocked: the game still starts, this browser just spectates.
+        }
       }
       onClose();
       navigate(`/game/${resp.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create game");
+      // Turnstile tokens are single-use; get a fresh one for the retry.
+      setTurnstileToken(null);
+      setTurnstileKey((k) => k + 1);
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -601,6 +628,16 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
               )}
             </div>
           </div>
+        )}
+
+        {serverInfo && serverInfo.games_per_day > 0 && !adminToken && (
+          <p className="new-game-dialog__setting-help">
+            Each person can start {serverInfo.games_per_day} game{serverInfo.games_per_day === 1 ? "" : "s"} every 24 hours.
+          </p>
+        )}
+
+        {siteKey && (
+          <Turnstile key={turnstileKey} siteKey={siteKey} onToken={setTurnstileToken} />
         )}
 
         {error && (

@@ -185,7 +185,7 @@ class GameManager:
                 logger.info("Recovered %d orphaned game(s)", len(orphaned))
 
     async def start_game(
-        self, config: GameConfig, player_secret: str | None = None
+        self, config: GameConfig, player_secret: str | None = None, creator_ip_hash: str | None = None
     ) -> tuple[str, str]:
         """Create a game record and start it as a background task."""
         game_id = uuid4().hex[:12]
@@ -262,6 +262,7 @@ class GameManager:
                 routing_mode=config.routing_mode or (None if config.use_nitro else "economy"),
                 use_nitro=config.use_nitro if config.routing_mode is None else False,
                 harness_version=HARNESS_VERSION,
+                creator_ip_hash=creator_ip_hash,
             )
             session.add(game)
             await session.commit()
@@ -285,7 +286,9 @@ class GameManager:
         if queue in queues:
             queues.remove(queue)
         logger.debug("Game %s: WebSocket subscriber removed", game_id)
-        if game_id in self.event_queues:
+        if not queues:
+            self.event_queues.pop(game_id, None)
+        elif game_id in self.event_queues:
             self._fire_and_forget(self._broadcast_spectator_count(game_id))
 
     def get_spectator_count(self, game_id: str) -> int:
@@ -781,7 +784,7 @@ class GameManager:
                 black_is_llm and not temperature_is_default(config.black_temperature)
             )
             self_play = white_key == black_key
-            api_error_forfeit = result.termination == "api_error"
+            api_error_forfeit = result.termination in ("api_error", "llm_unavailable")
             skip_elo = (
                 config.chaos_mode
                 or has_limited_sf

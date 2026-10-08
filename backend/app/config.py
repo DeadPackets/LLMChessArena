@@ -20,6 +20,18 @@ RATE_LIMIT_GAME_CREATE = int(os.getenv("RATE_LIMIT_GAME_CREATE", "5"))
 RATE_LIMIT_API_READ = int(os.getenv("RATE_LIMIT_API_READ", "60"))
 RATE_LIMIT_GAME_STOP = int(os.getenv("RATE_LIMIT_GAME_STOP", "10"))
 RATE_LIMIT_WS_CONNECT = int(os.getenv("RATE_LIMIT_WS_CONNECT", "20"))
+# Per-person game quota (keyed by client IP, IPv6 by /64). 0 disables it.
+GAMES_PER_DAY = int(os.getenv("GAMES_PER_DAY", "1"))
+
+# Cloudflare Turnstile on game creation; disabled when the secret is unset.
+TURNSTILE_SITE_KEY = os.getenv("TURNSTILE_SITE_KEY", "")
+TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "")
+TURNSTILE_HOSTNAMES = set(os.getenv("TURNSTILE_HOSTNAMES", "llmchess.deadpackets.pw").split(","))
+
+# Refuse new games when the OpenRouter key has less than this left.
+MIN_KEY_BALANCE_USD = float(os.getenv("MIN_KEY_BALANCE_USD", "2"))
+# Pause new games once OpenRouter reports this much spend today (UTC). 0 disables it.
+DAILY_BUDGET_USD = float(os.getenv("DAILY_BUDGET_USD", "0"))
 
 # Concurrency
 MAX_CONCURRENT_GAMES = int(os.getenv("MAX_CONCURRENT_GAMES", "3"))
@@ -71,6 +83,8 @@ HARNESS_VERSION = "pydantic-ai-2.43-v1"
 # Default whole-move ceiling (incl. retries) for LLM/Stockfish sides when the game
 # has no explicit move_time_limit. Never applied to humans.
 LLM_MOVE_TIMEOUT_DEFAULT = float(os.getenv("LLM_MOVE_TIMEOUT_DEFAULT", "300"))
+# Idle humans forfeit on time, so an abandoned tab cannot hold a game slot forever.
+HUMAN_MOVE_TIMEOUT_DEFAULT = float(os.getenv("HUMAN_MOVE_TIMEOUT_DEFAULT", "900"))
 # Heartbeat while a side is thinking, so a slow/hung provider is visible in the UI.
 MOVE_WATCHDOG_INTERVAL = float(os.getenv("MOVE_WATCHDOG_INTERVAL", "30"))
 

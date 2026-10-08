@@ -46,6 +46,9 @@ class StockfishService:
 
     async def evaluate(self, board: chess.Board, depth: int = 18, multipv: int = 3) -> PositionEval:
         """Evaluate a position and return structured evaluation data with top N lines."""
+        # Chaos moves can produce these; Stockfish exits on them and takes every game's eval down.
+        if board.status() & (chess.STATUS_OPPOSITE_CHECK | chess.STATUS_NO_WHITE_KING | chess.STATUS_NO_BLACK_KING | chess.STATUS_TOO_MANY_KINGS):
+            raise ValueError("Position is not evaluable by Stockfish")
         async with self._lock:
             start = time.monotonic()
             infos = await self.engine.analyse(
@@ -107,6 +110,8 @@ class StockfishService:
     @staticmethod
     def format_eval(cp: int, mate_in: int | None) -> str:
         """Format evaluation for display (e.g. '+0.35' or 'M5')."""
+        if mate_in == 0:
+            return "#"
         if mate_in is not None:
             return f"{'M' if mate_in > 0 else '-M'}{abs(mate_in)}"
         return f"{'+' if cp >= 0 else ''}{cp / 100:.2f}"

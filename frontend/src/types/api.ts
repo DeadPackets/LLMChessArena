@@ -224,6 +224,7 @@ export interface CreateGameRequest {
   move_time_limit?: number | null;
   draw_adjudication?: boolean;
   use_nitro?: boolean;
+  turnstile_token?: string | null;
   routing_mode?: RoutingMode;
 }
 
@@ -280,4 +281,7 @@ export interface QueueStatus {
   max_queued: number;
   total_spectators: number;
   total_games: number;
+  llm_unavailable: string | null;
+  turnstile_site_key: string | null;
+  games_per_day: number;
 }
