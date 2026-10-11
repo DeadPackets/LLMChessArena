@@ -97,9 +97,9 @@ NARRATION_CHAR_CAP = int(os.getenv("NARRATION_CHAR_CAP", "128"))
 # for Claude Opus), which makes its pre-flight credit check reserve enough credit
 # for that worst case and can 402 on premium models. This also bounds reasoning:
 # on the reasoning.effort path the thinking budget is a fraction of max_tokens
-# (high ~= 0.8), so 16384 gives high-effort models ~13k thinking tokens plus
-# ample room for the small move/narration/table_talk response.
-LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "16384"))
+# (high ~= 0.8), so 32768 gives high-effort models ~26k thinking tokens plus
+# room for the move/narration/table_talk response. 16384 truncated xhigh moves in prod.
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "32768"))
 
 # Admin — shared secret authorizing destructive admin actions (e.g. deleting
 # broken games) via the X-Admin-Token header. Left empty by default: when unset,

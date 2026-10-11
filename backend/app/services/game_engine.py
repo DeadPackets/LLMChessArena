@@ -618,6 +618,7 @@ class GameEngine:
         prompt = build_user_prompt(self.board, color, history)
         transport_errors = 0
         persisted = 0
+        truncation_retried = False
         while True:
             deps.output_mode = "prompted" if color in self._prompted_output_colors else "tool"
             kwargs = {"output_type": PromptedOutput(ChessMove)} if deps.output_mode == "prompted" else {}
@@ -633,7 +634,7 @@ class GameEngine:
                     deps.current.status = "cancelled"
                     deps.current.elapsed_ms = int((time.monotonic() - deps.request_started) * 1000)
                 raise
-            except UnexpectedModelBehavior:
+            except UnexpectedModelBehavior as exc:
                 if not deps.response_received:
                     self._forfeit_was_api_error = True
                     if deps.current:
@@ -642,6 +643,11 @@ class GameEngine:
                     return None
                 if deps.current and deps.current.status == "invalid_output":
                     await deps.reject("(invalid output)", "Response did not match the move format")
+                # Reasoning used the whole token budget: retry once, a second would likely truncate too.
+                if "token limit" in str(exc) and not truncation_retried:
+                    truncation_retried = True
+                    await deps.status(f"{color.title()}: ran out of thinking budget; retrying…")
+                    continue
                 self._consecutive_illegal_moves = deps.invalid_count
                 return None
             except Exception as exc:
