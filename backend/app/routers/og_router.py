@@ -42,6 +42,7 @@ def _fmt_termination(t: str | None) -> str:
         "fifty_moves": "fifty-move rule",
         "max_moves": "move limit",
         "illegal_moves": "illegal moves",
+        "thinking_budget": "ran out of thinking budget",
         "timeout": "timeout",
         "resignation": "resignation",
         "adjudication": "adjudication",

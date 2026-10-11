@@ -253,7 +253,7 @@ def _material_balance(board: chess.Board) -> str:
 
 
 def _describe_last_move(move_history: list[dict], color: str) -> str | None:
-    """Describe what the opponent just did, so the LLM pays attention to threats."""
+    """Describe what the opponent just did. No engine verdicts: models must judge moves themselves."""
     if not move_history:
         return None
     last = move_history[-1]
@@ -261,14 +261,7 @@ def _describe_last_move(move_history: list[dict], color: str) -> str | None:
         return None  # Our own last move, skip
     opp_color = last.get("color", "?").title()
     san = last.get("san", "?")
-    classification = last.get("classification")
-
-    parts = [f"{opp_color} just played {san}."]
-    if classification and classification in ("blunder", "mistake", "inaccuracy"):
-        parts.append(f"Stockfish rated it a {classification}. Look for ways to punish.")
-    elif classification == "brilliant":
-        parts.append("It was rated a strong move. Be careful.")
-    return " ".join(parts)
+    return f"{opp_color} just played {san}."
 
 
 def build_user_prompt(

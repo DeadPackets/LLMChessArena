@@ -7,6 +7,7 @@ import pytest
 from fastapi import FastAPI
 from pydantic import ValidationError
 
+from app.config import HARNESS_VERSION
 from app.models.api_models import CreateGameRequest
 from app.models.chess_models import GameConfig
 from app.routers import games, openrouter_proxy
@@ -103,7 +104,7 @@ def test_routing_persistence(tmp_path, monkeypatch, routing, nitro, stored, lega
                 assert game.routing_mode == stored
                 assert game.use_nitro is legacy
                 assert game.white_reasoning_effort == "provider_default"
-                assert game.harness_version == "pydantic-ai-2.43-v1"
+                assert game.harness_version == HARNESS_VERSION
         finally:
             await engine.dispose()
     asyncio.run(run())

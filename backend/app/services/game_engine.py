@@ -95,6 +95,7 @@ class GameEngine:
         self._last_opening: dict[str, str] | None = None
         self._consecutive_illegal_moves = 0
         self._forfeit_was_api_error = False
+        self._forfeit_was_truncation = False
         self._llm_unavailable = False
         self._prompted_output_colors: set[str] = set()
         self._last_move_was_chaos = False
@@ -248,6 +249,8 @@ class GameEngine:
                     termination = (
                         "api_error"
                         if self._forfeit_was_api_error
+                        else "thinking_budget"
+                        if self._forfeit_was_truncation
                         else "illegal_moves"
                     )
                     logger.warning(
@@ -586,6 +589,7 @@ class GameEngine:
         """
         started = time.monotonic()
         self._forfeit_was_api_error = False
+        self._forfeit_was_truncation = False
         self._move_had_transport_error = False
         self._consecutive_illegal_moves = 0
         history = [r.model_dump() for r in self.move_history[-max(MOVE_HISTORY_PLIES, TABLE_TALK_HISTORY):]]
@@ -641,13 +645,18 @@ class GameEngine:
                         deps.current.status = "provider_error"
                         deps.current.elapsed_ms = int((time.monotonic() - deps.request_started) * 1000)
                     return None
+                truncated = "token limit" in str(exc)
                 if deps.current and deps.current.status == "invalid_output":
-                    await deps.reject("(invalid output)", "Response did not match the move format")
+                    if truncated:
+                        await deps.reject("(no move)", "Ran out of thinking budget before answering")
+                    else:
+                        await deps.reject("(invalid output)", "Response did not match the move format")
                 # Reasoning used the whole token budget: retry once, a second would likely truncate too.
-                if "token limit" in str(exc) and not truncation_retried:
+                if truncated and not truncation_retried:
                     truncation_retried = True
                     await deps.status(f"{color.title()}: ran out of thinking budget; retrying…")
                     continue
+                self._forfeit_was_truncation = truncated
                 self._consecutive_illegal_moves = deps.invalid_count
                 return None
             except Exception as exc:

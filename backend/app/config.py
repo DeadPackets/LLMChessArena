@@ -79,7 +79,8 @@ LLM_RETRY_BASE_DELAY = max(0.0, float(os.getenv("LLM_RETRY_BASE_DELAY", "1")))
 LLM_CACHE_TTL = os.getenv("LLM_CACHE_TTL", "5m")
 if LLM_CACHE_TTL not in ("5m", "1h"):
     raise ValueError("LLM_CACHE_TTL must be 5m or 1h")
-HARNESS_VERSION = "pydantic-ai-2.43-v1"
+# v2: prompt no longer includes Stockfish move classifications.
+HARNESS_VERSION = "pydantic-ai-2.43-v2"
 # Default whole-move ceiling (incl. retries) for LLM/Stockfish sides when the game
 # has no explicit move_time_limit. Never applied to humans.
 # xhigh reasoning models took up to 283s for accepted moves in prod; silent hangs still
