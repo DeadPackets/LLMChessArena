@@ -36,6 +36,7 @@ function outcomeDisplay(outcome: string, whiteModel: string | null, blackModel: 
 function formatTermination(t: string): string {
   if (t === "llm_unavailable") return "Halted: LLM budget used up or key paused";
   if (t === "thinking_budget") return "Forfeit: ran out of thinking budget before moving";
+  if (t === "move_timeout") return "Forfeit: move took longer than 30 min (unrated)";
   return t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 

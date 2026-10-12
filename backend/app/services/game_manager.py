@@ -102,7 +102,7 @@ def game_eligible_for_elo(g: Game) -> bool:
     if g.outcome not in ("white_wins", "black_wins", "draw"):
         return False
     # API-error forfeits are infra failures, not chess results.
-    if g.termination == "api_error":
+    if g.termination in ("api_error", "move_timeout"):
         return False
     if g.chaos_mode:
         return False
@@ -784,7 +784,7 @@ class GameManager:
                 black_is_llm and not temperature_is_default(config.black_temperature)
             )
             self_play = white_key == black_key
-            api_error_forfeit = result.termination in ("api_error", "llm_unavailable")
+            api_error_forfeit = result.termination in ("api_error", "llm_unavailable", "move_timeout")
             skip_elo = (
                 config.chaos_mode
                 or has_limited_sf

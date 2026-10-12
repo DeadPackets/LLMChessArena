@@ -44,6 +44,7 @@ def _fmt_termination(t: str | None) -> str:
         "illegal_moves": "illegal moves",
         "thinking_budget": "ran out of thinking budget",
         "timeout": "timeout",
+        "move_timeout": "move took over 30 min",
         "resignation": "resignation",
         "adjudication": "adjudication",
         "king_captured": "king captured",

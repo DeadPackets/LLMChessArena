@@ -83,9 +83,9 @@ if LLM_CACHE_TTL not in ("5m", "1h"):
 HARNESS_VERSION = "pydantic-ai-2.43-v2"
 # Default whole-move ceiling (incl. retries) for LLM/Stockfish sides when the game
 # has no explicit move_time_limit. Never applied to humans.
-# xhigh reasoning models took up to 283s for accepted moves in prod; silent hangs still
-# die at the LLM_REQUEST_TIMEOUT read timeout, so this only cuts off slow-but-streaming moves.
-LLM_MOVE_TIMEOUT_DEFAULT = float(os.getenv("LLM_MOVE_TIMEOUT_DEFAULT", "900"))
+# Fits a full LLM_MAX_TOKENS move plus its one truncation retry at ~36 tok/s (Grok via xAI
+# streamed 32k tokens in 595s). Silent hangs still die at the LLM_REQUEST_TIMEOUT read timeout.
+LLM_MOVE_TIMEOUT_DEFAULT = float(os.getenv("LLM_MOVE_TIMEOUT_DEFAULT", "1800"))
 # Idle humans forfeit on time, so an abandoned tab cannot hold a game slot forever.
 HUMAN_MOVE_TIMEOUT_DEFAULT = float(os.getenv("HUMAN_MOVE_TIMEOUT_DEFAULT", "900"))
 # Heartbeat while a side is thinking, so a slow/hung provider is visible in the UI.

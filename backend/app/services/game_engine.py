@@ -214,7 +214,12 @@ class GameEngine:
                 await self._emit_status(f"{current_color.title()} timed out!")
                 return self._build_result(
                     outcome=f"{winner}_wins",
-                    termination="api_error" if not is_human and not is_stockfish and (self.config.move_time_limit is None or self._move_had_transport_error) else "timeout",
+                    termination=(
+                        "timeout" if is_human or is_stockfish
+                        else "api_error" if self._move_had_transport_error
+                        else "move_timeout" if self.config.move_time_limit is None
+                        else "timeout"
+                    ),
                 )
             finally:
                 if heartbeat:

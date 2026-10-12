@@ -161,7 +161,7 @@ def test_invalid_output_budget_is_ten_requests():
     assert all(r.status == "illegal_move" for r in engine.request_records)
 
 
-def test_silent_llm_default_deadline_is_infrastructure_failure(monkeypatch):
+def test_llm_default_deadline_is_unrated_move_timeout(monkeypatch):
     monkeypatch.setattr("app.services.game_engine.LLM_MOVE_TIMEOUT_DEFAULT", 0.01)
 
     async def stream(messages, info):
@@ -171,7 +171,7 @@ def test_silent_llm_default_deadline_is_infrastructure_failure(monkeypatch):
     engine = GameEngine(GameConfig(white_model="test", black_model="test"))
     with chess_agent.override(model=FunctionModel(stream_function=stream)):
         result = run(engine.play_game())
-    assert result.termination == "api_error"
+    assert result.termination == "move_timeout"
     assert engine.request_records[0].status == "cancelled"
 
 
