@@ -22,6 +22,8 @@ RATE_LIMIT_GAME_STOP = int(os.getenv("RATE_LIMIT_GAME_STOP", "10"))
 RATE_LIMIT_WS_CONNECT = int(os.getenv("RATE_LIMIT_WS_CONNECT", "20"))
 # Per-person game quota (keyed by client IP, IPv6 by /64). 0 disables it.
 GAMES_PER_DAY = int(os.getenv("GAMES_PER_DAY", "1"))
+# Rolling window for GAMES_PER_DAY (the name predates the configurable window).
+GAME_QUOTA_HOURS = float(os.getenv("GAME_QUOTA_HOURS", "12"))
 
 # Cloudflare Turnstile on game creation; disabled when the secret is unset.
 TURNSTILE_SITE_KEY = os.getenv("TURNSTILE_SITE_KEY", "")

@@ -20,6 +20,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.config import (
     ADMIN_TOKEN,
+    GAME_QUOTA_HOURS,
     GAMES_PER_DAY,
     MAX_MOVES_PER_SIDE,
     TURNSTILE_HOSTNAMES,
@@ -102,7 +103,7 @@ async def _verify_turnstile(token: str | None, ip: str) -> bool:
 
 async def _quota_retry_after(creator_hash: str) -> int | None:
     """Seconds until this creator may start another game, or None if allowed now."""
-    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    since = datetime.now(timezone.utc) - timedelta(hours=GAME_QUOTA_HOURS)
     async with get_session_factory()() as session:
         rows = (await session.exec(
             select(Game.started_at)
@@ -115,7 +116,7 @@ async def _quota_retry_after(creator_hash: str) -> int | None:
     oldest = rows[-GAMES_PER_DAY]
     if oldest.tzinfo is None:
         oldest = oldest.replace(tzinfo=timezone.utc)
-    return max(1, int((oldest + timedelta(hours=24) - datetime.now(timezone.utc)).total_seconds()))
+    return max(1, int((oldest + timedelta(hours=GAME_QUOTA_HOURS) - datetime.now(timezone.utc)).total_seconds()))
 
 
 @router.post("", response_model=GameCreatedResponse)
@@ -226,7 +227,7 @@ async def create_game(
                 hours, minutes = divmod(retry_after // 60, 60)
                 raise HTTPException(
                     429,
-                    f"You can start {GAMES_PER_DAY} game{'s' if GAMES_PER_DAY != 1 else ''} every 24 hours. "
+                    f"You can start {GAMES_PER_DAY} game{'s' if GAMES_PER_DAY != 1 else ''} every {GAME_QUOTA_HOURS:g} hours. "
                     f"Your next game is available in {hours}h {minutes}m.",
                     headers={"Retry-After": str(retry_after)},
                 )
@@ -373,6 +374,7 @@ async def queue_status(
     state["llm_unavailable"] = await openrouter_key.unavailable_reason()
     state["turnstile_site_key"] = TURNSTILE_SITE_KEY or None
     state["games_per_day"] = GAMES_PER_DAY
+    state["quota_hours"] = GAME_QUOTA_HOURS
     return state
 
 

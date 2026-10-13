@@ -632,7 +632,7 @@ export default function NewGameDialog({ open, onClose, initialSettings }: Props)
 
         {serverInfo && serverInfo.games_per_day > 0 && !adminToken && (
           <p className="new-game-dialog__setting-help">
-            Each person can start {serverInfo.games_per_day} game{serverInfo.games_per_day === 1 ? "" : "s"} every 24 hours.
+            Each person can start {serverInfo.games_per_day} game{serverInfo.games_per_day === 1 ? "" : "s"} every {serverInfo.quota_hours} hours.
           </p>
         )}
 

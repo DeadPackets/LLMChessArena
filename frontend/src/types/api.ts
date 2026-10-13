@@ -284,4 +284,5 @@ export interface QueueStatus {
   llm_unavailable: string | null;
   turnstile_site_key: string | null;
   games_per_day: number;
+  quota_hours: number;
 }

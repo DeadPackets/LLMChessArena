@@ -23,7 +23,7 @@ BACKEND = Path(__file__).resolve().parents[1]
 load_dotenv(BACKEND / ".env")  # OPENROUTER_API_KEY, STOCKFISH_PATH
 MODEL = "google/gemini-3.1-flash-lite"
 ADMIN = "e2e-admin"
-TS_PASS_TOKEN = "XXXX.DUMMY.TOKEN.XXXX"  # accepted by the always-pass test secret
+TS_PASS_TOKEN = "XXXX.DUMMY.TOKEN.XXXX"  # the always-pass test secret accepts any token
 results: list[dict] = []
 
 
@@ -53,7 +53,9 @@ def start_server(port: int, workdir: str, **env) -> subprocess.Popen:
 
 
 def body(**extra) -> dict:
-    return {"white_is_human": True, "black_model": MODEL, "turnstile_token": TS_PASS_TOKEN, **extra}
+    # Unique per request: the server rejects replayed tokens.
+    return {"white_is_human": True, "black_model": MODEL,
+            "turnstile_token": f"{TS_PASS_TOKEN}.{time.monotonic_ns()}", **extra}
 
 
 async def human_move_flow(base: str, game_id: str, secret: str) -> None:
@@ -86,7 +88,7 @@ async def main(report: Path) -> None:
     try:
         c = httpx.Client(base_url=base, timeout=30)
         qs = c.get("/api/games/queue-status").json()
-        check("queue-status exposes site key + quota", qs["turnstile_site_key"] and qs["games_per_day"] == 1, qs)
+        check("queue-status exposes site key + quota", qs["turnstile_site_key"] and qs["games_per_day"] == 1 and qs["quota_hours"] == 12, qs)
 
         r = c.post("/api/games", json=body(turnstile_token=None))
         check("missing Turnstile token -> 403", r.status_code == 403, r.text)
@@ -98,8 +100,8 @@ async def main(report: Path) -> None:
         check("first game today -> 200", first.status_code == 200, first.text)
 
         r = c.post("/api/games", json=body())
-        check("second game same IP -> 429 with Retry-After",
-              r.status_code == 429 and int(r.headers.get("retry-after", 0)) > 23 * 3600, [r.text, dict(r.headers)])
+        check("second game same IP -> 429 with ~12h Retry-After",
+              r.status_code == 429 and 11 * 3600 < int(r.headers.get("retry-after", 0)) <= 12 * 3600, [r.text, dict(r.headers)])
 
         other = {"X-Real-IP": "203.0.113.7"}
         r = c.post("/api/games", json=body(), headers=other)
